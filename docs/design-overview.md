@@ -71,7 +71,7 @@
 
 | 方案 | 做法 | 结论 |
 |---|---|---|
-| **A. Cookie 持久化**（首版）| 用系统 HTTP 栈的 Cookie 存储（iOS `HTTPCookieStorage`；鸿蒙 `request.agent`）持久化会话 | ✅ 零后端改动，先跑通 |
+| **A. Cookie 持久化**（首版）| 用系统 HTTP 栈的 Cookie 存储（iOS `HTTPCookieStorage`；鸿蒙**手动**解析 `Set-Cookie`/`HttpResponse.cookies` 并每请求带 `Cookie` 头——API 12 没有自动 Cookie 管理，`request.agent` 是上传/下载任务管理，不是 Cookie 管理器）持久化会话 | ✅ 零后端改动，先跑通 |
 | B. Bearer Token | 后端加 `POST /api/auth/token` + refresh | 【待后端新增】第二版再做（多设备、免 Cookie 策略限制）|
 
 **首版必须实现**：
@@ -149,10 +149,15 @@
 ### 5.3 对话训练（只有语音）
 
 ```
-场景列表 → 开 session → 每轮：录音 → POST turn → 播放回复（TTS）
+场景列表 → 开 session → 每轮（**三步，后端没有一体化接口**）：
+  1) 录音 → `POST /api/asr` 得到文本
+  2) `POST /api/chat/sessions/:id/turn`（multipart：**text 必填** + audio 可选）→ 返回**助手文本**（不返回 TTS 音频）
+  3) `POST /api/tts` 播放助手回复
   · 提示句（点一下 = 自动开始录音，**不发文字**）
   · 无文字输入框（产品决定，练口语）
-  · 每轮后台跑 unscripted 发音评估【待后端上线】→ 历史里家长可看分数，儿童只看鼓励
+  · 后台发音评估：turn 接口用 `audio` 在 `after()` 里跑 unscripted 评测【已实现】，
+    结果由 `GET /api/chat/sessions/:id/messages` 返回 `pron`（**不是** `/sessions/:id`）；
+    前端发完一轮后轮询几次补上；家长看分数、儿童只看鼓励
 ```
 
 ### 5.4 故事模式（核心差异化）
@@ -217,7 +222,10 @@
 
 - 全链路 HTTPS；**证书必须被设备信任**（家庭自签场景需安装根证书，公信证书则无需）
 - 会话 Cookie/Token 存 **Keychain（iOS）/ Asset Store（鸿蒙）**，不写日志
-- 录音/照片**只上传到家庭 NAS**；云端 AI（Azure/DeepSeek/智谱）只收到必要的音频片段/文本/图片
+- **录音/照片会离开家庭网络**：当前部署 `PROVIDER_MODE=hybrid`，音频会发给 **Azure**（ASR/发音评测/TTS），
+  文本会发给 **DeepSeek**（对话/改写/复述），书页照片与插画提示会发给 **DeepSeek/智谱**。
+  服务端**不在云端留存**这些内容（只在本机缓存），但**必须如实告知家人**，不能宣称"录音不出户"。
+  · 若要求完全本地：需 `PROVIDER_MODE=local` 且本地模型（faster-whisper/piper/本地 LLM）就绪——目前**未部署**
 - 日志里**禁止**出现：Cookie、Token、音频 base64、完整错误堆栈给用户看
 - 家长面板与"提建议"仅 `parent` 可见；儿童账号隐藏
 - 截图/后台切换：iOS 可选模糊处理（孩子录音界面）

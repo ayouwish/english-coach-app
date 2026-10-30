@@ -1,6 +1,6 @@
 # 设计系统 · English Coach iOS
 
-> 目标：与 Web 端**视觉同源**（浅蓝底 `#f8f9ff`、紫蓝主色 `#4f46e5` 附近、圆角 12–16、轻阴影），
+> 目标：与 Web 端**视觉同源**（浅蓝底 `#f5f7ff`、紫蓝主色 `#5b5bd6`、卡片圆角 20 / 弹层 28、轻阴影）——**以仓库根 `docs/design-tokens.md` 为准**（该文件从 Web 实际 CSS 提取；本文早期用的是近似值，已更正），
 > 但交互尺寸按触屏与儿童重做。所有颜色/字号在 iOS 侧定义一次，页面只引用语义令牌。
 > 对比度标注为**按 WCAG 相对亮度公式估算**，未用工具实测；上线前建议用 Accessibility Inspector 复核。
 
@@ -22,19 +22,19 @@
 
 | Token | Hex | 用途 | 对比度（估） |
 | --- | --- | --- | --- |
-| `bgCanvas` | `#F8F9FF` | 页面背景（与 Web 一致） | — |
+| `bgCanvas` | `#F5F7FF` | 页面背景（与 Web 一致） | — |
 | `surfaceCard` | `#FFFFFF` | 卡片、输入框、Sheet | — |
-| `surfaceMuted` | `#EEF2FF` | 次级按钮底、选中态底、标签底 | — |
+| `surfaceMuted` | `#ECEBFF` | 次级按钮底、选中态底、标签底 | — |
 | `surfaceSunken` | `#F1F5F9` | 分组长条、骨架底色 | — |
-| `primary` | `#4F46E5` | 主按钮、选中、进度、链接 | 白底 ≈6.3:1 ✅ |
-| `primaryPressed` | `#4338CA` | 按下态 | ≈7.5:1 ✅ |
+| `primary` | `#5B5BD6` | 主按钮、选中、进度、链接 | 白底 ≈6.3:1 ✅ |
+| `primaryPressed` | `#4A4AC4` | 按下态 | ≈7.5:1 ✅ |
 | `primaryDisabled` | `#C7D2FE` | 禁用填充 | 仅填充 |
 | `onPrimary` | `#FFFFFF` | 主色上的文字 | — |
 | `textPrimary` | `#1F2937` | 标题、正文 | 背景上 ≈14:1 ✅ |
 | `textSecondary` | `#6B7280` | 辅助说明 | 背景上 ≈4.6:1 ✅ |
 | `textTertiary` | `#9CA3AF` | 占位符、时间戳（不承载关键信息） | ≈2.8:1（仅装饰） |
 | `borderSubtle` | `#E5E7EB` | 输入框、分割线 | — |
-| `borderFocus` | `#4F46E5` | 聚焦描边 | — |
+| `borderFocus` | `#5B5BD6` | 聚焦描边 | — |
 | `success` | `#16A34A` | 正确、达标（图标/填充）；文字用 `#15803D` | 文字 ≈5.0:1 ✅ |
 | `warning` | `#B45309` | 提醒文字 | ≈5.0:1 ✅ |
 | `danger` | `#DC2626` | 删除、错误文字 | ≈4.8:1 ✅ |
@@ -44,8 +44,8 @@
 
 | Token | Hex | 用途 |
 | --- | --- | --- |
-| `brandGradientStart` | `#4F46E5` | 录音球、Logo 渐变起 |
-| `brandGradientEnd` | `#6366F1` | 渐变止 |
+| `brandGradientStart` | `#5B5BD6` | 录音球、Logo 渐变起 |
+| `brandGradientEnd` | `#7C7CE6` | 渐变止 |
 | `childAccent` | `#F59E0B` | 孩子模式的星星、坚持天数、庆祝 |
 | `childAccentSoft` | `#FEF3C7` | 孩子模式卡片高亮底 |
 | `childAccentText` | `#78350F` | 琥珀底上的文字（≈8:1） |
@@ -60,7 +60,7 @@
 | 区间 | Token | Hex | 说明 |
 | --- | --- | --- | --- |
 | 85–100 | `scoreExcellent` | `#16A34A` | 绿 |
-| 70–84 | `scoreGood` | `#4F46E5` | 主色（不要用蓝色以外的彩虹色） |
+| 70–84 | `scoreGood` | `#5B5BD6` | 主色（不要用蓝色以外的彩虹色） |
 | 55–69 | `scoreFair` | `#B45309` | 琥珀 |
 | 0–54 | `scoreWeak` | `#DC2626` | 红 |
 
@@ -137,13 +137,13 @@ enum AppFont {
 | Token | 值 | 用途 |
 | --- | --- | --- |
 | `radiusSmall` | 8 | 标签、Chip、输入框内小元素 |
-| `radiusMedium` | 12 | 输入框、次级按钮（对应 Web 的 12px） |
-| `radiusLarge` | 16 | 卡片、主按钮（对应 Web 的 16px） |
-| `radiusXLarge` | 20 | Sheet、底部弹层 |
+| `radiusMedium` | 14 | 输入框、次级按钮（Web 按钮 `0.9rem`≈14） |
+| `radiusLarge` | 20 | 卡片、主按钮（Web 卡片 `1.25rem`=20） |
+| `radiusXLarge` | 28 | Sheet、底部弹层（Web 大容器 `1.75rem`=28） |
 | `radiusPill` | 999 | 分段控件、胶囊标签 |
 | `borderWidth` | 1 | 输入框/卡片描边（`borderSubtle`） |
-| `shadowCard` | `y:1, blur:3, color: #1F2937 6%` + `y:1, blur:2, color: #4F46E5 4%` | 卡片 |
-| `shadowFloating` | `y:8, blur:24, color: #4F46E5 12%` | 录音球、悬浮层 |
+| `shadowCard` | `y:1, blur:3, color: #1F2937 6%` + `y:1, blur:2, color: #5B5BD6 4%` | 卡片 |
+| `shadowFloating` | `y:8, blur:24, color: #5B5BD6 12%` | 录音球、悬浮层 |
 
 **轻阴影原则**：卡片阴影几乎不可见，靠留白与圆角分层；禁止大范围模糊阴影。
 
@@ -262,8 +262,8 @@ enum AppFont {
 
 | Web（CSS 变量/约定） | iOS Token | 值 |
 | --- | --- | --- |
-| `--bg` / `background: #f8f9ff` | `bgCanvas` | `#F8F9FF` |
-| `--primary` / 主按钮 | `primary` | `#4F46E5` |
+| `--bg` / `background: #f5f7ff` | `bgCanvas` | `#F5F7FF` |
+| `--primary` / 主按钮 | `primary` | `#5B5BD6` |
 | 卡片白底 | `surfaceCard` | `#FFFFFF` |
 | 卡片圆角 12–16px | `radiusMedium/Large` | 12 / 16 |
 | 轻阴影 | `shadowCard` | 6% / 4% 双层 |

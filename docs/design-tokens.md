@@ -2,6 +2,9 @@
 
 来源：Web 端 `web/src/app/globals.css` 的 CSS 变量（**已实现·后端现有**，这里是客户端对齐用的搬运）。
 
+> **本文是跨端唯一权威**。平台文档（`ios/docs/design-system.md`、`hos/docs/design-system.md`）早期采用过近似值
+> （`#F8F9FF` / `#4F46E5` / 卡片 16px），已按实际 CSS 更正为 `#F5F7FF` / `#5B5BD6` / 卡片 20px。
+
 ## 颜色
 
 | 令牌 | 值 | 用途 |

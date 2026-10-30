@@ -49,13 +49,19 @@ POST /api/attempts（等）新增可选字段：client_audio = {container:"m4a",
 - 服务端仅用于**日志与错误提示**（"不支持的音频格式：<container>"）
 - 仍保留服务端自行探测（不信任客户端声明）
 
-## 4. 对话轮次发音信息【已由 web 侧实现，见 english-coach task-57】
+## 4. 对话轮次发音信息【已实现·后端现有】（`/api/chat/sessions/:id/messages`）
+
+发音评分是**后台异步**的：`turn` 接口在 `after()` 里跑 unscripted 评测并写入 `chat_messages.pron_json`，
+客户端需要**轮询** messages 接口获取：
 
 ```
-GET /api/chat/sessions/:id
-  messages[].pron = {pron, accuracy, fluency, completeness, weak_phonemes:[...]} | null
+GET /api/chat/sessions/:id/messages
+  { messages: [ { id, role, text, pron: {pron, accuracy, fluency, completeness,
+                  weak_phonemes:[{label, score}], words:[{word, score}]} | null } ] }
 ```
-- 儿童视角由**客户端**决定不显示分数（服务端照常返回，避免两套权限逻辑）
+- **注意**：`GET /api/chat/sessions/:id` **不返回** `messages[].pron`；客户端不要指望它
+- 儿童视角由**客户端**决定不显示分数（服务端已把 IPA 剥离；分数照常返回）
+- 这正是"三步对话"链路的第 3 步之后要补的数据（见 `design-overview.md` §5.3）
 
 ## 5. 上传断点/幂等【待后端新增（可选）】
 

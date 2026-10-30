@@ -145,7 +145,7 @@
 
 ```text
 ┌─────────────────────────────────────┐
-│ ← 跟读练习             A1 A2 B1 B2  │  ← 等级 segmented（C1 回退 B2）
+│ ← 跟读练习             A1 A2 B1 B2  │  ← 等级 segmented（C1 用户默认选 B2）
 ├─────────────────────────────────────┤
 │ “I think the weather is really...”  │  ← 句子卡（大字，可换行）
 │ 我觉得今天天气真的很好。      [翻译] │
@@ -167,17 +167,18 @@
 ### 交互
 
 1. 进入：加载语料（缓存优先）→ 默认选中 `sentenceId` 或第一句。
-2. 切换等级：过滤本地列表；后台刷新；不打断当前录音。
-3. 听示范：`POST /api/tts`（wav，儿童 slow）→ 下载 → AVPlayer；重复点先停再播。
-4. 跟我读：播完示范 → 200–300ms → 自动开录；用户只需读。
-5. 录音：0.6–60s；停止后立即上传；本地先保留一份用于回放。
-6. 提交：`POST /api/attempts`（同步，最长 90s）。
+2. C1 用户：语料只到 B2，客户端默认显示 B2（服务端没有 C1 语料；这是【客户端自行实现】的回退，不要请求 `level=C1` 拿空列表）。
+3. 切换等级：过滤本地列表；后台刷新；不打断当前录音。
+4. 听示范：`POST /api/tts`（wav，儿童 slow）→ 下载 → AVPlayer；重复点先停再播。
+5. 跟我读：播完示范 → 200–300ms → 自动开录；用户只需读。
+6. 录音：0.6–60s；停止后立即上传；本地先保留一份用于回放。
+7. 提交：`POST /api/attempts`（同步，最长约 100s，客户端超时 120s）。
    - 进度文案按耗时切换：“上传录音…”→“识别中…”→“评分中…”→“生成建议…”（不显示假百分比）。
    - 成功：总分/子项/逐词/纠错/语调（成人）；儿童走简化版。
    - `degraded=true`：显示“录音已保存，评测服务暂时不可用”，按钮“重试评测”（`POST /attempts/:id/retry`）。
    - 429：显示 `detail` 剩余时间，禁用录音。
-7. 重试评测：不重新录音；成功后替换结果。
-8. 下一句：按列表顺序；到末尾提示“这一组读完啦”。
+8. 重试评测：不重新录音；成功后替换结果。
+9. 下一句：按列表顺序；到末尾提示“这一组读完啦”。
 
 ### API
 
@@ -322,19 +323,21 @@
 └─────────────────────────────────────┘
 ```
 
+**进入会话**：开场白立即显示；`POST /tts`（mp3）朗读开场白（或用户点“再听”），不自动播放长文本。
+
 **一轮流程（必须按此顺序）**
 
 1. 录音（0.6–60s）→ 本地文件。
 2. `POST /asr`（`language=en`）→ `text`。
 3. 显示识别文本，提供“重说 / 发送”；**不自动发送**（避免误识别直接进 LLM）。
-4. `POST /chat/sessions/:id/turn`（multipart：`audio` + `text`）。
+4. `POST /chat/sessions/:id/turn`（multipart：`audio` + `text`；`text` ≤500 字符）。
 5. 收到 `reply/reply_zh/correction/suggested_replies/done`。
 6. `POST /tts`（`text=reply`, `format=mp3`）→ 下载 → 播放；失败不影响文字展示。
 7. 用户录音回放：`GET /audio/:user_message_id` 或本地 pending 文件。
 
 **约束**
 
-- **没有文字输入框**；建议回复 chips 点击只“朗读提示”，不发送；用户必须自己说。
+- **没有文字输入框**：这是【客户端自行实现】的产品约束（后端 `/turn` 也接受 JSON `text`，但移动端不提供文字入口）；建议回复 chips 点击只“朗读提示”，不发送，用户必须自己说。
 - 一轮未完成前禁用录音；不允许并发 turn。
 - 第 6 轮或 `done=true`：展示结束卡“今天聊得很棒”，提供“换个场景/再聊一次”。
 - 儿童：纠错只展示 1 条、语气温和；不显示音素；回复语速默认 slow。
@@ -384,6 +387,7 @@
 ```
 
 - `GET /materials?kind=story|page`；家庭共享。
+- “只看我的”是**客户端过滤**（`created_by === 当前用户`），后端没有 `mine` 参数；不要伪造接口。
 - 封面：`has_image=true` 时下载 `/materials/:id/image`（带 Cookie）→ PixelMap；无图用渐变占位。
 - 点击进详情；长按/更多：编辑/删除（创建者或家长；服务端 403 兜底）。
 - 空：“还没有故事，点右上角用一个中文故事换英文绘本”。
@@ -396,7 +400,7 @@
 │ 用中文讲讲你的故事                   │
 │ [ 大文本框                     ]     │
 │ [🎤 说中文]  0/2000                 │
-│ 难度 A1 A2 B1 B2                    │
+│ 难度 A1 A2 B1 B2 C1                 │
 │ ☑ 把 weakest 音练进故事（成人）      │
 │ [ 生成英文故事 ]                     │
 │                                     │
@@ -409,7 +413,7 @@
 ```
 
 - 中文输入：打字或 `POST /asr`（`language=zh-CN`）追加；≤2000 字。
-- 生成：`POST /story/rewrite`（`text_zh/level/max_sentences/use_weak_phonemes`）。
+- 生成：`POST /story/rewrite`（`text_zh/level/max_sentences/use_weak_phonemes`）；`level` 支持 A1–C1。
   - 60s 内可能较慢：显示“正在把故事变成英文…”，不显示假进度。
   - 503 `story_unavailable`：提示“可以先自己写英文”，切手动输入。
 - 结果：`title_en/sentences/text_en/readability/warnings/weak_phonemes_used`；可编辑英文句子。
@@ -630,6 +634,15 @@
 | 列表 | `GET /review` |
 | 评分 | `POST /review` |
 
+### 状态
+
+| 状态 | 表现 |
+|---|---|
+| loading | 卡片骨架；不整屏转圈 |
+| error | “错音本暂时打不开，稍后再试”；保留上次列表（如有） |
+| empty | “还没有要复习的，去跟读几句吧” |
+| 儿童 | 无 IPA、低分不显示、按钮文案更口语 |
+
 ---
 
 ## 10. 家长面板
@@ -665,7 +678,7 @@
 - 汇总：`GET /parent/summary` → `family/members/blind`。
 - 盲测周环比：突出 `current.avg_pron` 与 `delta_pron`；无数据时“做两次才能对比”。
 - 成员管理：
-  - 新建：`POST /family/members`（昵称/登录名/密码/角色/等级/出生年/头像/时长/自由聊）。
+  - 新建：`POST /family/members`（昵称/登录名/密码/角色/等级/出生年/头像/时长/自由聊；密码至少 8 位）。
   - 编辑：`PATCH /family/members/:id`（不能改角色）。
   - 重置密码：`POST /family/members/:id/password`（家长操作；**旧会话不会立即失效**，见 open-questions）。
 - 建议：`GET /suggestions?status=open`；`PATCH /suggestions/:id` 标记 read/resolved。

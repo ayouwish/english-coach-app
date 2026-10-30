@@ -133,6 +133,7 @@ export class PracticeVM {
 
 - VM 只暴露**方法**和**可观察字段**；UI 不直接改 `vm.result`。
 - 每个页面 `aboutToAppear` 调 `vm.load()`；`aboutToDisappear` 调 `vm.dispose()`。
+- 更新 AppStorage 中的 `SessionState` 时**整体替换对象**（`AppStorage.setOrCreate('session', new SessionState(...))`），避免嵌套属性变更不触发刷新。
 - VM 内不引用 `UIContext`/`promptAction`；需要 Toast 时通过回调 `onUiEvent` 交给页面。
 - VM 的所有异步方法都要有 `try/catch`，最终转成 `UiError`。
 
@@ -180,7 +181,7 @@ export class Routes {
 | `flow` | features/flow | `materialId?`, `mode?` | 所有 |
 | `chat_scenarios` | features/chat | — | 所有 |
 | `chat_session` | features/chat | `sessionId`, `scenarioId` | 所有 |
-| `story_list` | features/story | `kind=page|story` | 所有 |
+| `story_list` | features/story | `kind=page` 或 `kind=story` | 所有 |
 | `story_create` | features/story | `level?` | 所有 |
 | `story_detail` | features/story | `materialId` | 所有 |
 | `blind_test` | features/blindtest | `resume?` | 所有 |
@@ -299,7 +300,7 @@ try {
 - `maxLimit`：JSON 默认 5MB 足够；音频/图片下载显式设 20MB（图片 5MB、录音 12MB）。
 - `header` 用 `Record<string,string>`，不要传 Map。
 - `expectDataType: STRING` 用于 JSON；音频用 `ARRAY_BUFFER`。
-- 所有 URL 先 `http.encodeURL`（如果 query 含中文；TTS 文本走 POST body，避免 URL 编码问题）。
+- 所有 URL 的 query 做 URL 编码（中文/特殊字符；TTS 文本走 POST body，避免 URL 编码问题）。
 
 ### 5.3 Cookie 会话（方案 A）
 
@@ -329,12 +330,29 @@ function extractEcSession(cookies: string | undefined | null): string | null {
 
 **为什么不用 `enableAutoCookie`**：官方接口文档标注该 API 为 **API 26.0.0**，本项目最低 API 12，不可用；且它只在同一个 `HttpRequest` 实例内共享 Cookie，而我们的设计是每请求一个实例。手动 Cookie 更可控、可持久化、可测试。
 
+> 【待真机验证】`HttpResponse.cookies` 对 `httpOnly` Cookie 的返回行为（是否带属性、是否多条拼接）在不同版本上可能不同；实现必须同时准备 `header['set-cookie']` 兜底，并用真实登录响应做单测/真机验证。
+>
+> 另：`@ohos.request` 的 `agent` 是上传/下载任务管理，不是通用 HTTP 会话/Cookie 容器；不要用它替代 `@ohos.net.http` 来“自动管理 Cookie”。
+
 **安全取舍**：
 
 - token 放 **Asset Store Kit**（`asset.add/query/remove`，`Tag.SECRET`），不写 Preferences。
 - `httpOnly` 对原生 HTTP 没有浏览器意义，但 token 仍是敏感凭证：不日志、不埋点、不出现在错误详情。
 - 不实现“记住密码”；登录页可选记住邮箱（默认关）。
 - 退出登录：先 `POST /auth/logout`（失败也继续），再清 Asset、清页面缓存、清 `cacheDir` 音频。
+
+**Asset Store vs Preferences（加密）取舍**：
+
+| 维度 | Asset Store Kit | Preferences（明文/自行加密） |
+|---|---|---|
+| 加密 | 系统级加密存储，按别名访问 | 默认明文；要加密需自己用 Crypto Framework + 管理密钥 |
+| 访问控制 | 可配 `ACCESSIBILITY`、`AUTH_TYPE`、`REQUIRE_PASSWORD_SET` | 无系统级访问控制 |
+| 同步/备份 | 默认 `SYNC_TYPE.NEVER`，不参与云同步 | 随应用数据，可能进备份 |
+| 容量 | `SECRET` 1–1024 字节 | 适合小配置，不适合长密钥 |
+| 复杂度 | 低（API 11+，`addSync` API 12+） | 自行加密时密钥放哪又是新问题 |
+| 适用 | **会话 token、刷新令牌** | 非敏感配置（baseUrl、lastLevel、ttsRate） |
+
+结论：**token 必须进 Asset Store**；Preferences 只放非敏感配置。不要为了“少一个 API”把 token 塞进 Preferences，也不要用固定密钥自行加密（密钥同样要存，等于没解决）。
 
 ### 5.4 multipart 上传
 
@@ -363,7 +381,7 @@ const parts: http.MultiFormData[] = [
 
 ### 5.5 下载与图片
 
-`/api/audio/:id`、`/api/materials/:id/image` 都需要 Cookie，且 **`accept-ranges: none`**：
+`/api/audio/:id`、`/api/materials/:id/image` 都需要 Cookie；其中录音接口明确返回 **`accept-ranges: none`**，图片接口也不是为流式/分块读取设计的：
 
 - **不要**把 URL 直接交给 `AVPlayer.url` 或 `Image(url)`：它们不会带 Cookie，且可能依赖 Range。
 - 统一走 `HttpClient.download` → `cacheDir/audio|images/<hash>.<ext>` → 再交给 AVPlayer/ImageSource。
@@ -444,7 +462,8 @@ export class UiError {
 | 409 | `blind_test_closed` | 这次盲测已经结束了 | 回盲测首页 |
 | 409 | `no_practiced_sentences` | 还没有练过的句子，先去跟读几句吧 | 去跟读 |
 | 409 | `no_attempts` | 这次盲测还没有提交任何一句 | 继续录 |
-| 409 | `no_audio` / `audio_gone` | 这条录音没有保存，无法重试 | 重新录 |
+| 409 | `no_audio` | 这条记录没有保存录音，无法重试 | 重新录 |
+| 410 | `audio_gone` | 录音文件不在了 | 重新录/隐藏重试 |
 | 409 | `blind_attempt_no_retry` | 盲测中的录音不能重试评测 | 结束盲测再看 |
 | 413 | `payload_too_large` | 录音/图片太大了（上限 12MB / 10MB） | 缩短/重拍 |
 | 429 | `daily_limit_reached` | 今天已经练了 X 分钟，达到上限，明天再来 🌙 | 展示剩余，禁用录音 |
@@ -463,7 +482,7 @@ export class UiError {
 | 媒体 | `mic_denied` | 需要麦克风才能练习；去设置里允许 | 打开设置 |
 | 媒体 | `mic_unavailable` | 麦克风被占用了，关掉其他录音 App 再试 | 重试 |
 | 媒体 | `record_too_short` | 这次录得太短啦，读完句子再点“说完啦” | 重录 |
-| 媒体 | `record_too_large` | 录音超过 12MB，请缩短到 2 分钟内 | 重录 |
+| 媒体 | `record_too_large` | 录音超过 12MB，请缩短录音 | 重录 |
 | 媒体 | `playback_failed` | 声音播放失败，点播放器再试一次 | 重播 |
 
 ### 6.3 展示规范

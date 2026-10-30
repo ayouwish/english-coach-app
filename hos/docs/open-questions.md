@@ -129,6 +129,7 @@ POST /asr → POST /turn(audio+text) → POST /tts
 | 上架/审查 | 无影响 | 无影响 |
 
 **建议**：**A 先做**，因为不改后端、当天可联调；B 作为后续 ADR（尤其如果要做“注销全部设备”、短会话、或多客户端）。若选 B，必须在 M0 开工前定，否则客户端网络层要重写。
+**已记录**：[ADR-0001](adr/0001-session-cookie.md) 已按方案 A 接受；如需改为 B，请新开 ADR 并覆盖该结论。
 
 **需要谁拍板**：后端 + 客户端。
 **影响**：`commons/net` 认证实现、后端契约、M0 工期。
@@ -152,16 +153,23 @@ POST /asr → POST /turn(audio+text) → POST /tts
 
 ## Q6 🟠 API 12 / ArkTS 严格模式边界
 
+**事实**：HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是可选项——没有“关闭严格模式跑 TS”的开关。真正要决定的是：
+
+1. 是否 100% 按 ArkTS 约束写（推荐）；
+2. 是否为了复用 Web 代码/第三方库引入 JS/WebView（不推荐，Cookie/权限/隐私都不可控）；
+3. 是否使用状态管理 V2、API 15+ 新特性（会增加兼容分支）。
+
 **选项**
 
 | 方案 | 说明 |
 |---|---|
-| A. 锁 API 12（推荐） | 覆盖 HarmonyOS NEXT 5.0.0；`@kit.*` 稳定；不用 API 26 的 `enableAutoCookie` |
+| A. 锁 API 12 + 全严格 ArkTS（推荐） | 覆盖 HarmonyOS NEXT 5.0.0；`@kit.*` 稳定；不用 API 26 的 `enableAutoCookie` |
 | B. 追 API 14/15 | 新特性/新机型；但增加兼容分支 |
 | C. 同时兼容 API 11 | 更广；但部分 Kit/权限 API 不可用 |
+| D. 混合 JS/WebView | 复用 Web 代码；但破坏“零三方/会话/隐私”边界，不建议 |
 
-**建议**：A。`compileSdk/compatibleSdk/targetSdk = 12`；不使用 `@ObservedV2/@Trace`、`enableAutoCookie`、API 15+ 网络选项。
-**影响**：可用 API、测试机型、未来升级成本。
+**建议**：A。`compileSdk/compatibleSdk/targetSdk = 12`；不使用 `@ObservedV2/@Trace`、`enableAutoCookie`、API 15+ 网络选项；不使用 WebView 承载业务页面。
+**影响**：可用 API、测试机型、未来升级成本、可复用的 Web 代码量。
 
 ---
 

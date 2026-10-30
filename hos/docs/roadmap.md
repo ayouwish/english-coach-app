@@ -308,7 +308,7 @@
 ```text
 里程碑：M?
 日期：2026-??-??
-机型/系统：XXX / HarmonyOS NEXT API 12
+机型/系统：具体机型 / HarmonyOS NEXT API 12
 构建：debug/release，commit: ????
 场景：跟读 10 句（A2）
 结果：通过 / 失败（附截图/日志）

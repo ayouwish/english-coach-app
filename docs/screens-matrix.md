@@ -37,8 +37,8 @@
 |---|---|---|---|
 | 场景列表 | `GET /api/chat/scenarios` | — | 大卡片 |
 | 开始会话 | `POST /api/chat/sessions` | — | — |
-| 一轮对话 | `POST /api/chat/sessions/:id/turn`（multipart 音频）| ASR→LLM→TTS；**只有语音输入** | — |
-| 会话历史 | `GET /api/chat/sessions`、`GET /api/chat/sessions/:id` | 每轮含 `pron`（家长看分数，儿童只看鼓励）| 不显示分数 |
+| 一轮对话 | ① `POST /api/asr` ② `POST /api/chat/sessions/:id/turn`（multipart：text 必填 + audio）③ `POST /api/tts` | 后端**没有**一体化接口，必须三步；turn 只返回助手文本 | — |
+| 会话历史 | `GET /api/chat/sessions`、`GET /api/chat/sessions/:id`、**`GET /api/chat/sessions/:id/messages`** | `pron` 由 **messages** 接口返回（后台评分，轮询补齐）；家长看分数，儿童只看鼓励 | 不显示分数 |
 
 ## 5. 故事模式
 

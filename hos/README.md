@@ -39,12 +39,12 @@
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | ArkTS/ArkUI 分层、状态管理、路由、HTTP/Cookie、错误映射、离线缓存 |
 | [docs/audio.md](docs/audio.md) | AVRecorder 参数、麦克风权限、AVPlayer 播放、录放互斥、后台/锁屏 |
-| [docs/screens.md](docs/screens.md) | 12 个页面的界面结构、交互、API、loading/error/empty、儿童差异 |
+| [docs/screens.md](docs/screens.md) | 13 个界面（含首页/错音本）的结构、交互、API、loading/error/empty、儿童差异 |
 | [docs/design-system.md](docs/design-system.md) | 颜色/字号/间距/圆角/阴影/按钮层级、组件清单、深色模式取舍 |
 | [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md) | 权限声明、数据流、NAS/云端边界、隐私文案、合规注意 |
 | [docs/roadmap.md](docs/roadmap.md) | M0–M4 范围、验收标准、风险 |
 | [docs/open-questions.md](docs/open-questions.md) | 需要拍板的问题（Token、分发、平板、严格模式等） |
-| [docs/adr/](docs/adr/) | 后续架构决策记录目录（当前为空） |
+| [docs/adr/](docs/adr/) | 架构决策记录（已有 ADR-0001：Cookie 会话） |
 
 ---
 
@@ -96,7 +96,7 @@
 
 | 方法 | 路径 | 说明 | 状态 |
 |---|---|---|---|
-| POST | `/asr` | multipart `audio` + `language=en|zh-CN` → `{text,provider,duration_ms,language}` | 【已实现·后端现有】 |
+| POST | `/asr` | multipart `audio` + `language=en / zh-CN` → `{text,provider,duration_ms,language}` | 【已实现·后端现有】 |
 | POST/GET | `/tts` | `{text,rate,voice?,format?}` → 二进制音频；默认 wav，对话建议 mp3 | 【已实现·后端现有】 |
 | GET | `/chat/scenarios` | 按年龄过滤的场景列表 | 【已实现·后端现有】 |
 | POST | `/chat/sessions` | `{scenario_id}` → 新会话 + 开场白 | 【已实现·后端现有】 |
@@ -116,7 +116,7 @@
 
 | 方法 | 路径 | 说明 | 状态 |
 |---|---|---|---|
-| GET | `/materials?kind=page|story` | 家庭共享材料列表 | 【已实现·后端现有】 |
+| GET | `/materials?kind=page`、`kind=story` | 家庭共享材料列表 | 【已实现·后端现有】 |
 | POST | `/materials` | `{title,text,image_b64?,kind?,source?,source_zh?,level?}` | 【已实现·后端现有】 |
 | GET/PATCH/DELETE | `/materials/:id` | 详情 / 改名改文 / 删除（创建者或家长） | 【已实现·后端现有】 |
 | GET | `/materials/:id/image` | 图片；**需要 Cookie**，不能直接用 `Image(url)` | 【已实现·后端现有】 |
@@ -157,6 +157,7 @@
 | 403 | `forbidden` | 角色/归属不允许 | 提示“仅家长可用”或“无权访问” |
 | 404 | `not_found` / `audio_not_found` | 资源不存在 | 刷新列表或返回 |
 | 409 | `conflict` / `session_closed` / `blind_test_closed` / `no_practiced_sentences` / `no_attempts` / `no_audio` / `blind_attempt_no_retry` | 状态冲突 | 按 code 给具体文案；不要盲目重试 |
+| 410 | `audio_gone` | 录音文件已不存在 | 重新录，不重试评测 |
 | 413 | `payload_too_large` | 录音 >12MB / 图片 >10MB / 文本超限 | 本地先拦；服务端兜底 |
 | 429 | `daily_limit_reached` | 儿童达到每日上限 | 展示 `detail` 用量，停止提交 |
 | 500 | `internal_error` | 服务端异常 | 可重试一次 |
@@ -384,7 +385,23 @@ hdc shell aa start -a EntryAbility -b com.family.englishcoach
 
 ## 7. 编码与工程约定
 
-- ArkTS 严格模式：所有导出类型显式标注；禁止 `any`/`unknown` 泛滥；JSON 解析后立即转 DTO 并校验必填字段。
+### 7.1 ArkTS 严格模式边界
+
+HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是“带类型的 JS”。本项目按以下约束写：
+
+- 禁止 `any` / `unknown` 泛滥；JSON 解析后立即转 DTO 并校验，不用动态属性访问。
+- 禁止结构化类型“鸭子类型”；接口/类显式声明，跨模块用 `interface`。
+- 禁止 `eval`、`Function` 构造、原型改写、`with`、动态 `import()`。
+- 对象字面量必须有明确类型；不用 `as object` 绕过检查。
+- 不使用 `@ObservedV2/@Trace`（状态管理 V2）；统一 V1。
+- 不使用 API 26 的 `enableAutoCookie`；不依赖未在 API 12 文档中稳定的 Kit。
+- 装饰器只用于 ArkUI/状态管理；不在普通类上自定义装饰器。
+- 所有 `Promise` 都要 `await` 或显式 `void`；不允许“发出去就不管”的写操作。
+
+> 是否启用更严格的 lint/编译选项，见 [docs/open-questions.md](docs/open-questions.md) Q6。
+
+### 7.2 命名与文案
+
 - 命名：页面 `XxxPage.ets`，组件 `XxxCard.ets`，VM `XxxVM.ets`，服务 `XxxService.ets`。
 - 每个 feature 只暴露 `Index.ets`；内部实现不跨模块导出。
 - 所有用户可见文案走 `resources/base/element/string.json`；儿童版文案单独 key（`child_` 前缀），不要在代码里三元表达式堆文案。
@@ -413,7 +430,7 @@ hdc shell aa start -a EntryAbility -b com.family.englishcoach
 
 本目录当前交付：
 
-- 8 份设计文档（本 README + `docs/` 下 7 份）；
+- 8 份核心设计文档（本 README + `docs/` 下 7 份）+ 1 份 ADR；
 - 目录骨架：`entry/`、`features/*`、`commons/*`，以及 `.gitkeep` 占位；
 - **没有** `module.json5`、`app.json5`、`oh-package.json5` 等可编译配置，避免留下“看起来能跑其实跑不起来”的半成品。
 

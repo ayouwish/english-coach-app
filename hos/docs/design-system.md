@@ -2,7 +2,7 @@
 
 > 目标：与 Web 端视觉语言一致，同时满足 HarmonyOS 的尺寸/密度/无障碍要求。
 > 本文的 token 是**客户端唯一来源**；页面禁止写死颜色/圆角/字号。
-> 颜色值以需求给定的 `#F8F9FF` / `#4F46E5` 为基准；与现有 Web 的差异见第 1.3 节。
+> 颜色/圆角**以仓库根 `docs/design-tokens.md` 为准**（从 Web 实际 CSS 提取：`#F5F7FF` / `#5B5BD6`）。本文早期用的是近似值，已同步更正；与 Web 的其余差异见第 1.3 节。
 
 ---
 
@@ -12,15 +12,15 @@
 
 | Token | 浅色值 | 用途 | 备注 |
 |---|---|---|---|
-| `ec_bg` | `#F8F9FF` | 页面底色 | 浅蓝白，降低长时间阅读疲劳 |
+| `ec_bg` | `#F5F7FF` | 页面底色 | 浅蓝白，降低长时间阅读疲劳 |
 | `ec_surface` | `#FFFFFF` | 卡片/弹层 | |
 | `ec_surface_alt` | `#F1F3FF` | 次级卡片/输入框底 | |
 | `ec_ink` | `#1B1F3B` | 主文字 | 对比度 ≥12:1 |
 | `ec_muted` | `#6B7290` | 次要文字/说明 | 白底约 4.8:1，正文可用 |
 | `ec_border` | `#E3E6F3` | 分割线/描边 | 1px |
-| `ec_primary` | `#4F46E5` | 主按钮/强调/选中 | 白字对比约 6.3:1 |
-| `ec_primary_pressed` | `#4338CA` | 按下态 | |
-| `ec_primary_soft` | `#EEF0FF` | 主色浅底/选中背景 | |
+| `ec_primary` | `#5B5BD6` | 主按钮/强调/选中 | 白字对比约 6.3:1 |
+| `ec_primary_pressed` | `#4A4AC4` | 按下态 | |
+| `ec_primary_soft` | `#ECEBFF` | 主色浅底/选中背景 | |
 | `ec_focus` | `#A5B4FC` | 焦点环/描边 | 2vp |
 | `ec_good` | `#16A34A` | 成功/高分 | 图形/大字号 |
 | `ec_good_text` | `#15803D` | 成功文字（小字号） | 白底约 5.1:1 |
@@ -142,9 +142,9 @@
 | Token | 值 | 用途 |
 |---|---|---|
 | `radius_sm` | 8vp | 小标签/输入框内元素 |
-| `radius_md` | 12vp | 按钮/输入框 |
-| `radius_lg` | 16vp | 卡片 |
-| `radius_xl` | 20vp | 儿童卡片/大按钮 |
+| `radius_md` | 14vp | 按钮/输入框（Web `0.9rem`） |
+| `radius_lg` | 20vp | 卡片（Web `1.25rem`） |
+| `radius_xl` | 28vp | 大容器/弹层（Web `1.75rem`） |
 | `radius_pill` | 999vp | 胶囊/头像 |
 
 ### 3.3 阴影
