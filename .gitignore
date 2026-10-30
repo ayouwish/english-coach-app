@@ -1,0 +1,24 @@
+# iOS
+ios/build/
+ios/DerivedData/
+ios/Pods/
+ios/*.xcworkspace/xcuserdata/
+ios/**/xcuserdata/
+*.ipa
+*.dSYM.zip
+
+# HarmonyOS
+hos/build/
+hos/.hvigor/
+hos/oh_modules/
+hos/**/build/
+hos/.idea/
+*.hap
+
+# 通用
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+node_modules/
