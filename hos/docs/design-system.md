@@ -52,8 +52,8 @@
 
 | 项 | Web 现值 | 本文值 | 差异 |
 |---|---|---|---|
-| 背景 | `#F5F7FF` | `#F8F9FF` | 极接近，肉眼几乎不可辨 |
-| 主色 | `#5B5BD6` | `#4F46E5` | 后者更偏靛蓝、饱和度略高 |
+| 背景 | `#F5F7FF` | `#F5F7FF` | ✅ 已对齐（早期近似值 `#F8F9FF` 已废）|
+| 主色 | `#5B5BD6` | `#5B5BD6` | ✅ 已对齐（早期近似值 `#4F46E5` 已废）|
 | 主色浅底 | `#ECEBFF` | `#EEF0FF` | 极接近 |
 | 卡片圆角 | `1.25rem`（20px） | 16px（卡片） | 本文更紧凑 |
 | 阴影 | `0 8px 24px rgba(27,31,59,0.06)` | 同 | 一致 |
@@ -67,11 +67,11 @@
 ```json
 {
   "color": [
-    { "name": "ec_bg", "value": "#F8F9FF" },
+    { "name": "ec_bg", "value": "#F5F7FF" },
     { "name": "ec_surface", "value": "#FFFFFF" },
     { "name": "ec_ink", "value": "#1B1F3B" },
     { "name": "ec_muted", "value": "#6B7290" },
-    { "name": "ec_primary", "value": "#4F46E5" },
+    { "name": "ec_primary", "value": "#5B5BD6" },
     { "name": "ec_primary_soft", "value": "#EEF0FF" },
     { "name": "ec_border", "value": "#E3E6F3" },
     { "name": "ec_good", "value": "#16A34A" },

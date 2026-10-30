@@ -24,7 +24,7 @@
 | Q12 | 离线写队列 | 🟡 | 不做；只做只读缓存 + 手动重试 | M4 前 |
 | Q13 | 横屏/方向锁定 | 🟡 | 手机锁竖屏；平板允许横屏 | M4 前 |
 | Q14 |  Bundle 名 / 应用名 / 图标 | 🟡 | `com.family.englishcoach` / “家庭英语教练” | M0 前 |
-| Q15 | 调色板与 Web 对齐 | 🟡 | 客户端按 #F8F9FF/#4F46E5；Web 补共享 token | M0 前 |
+| Q15 | 调色板与 Web 对齐 | ✅ | 已对齐实际 Web CSS：`#F5F7FF` / `#5B5BD6` / 卡片 20px（以 `docs/design-tokens.md` 为准）| 已解决 |
 | Q16 | 是否加证书 pinning | 🟡 | MVP 不做；M4 评估 | M4 前 |
 | Q17 | 是否接崩溃/统计分析 | 🟡 | 不接；本地日志 | 上架前 |
 | Q18 | 盲测对儿童展示到什么程度 | 🟡 | 只显示完成/星星，不显示分数 | M3 前 |
@@ -301,7 +301,7 @@ POST /asr → POST /turn(audio+text) → POST /tts
 
 ## Q15 🟡 调色板与 Web 对齐
 
-- 需求给 `#F8F9FF` / `#4F46E5`；Web 现值 `#F5F7FF` / `#5B5BD6`，圆角 20px。
+- 已按 Web 实际 CSS 统一：`#F5F7FF` / `#5B5BD6`，卡片圆角 20px、弹层 28px、按钮 14px。
 - 建议 Web 补共享 token（纯前端改动），或客户端改用 Web 现值。
 - 在拍板前，客户端按本文 token；验收做并排对比。
 
