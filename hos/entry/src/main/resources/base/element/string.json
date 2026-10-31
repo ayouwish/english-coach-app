@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "English Coach 应用入口（M0）"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "家庭英语口语教练"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "家庭英语教练"
+    },
+    {
+      "name": "reason_microphone",
+      "value": "跟读练习需要录下你的声音，才能帮你看看读得准不准。录音只用于本次评测。"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "0.1.0",
+  "description": "English Coach entry HAP（M0：登录 + 跟读 + 设置）",
+  "main": "",
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {}
+}

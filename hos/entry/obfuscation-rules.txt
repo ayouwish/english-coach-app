@@ -1,0 +1,8 @@
+# 混淆规则（M0 未启用，enable: false）。
+# 开启前必须确认：反射/JSON 字段名/资源名都不依赖被混淆的符号。
+# JSON 字段来自服务端契约，代码通过 interface 读取，不依赖类名，理论上可混淆；
+# 但 M0 阶段不做 release 混淆，避免引入不可验证的风险。
+-enable-property-obfuscation
+-enable-toplevel-obfuscation
+-enable-filename-obfuscation
+-enable-export-obfuscation

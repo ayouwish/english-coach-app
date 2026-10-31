@@ -1,0 +1,10 @@
+{
+  // 【待确认】与 oh-package.json5 的 modelVersion 保持一致。
+  // 若 DevEco 报 hvigor 版本不匹配：用 DevEco 新建工程生成的 hvigor/ 目录整体覆盖。
+  "modelVersion": "6.0.0",
+  "dependencies": {},
+  "execution": {},
+  "logging": {},
+  "debugging": {},
+  "nodeOptions": {}
+}

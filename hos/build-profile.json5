@@ -1,0 +1,38 @@
+{
+  "app": {
+    "signingConfigs": [],
+    "products": [
+      {
+        "name": "default",
+        "runtimeOS": "HarmonyOS",
+        // 【待确认】API 20 基线：三个版本号都写 20。
+        // 若 DevEco 报 “版本号格式不支持”，改为字符串形式 "6.0.0(20)"（HarmonyOS 6.0.0）。
+        "compileSdkVersion": 20,
+        "compatibleSdkVersion": 20,
+        "targetSdkVersion": 20
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

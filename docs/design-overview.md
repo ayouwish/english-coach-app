@@ -182,7 +182,29 @@ refresh 也失败 → 清 token → 跳登录
   → 故事集：按日期分组、连续天数、录音回放、只看我的
 ```
 
-### 5.5 盲测 / 诊断 / 家长面板
+### 5.5 虚拟形象（M4+，Web 已实现）
+
+**用户需求**：拍照/上传设置虚拟形象（几种风格）→ 故事插画参考该形象 → **生成提示词前端可见**（便于反馈）。
+
+```
+📷 拍照/上传 → 视觉 LLM 只产出"可画的卡通特征"角色卡（过滤种族/宗教/年龄/姓名）
+  → 文生图 + 风格（watercolor/cartoon/pixel/papercut/clay）→ 风格化头像
+  → 角色卡入库（可手动编辑，如"戴眼镜"）
+📖 故事插画：角色卡 + 相同风格注入提示词 → 角色在各插画中保持相似
+🏷 提示词可见：插画下方折叠展示 prompt_used → 「这个提示词有点问题」→ 复用提建议（预填）
+```
+
+**硬限制（必须如实告知用户）**：智谱生图接口**只支持文生图，不支持参考图/图生图** →
+一致性是「角色卡 + 固定风格」级别，**不是身份级还原**；要更强一致性需换支持图生图的 provider
+（阿里 Qwen-Image-Edit / 豆包 SeedEdit / 本地 ComfyUI+IP-Adapter，`IMAGE_PROVIDER` 可切换）。
+
+**隐私**：照片**只发给视觉 LLM**（DeepSeek）产出文字描述，**不发给智谱**；头像与角色卡存本地。
+
+**接口（Web 已实现，契约 v1.11 §19）**：
+- 后端 voice：`POST /v1/image/avatar`、`/v1/image/illustrate` 支持 `character_desc`/`character_style`、`capabilities.image_avatar`
+- Web：`GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image`；`/api/story/[id]/illustrate` 自动带角色卡
+
+### 5.6 盲测 / 诊断 / 家长面板
 
 - 盲测：`POST /api/attempts/async` 带 `blind_test_id`，结束 `POST /api/blind-tests/:id/finish`（只统计已评分）
 - 诊断：`GET /api/diagnosis`（最弱音素、掌握度、建议）

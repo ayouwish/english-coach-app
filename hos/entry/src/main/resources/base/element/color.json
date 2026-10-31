@@ -1,0 +1,26 @@
+{
+  "color": [
+    { "name": "ec_bg", "value": "#F5F7FF" },
+    { "name": "ec_surface", "value": "#FFFFFF" },
+    { "name": "ec_surface_alt", "value": "#F1F3FF" },
+    { "name": "ec_ink", "value": "#1B1F3B" },
+    { "name": "ec_muted", "value": "#6B7290" },
+    { "name": "ec_border", "value": "#E3E6F3" },
+    { "name": "ec_primary", "value": "#5B5BD6" },
+    { "name": "ec_primary_pressed", "value": "#4A4AC4" },
+    { "name": "ec_primary_soft", "value": "#ECEBFF" },
+    { "name": "ec_focus", "value": "#A5B4FC" },
+    { "name": "ec_good", "value": "#16A34A" },
+    { "name": "ec_good_text", "value": "#15803D" },
+    { "name": "ec_good_bg", "value": "#F0FDF4" },
+    { "name": "ec_warn", "value": "#F59E0B" },
+    { "name": "ec_warn_text", "value": "#B45309" },
+    { "name": "ec_warn_bg", "value": "#FFF3D6" },
+    { "name": "ec_bad", "value": "#EF4444" },
+    { "name": "ec_bad_text", "value": "#B91C1C" },
+    { "name": "ec_bad_bg", "value": "#FEF2F2" },
+    { "name": "ec_info", "value": "#0EA5E9" },
+    { "name": "ec_overlay", "value": "#5C1B1F3B" },
+    { "name": "start_window_background", "value": "#F5F7FF" }
+  ]
+}

@@ -1,0 +1,19 @@
+# DevEco Studio / hvigor 构建产物与本机配置，不入库
+.hvigor/
+oh_modules/
+**/oh_modules/
+**/build/
+**/.preview/
+local.properties
+
+# 签名材料（证书/密钥/密码）绝不入库
+*.p12
+*.cer
+*.p7b
+*.keystore
+
+# 打包产物
+*.hap
+*.har
+*.hsp
+*.app

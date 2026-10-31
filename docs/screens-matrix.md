@@ -50,7 +50,8 @@
 | 故事集 | `GET /api/materials?kind=story` | 按日期分组、连续天数、只看我的 | 不显示分数 |
 | 故事详情 | `GET /api/materials/:id` | 英文全文 + 录音回放 + 复述记录 | 分数仅家长 |
 | 复述 | `POST /api/story/retell` | 覆盖度，不评发音分 | 只看鼓励 |
-| 插画 | `POST /api/story/:id/illustrate` | 每天一张；失败可见 | 「给我画一张画」|
+| 插画 | `POST /api/story/:id/illustrate` | 每天一张；**自动带用户的 `character_desc` + `avatar_style`**；失败可见；插画下方显示 `prompt_used` + 「这个提示词有问题」反馈（预填提建议）| 「给我画一张画」|
+| 虚拟形象（M4+）| `GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image` | 拍照/上传 + 5 风格（水彩/卡通/像素/剪纸/黏土）+ 角色卡可编辑 + 提示词可见；`capabilities.image_avatar=false` 时隐藏入口 | 「给我画一个我」|
 
 ## 6. 盲测 / 诊断 / 复习
 

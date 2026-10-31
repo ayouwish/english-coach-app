@@ -1,0 +1,58 @@
+# XcodeGen 工程描述 —— 避免手写 pbxproj。
+# 在 ios/ 目录执行：brew install xcodegen && xcodegen generate
+# 生成产物 EnglishCoach.xcodeproj 不提交（见 .gitignore 建议）。
+name: EnglishCoach
+
+options:
+  bundleIdPrefix: top.dreamsearch
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    # Swift 6 语言模式 + 完整并发检查：代码按严格并发编写，不使用 @unchecked Sendable 逃避。
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    CLANG_ENABLE_MODULES: YES
+
+targets:
+  EnglishCoach:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: EnglishCoach
+        # Info.plist 通过 INFOPLIST_FILE 注入，不能再作为资源复制进 bundle，
+        # 否则会出现 “Multiple commands produce ... Info.plist”。
+        excludes:
+          - "Resources/Info.plist"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: top.dreamsearch.englishcoach
+        PRODUCT_NAME: EnglishCoach
+        INFOPLIST_FILE: EnglishCoach/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"          # iPhone only；iPad 见 open-questions Q8
+        CODE_SIGN_STYLE: Automatic
+        # 首次构建前在 Xcode 里选择你自己的 Team（或在此填 DEVELOPMENT_TEAM）。
+        DEVELOPMENT_TEAM: ""
+        SUPPORTS_MACCATALYST: NO
+        ENABLE_PREVIEWS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        # 不引入第三方依赖；没有 Assets.xcassets 也能构建（仅缺 App 图标）。
+        ENABLE_MODULE_VERIFIER: NO
+
+schemes:
+  EnglishCoach:
+    build:
+      targets:
+        EnglishCoach: all
+    run:
+      config: Debug
+    archive:
+      config: Release
