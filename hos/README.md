@@ -19,7 +19,7 @@
 | 录音 | AVRecorder → **m4a / AAC、单声道、16kHz、65kbps** | 统一参数，不设低带宽分支；整段上传、不切片；上限 12MB |
 | 播放 | 先下载到 `cacheDir`，再 `AVPlayer` 用 `fd://` 播放 | `/api/audio/:id` 返回 `accept-ranges: none`，不适合边下边播；且需要 `Authorization` |
 | TTS | 跟读示范用 `wav`（命中缓存快），对话用 `mp3` | 客户端只负责取字节、落盘、播放 |
-| 分发 | iOS 用 **TestFlight**；鸿蒙建议内部签名/企业内部分发或应用市场内测，**【待用户确认】** | 见 [docs/open-questions.md](docs/open-questions.md) Q3 |
+| 分发 | iOS 用 **TestFlight**；鸿蒙建议**内部签名/企业内部分发首发**、应用市场内测备选，**【待用户确认】** | 见 [docs/open-questions.md](docs/open-questions.md) Q3 |
 | 第三方依赖 | **运行时零三方**，只用 `@kit.*` 系统能力 | 不引入 axios、图片库、统计 SDK、WebView |
 | 儿童模式 | 不显示 IPA、不显示低分、大按钮、慢速默认 | 服务端只保证剥离 IPA；**低分隐藏是客户端策略** |
 | 深色模式 | MVP 不做，M4 再用资源限定符补齐 | 先把颜色 token 化，禁止硬编码 |

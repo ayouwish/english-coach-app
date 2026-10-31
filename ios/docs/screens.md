@@ -214,7 +214,7 @@
 
 | 调用 | 参数 | 用途 |
 | --- | --- | --- |
-| `POST /tts` | `{text, rate: normal\|slow, format: "mp3"}` | 示范音 |
+| `POST /tts` | `{text, rate: normal\|slow}`（示范音默认 `format=wav`，命中预热缓存；对话回复用 `format=mp3`） | 示范音 |
 | `POST /attempts` | multipart：audio/sentence_id/reference_text/mode=scripted/duration_ms | 同步评分 |
 | `GET /audio/:id` | — | 服务端保存的录音回放（刷新后仍可听） |
 | `POST /attempts/:id/retry` | — | `provider_timeout/provider_error` 后重评，不重录 |
@@ -358,7 +358,7 @@
 
 > **后端没有“一体化对话”接口**：turn 不做 ASR、不合成 TTS。客户端必须按顺序编排 **`/asr` → `/turn` → `/tts`**；turn 只返回助手文本。
 
-1. 进入：`POST /chat/sessions` 返回首条 assistant 消息（`opening_line` + `text_zh`），**没有音频**；客户端立即用 `POST /tts {text, format:"mp3"}` 合成开场白（或在用户点“播放”时才合成）。
+1. 进入：`POST /chat/sessions` 返回首条 assistant 消息（`opening_line`；该响应里的 `text_zh` 为 `null`，中文开场白需重新拉 `GET /chat/sessions/:id` 的历史获得），**没有音频**；客户端立即用 `POST /tts {text, format:"mp3"}` 合成开场白（或在用户点“播放”时才合成）。
 2. 点/按住麦克风球 → 立刻停止正在播放的 TTS → 录音（≤60s，对话建议 30s 上限）。
 3. 停止 → **`POST /asr`**（multipart `audio`，`language=en`）→ 拿到 `text`（字段名是 `text`，不是 `transcript`）。ASR 为空 → 提示“我没听清，再说一次”，**不进入 turn**。
 4. **`POST /chat/sessions/:id/turn`**（multipart：**`text` 必填** + `audio`）→ 状态“正在思考…”（由上传/等待阶段切换）。响应含 `reply`、`reply_zh`、`correction`、`suggested_replies`、`done`、`user_audio_url` 等，**不含音频**。

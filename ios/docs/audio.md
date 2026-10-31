@@ -133,7 +133,7 @@ let settings: [String: Any] = [
     AVFormatIDKey: kAudioFormatMPEG4AAC,       // m4a 容器 / AAC 编码
     AVSampleRateKey: 16_000,                   // 16kHz：ASR/PA 的常规输入，体积小
     AVNumberOfChannelsKey: 1,                  // 单声道
-    AVEncoderBitRateKey: 65_000,               // 65kbps（固定码率）
+    AVEncoderBitRateKey: 65_000,               // 65kbps（目标码率）
     AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue  // 有码率时基本被忽略，仅作声明
 ]
 // 文件：Caches/Recordings/<uuid>.m4a

@@ -44,7 +44,7 @@
 | Xcode 工程、目录、CI 脚本骨架 | 连读、对话、故事、盲测、家长面板 |
 | `AppRoot` token 恢复、角色化 Tab（先只做“练习/我的”两个占位） | 动画打磨、深色模式 |
 | 登录 / 刷新 / 吊销 / 401 单飞刷新 / Keychain 持久化 | 离线队列 |
-| **TestFlight 内部测试通道**（构建上传、测试组、90 天续期记录） | 外部测试 / App Store 上架 |
+| **TestFlight 内部测试通道**（≤100 名内部测试员、无需 Beta 审核；构建上传、测试组、90 天续期记录） | 外部测试 / App Store 上架 |
 | `Core/Networking`：Endpoint、APIClient、Multipart、错误映射、重试、Bearer 注入 | 离线队列 |
 | `Core/Audio`：权限、录音、播放、互斥、电平 | 后台播放、蓝牙专项优化 |
 | 语料列表（A1–B2）+ 难度切换 + 缓存快照 | 分页（视后端而定） |

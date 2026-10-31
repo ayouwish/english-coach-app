@@ -32,6 +32,7 @@ POST /api/auth/revoke   {refresh_token}
   - 重放仍 401 → 清 token，只跳一次登录。
 - 退出：`POST /auth/revoke {refresh_token}` → 无论成功失败都清本地 token、页面缓存、`cacheDir` 音频。
 - 不把 refresh 放在 URL/query、不写日志、不进 Preferences、不进备份、不写 `AppStorage` 持久化。
+- 客户端不解析 token 内容；access 用 JWT 还是不透明短 token、refresh 服务端如何存哈希、`/auth/revoke` 是否要求 access，均由后端实现文档冻结【待后端确认】。
 
 ## 为什么不继续 Cookie
 

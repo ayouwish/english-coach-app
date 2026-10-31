@@ -304,7 +304,7 @@ curl -i -X POST $BASE/auth/revoke -H 'Content-Type: application/json' \
 
 #### 隐私清单 `PrivacyInfo.xcprivacy`
 
-TestFlight 构建同样要求隐私清单（Apple 对 Required Reason API 的声明要求适用于上传到 App Store Connect 的构建）。最小内容：
+TestFlight 构建也应提供隐私清单：Apple 要求上传到 App Store Connect 的构建声明 Required Reason API 与收集的数据；缺失可能收到警告，并影响将来任何上架动作。最小内容：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
