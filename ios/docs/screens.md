@@ -44,7 +44,7 @@
 ## 1. 登录
 
 ### 1.1 目标与入口
-首次启动、会话过期、主动退出后进入。
+首次启动、token 失效（refresh 过期/被吊销）、主动退出后进入。
 
 ### 1.2 布局
 
@@ -71,18 +71,19 @@
 ### 1.3 交互
 - 邮箱键盘 `.emailAddress`、`textContentType = .username`；密码 `.password`、`textContentType = .password`；登录按钮在两者非空时可用。
 - `keyboardType`/`submitLabel`：密码回车直接提交；提交中按钮变 loading，禁止重复点击。
-- 成功后**必须**再调 `GET /auth/me` 拿角色与能力，再决定 Tab；不要用登录响应里的推测字段。
+- 成功后把 `access_token`/`refresh_token` 写入 **Keychain**（不写 `UserDefaults`、不打印）；用 `/auth/token` 响应里的 `user` 即可决定 Tab，但**冷启动只有 token 时仍以 `GET /auth/me` 为准**，避免角色/等级变更后不同步。
 - “记住邮箱”只存 Keychain（上次登录邮箱），**不存密码**；密码框不自动填充已保存密码（避免共用设备泄露）。
-- 登录失败 `401`：`邮箱或密码不正确`，焦点回到密码框并全选。
+- 登录失败 `401`：`邮箱或密码不正确`，焦点回到密码框并全选；后端不可达时不能误报为密码错误。
 - 服务器设置：默认**完全隐藏**（连点 Logo 5 次或长按版本号才展开），避免孩子在共用设备上误改；登录后由 设置 → 服务器 管理，且仅 `role=parent` 可改。**【客户端自行实现】**
+- 切换服务器地址会**清掉本机 token 并要求重新登录**（token 与服务器绑定）。
 
 ### 1.4 API
 
 | 调用 | 用途 | 备注 |
 | --- | --- | --- |
-| `POST /auth/login` | 建立 Cookie 会话 | 请求体 `{email,password}`；响应状态码决定成功与否 |
-| `GET /auth/me` | 拉取 profile（role/ageBand/cefrLevel/avatar） | 决定 Tab 与能力 |
-| `GET /health` | “测试连接”按钮 | 显示 `db` / `voice.reachable` 勾叉 |
+| `POST /auth/token` | 邮箱+密码换 token | **【待后端新增·P0】** 请求体 `{email,password}`；响应 `{access_token, refresh_token, token_type:"Bearer", expires_in, user}`；写 Keychain |
+| `GET /auth/me` | 冷启动校验 token / 拉最新 profile | 带 `Authorization: Bearer`；401 先走单飞刷新 |
+| `GET /health` | “测试连接”按钮 | 显示 `db` / `voice.reachable` 勾叉，不需要鉴权 |
 
 ### 1.5 状态
 
@@ -92,7 +93,8 @@
 | 凭据错误 | 密码框下方红色内联文案（成人）/ 中性文案“再检查一下邮箱和密码哦”（孩子场景罕见） |
 | 服务器不可达 | 表单上方横幅：“连不上学习服务器。确认手机连着家里的 Wi-Fi，且 NAS 已开机。” + “重试” + “改服务器地址” |
 | 网络离线 | 横幅“当前没有网络”，登录按钮禁用 |
-| 已登录但 `/auth/me` 失败 | 不进入主界面；提示“登录成功但读取账号失败”，提供重试 |
+| 已登录但 `/auth/me` 失败 | 不进入主界面；提示“登录成功但读取账号失败”，提供重试（网络错误时保留 token） |
+| token 刷新被拒 | 清 Keychain token → 停在本页并提示“登录已过期，请重新登录”，不展示空白主界面 |
 | empty | 不适用 |
 
 ### 1.6 儿童/成人差异
@@ -352,40 +354,49 @@
 └────────────────────────────────┘
 ```
 
-### 5.3 交互（一轮 = 一次录音）
-1. 进入：显示开场白（若 `POST /chat/sessions` 返回首轮消息/音频则直接播；**【待确认】** 是否返回开场）。
-2. 点/按住麦克风球 → 立刻停止正在播放的 TTS → 录音（≤60s，≤30s 更符合对话节奏，建议 30s 上限）。
-3. 停止 → `POST /chat/sessions/:id/turn`（multipart `audio`）→ 状态“正在思考…”（同时可展示“正在听…”→“正在想…”两段，由上传/等待阶段切换）。
-4. 响应到达：追加助手气泡（文本）+ 落盘音频 → 自动播放（可在设置关闭）；播放时气泡高亮。
-5. 播放中用户再次按麦克风：立即停止播放并开始录音（**打断优先**）。
-6. 失败：气泡位置内联“没听清，再说一次”（`unsupported_audio`/空识别）或“服务器有点慢，重试”（超时）；**不重发旧音频**（对话有时序语义），改为重说。
-7. 结束：本地退出并确认；无 `DELETE /chat/sessions/:id`（**【待确认】**），退出不删除服务端记录。
+### 5.3 交互（一轮 = 一次录音 + 三步调用）
+
+> **后端没有“一体化对话”接口**：turn 不做 ASR、不合成 TTS。客户端必须按顺序编排 **`/asr` → `/turn` → `/tts`**；turn 只返回助手文本。
+
+1. 进入：`POST /chat/sessions` 返回首条 assistant 消息（`opening_line` + `text_zh`），**没有音频**；客户端立即用 `POST /tts {text, format:"mp3"}` 合成开场白（或在用户点“播放”时才合成）。
+2. 点/按住麦克风球 → 立刻停止正在播放的 TTS → 录音（≤60s，对话建议 30s 上限）。
+3. 停止 → **`POST /asr`**（multipart `audio`，`language=en`）→ 拿到 `text`（字段名是 `text`，不是 `transcript`）。ASR 为空 → 提示“我没听清，再说一次”，**不进入 turn**。
+4. **`POST /chat/sessions/:id/turn`**（multipart：**`text` 必填** + `audio`）→ 状态“正在思考…”（由上传/等待阶段切换）。响应含 `reply`、`reply_zh`、`correction`、`suggested_replies`、`done`、`user_audio_url` 等，**不含音频**。
+5. 用 `POST /tts {text: reply, format:"mp3"}` 合成助手回复 → 落盘 → 追加助手气泡并播放（可在设置关闭）；播放时气泡高亮。慢速重播用 `rate=slow` 重新请求 TTS。
+6. 播放中用户再次按麦克风：立即停止播放并开始录音（**打断优先**）。
+7. 发音评分是**后台异步**的：turn 响应后轮询 `GET /chat/sessions/:id/messages`，把用户消息的 `pron` 补到气泡/结果区（家长可见分数，孩子只看鼓励）。`GET /chat/sessions/:id` **不返回** `pron`，不要用它轮询。
+8. 失败：`unsupported_audio`/ASR 空 → “没听清，再说一次”；`provider_timeout` → “服务器有点慢，重试”；`session_closed`（409，满 6 轮或已结束）→ “这段对话已经结束了，换个场景继续吧”，返回场景页。**不重发旧音频**（对话有时序语义），改为重说。
+9. 结束：本地退出并确认；无 `DELETE /chat/sessions/:id`（**【待确认】**），退出不删除服务端记录。
 
 ### 5.4 API
 
 | 调用 | 说明 |
 | --- | --- |
 | `GET /chat/scenarios` | 场景列表（缓存 7 天） |
-| `POST /chat/sessions` | `{scenario_id}` → 会话（返回 id + 可能首句） |
-| `POST /chat/sessions/:id/turn` | multipart audio；返回文本 + 音频（形态**【待确认】**） |
-| `POST /tts` | 助手消息重播/慢速（若 turn 已返回音频则用本地） |
-| `POST /asr` | 仅当需要显示“我说了什么”时使用；**【待确认】** turn 是否已带 transcript |
+| `POST /chat/sessions` | `{scenario_id}` → 会话（201，返回 `session_id` + 首条 assistant 消息 `opening_line`，**无音频**） |
+| `POST /asr` | multipart `audio`（+`language=en`）→ `{text, provider, duration_ms, language}`；对话第 1 步 |
+| `POST /chat/sessions/:id/turn` | multipart **`text` 必填** + `audio` → 助手文本与纠错（**无音频**）；第 2 步 |
+| `POST /tts` | 助手回复/开场白/慢速重播（`format:"mp3"`）；第 3 步 |
+| `GET /chat/sessions/:id/messages` | **轮询发音评分**：`messages[].pron`（用户消息），1s/2s/3s… 上限约 15s；第 4 步（异步） |
+| `GET /chat/sessions/:id` | 进入会话时渲染历史（含 `correction`/`flag`/`audio_url`，**不含 `pron`**） |
 
 ### 5.5 状态
 
 | 状态 | 表现 |
 | --- | --- |
 | 录音中 | 球体红点 + 波形 + 计时 |
-| 上传/等待 | “正在听…”→“正在想…”（超过 8s 追加“网络有点慢”） |
-| 播放中 | 气泡声波动画 + 点击可暂停 |
-| 识别为空 | “我没听清，再说一次” |
+| 识别中 | “正在听…”（`/asr` 请求中） |
+| 上传/等待 | “正在想…”（turn 请求中；超过 8s 追加“网络有点慢”） |
+| 合成/播放中 | 气泡声波动画 + 点击可暂停（TTS 首次 1–3s，按钮可先显示 loading） |
+| 识别为空 | “我没听清，再说一次”；不显示用户文本气泡 |
+| 评分待补 | 气泡角落显示轻量“评分中…”；超时显示“评分稍后可在历史中查看”，**不报错** |
 | 服务不可用 | 顶部横幅 + 重试；保留对话历史可读 |
-| 会话失效（404/401） | “这段对话已结束”，返回场景页 |
+| 会话失效（404/401） | 401 → 单飞刷新；404 → “这段对话已结束”，返回场景页 |
 | 空态 | 无历史（新会话）→ 显示场景开场提示与例句 |
 
 ### 5.6 儿童/成人差异
-- 孩子：**只有语音，无任何文字输入**（严格约束）；助手文本默认隐藏中文翻译，提供“听不懂？看中文”按钮（若返回中文）；麦克风球 96pt 常驻底部；播放速度默认 slow。
-- 成人：助手文本 + 可选中英文对照；可长按气泡复制文本（M4）；录音上限 30s。
+- 孩子：**只有语音，无任何文字输入**（严格约束）；助手文本默认隐藏中文翻译，提供“听不懂？看中文”按钮（若返回中文）；麦克风球 96pt 常驻底部；播放速度默认 slow；发音评分只转成鼓励文案（服务端已剥离 IPA），**不显示数字**。
+- 成人：助手文本 + 可选中英文对照；可长按气泡复制文本（M4）；录音上限 30s；用户气泡可展开 `pron` 的分项（准确度/流利度/完整度/弱音素）。
 - 两者都**没有**键盘、没有 `TextField`、没有“发送”按钮。
 
 ---
@@ -448,8 +459,8 @@
 ```
 
 复述流程（两步，客户端编排）：
-1. 录音 → `POST /asr`（`language=en`）拿 `transcript`；
-2. `POST /story/retell {story_sentences, transcript, level}` → `coverage/covered_points/missing_points/feedback_zh/feedback_en`。
+1. 录音 → `POST /asr`（`language=en`）拿 `text`；
+2. `POST /story/retell {material_id?, story_sentences, transcript, level}` → `coverage/covered_points/missing_points/feedback_zh/feedback_en`。
 - `story_sentences` 从详情数据取（创建时本地保存 + 详情接口返回，**【待确认】** 是否由 `/materials/:id` 提供）。
 - 复述录音上限 120s（故事更长），仍受 12MB 限制。
 - 孩子：覆盖度用星星/进度条，不用百分比；反馈只显示中文。
@@ -635,11 +646,12 @@
 ### 10.2 服务器体检页
 - 调 `GET /health`，逐项展示：`db`、`voice.reachable`、`voice.mode`、`capabilities.ocr/heic/image`（绿点/红点 + 文案）。
 - 失败时给出可执行建议：检查 Wi-Fi、NAS 是否开机、地址是否正确。
-- 可“复制诊断信息”给家长/开发者（不含 Cookie/邮箱）。
+- 可“复制诊断信息”给家长/开发者（**不含 token/Cookie/邮箱**；只含版本、构建号、baseURL 主机名、健康检查结果）。
 
 ### 10.3 退出登录
-- `POST /auth/logout` → 清 Cookie（逐个 `HTTPCookieStorage` 删除该域）→ 清账户缓存 → 回登录页。
-- 若登出请求失败（离线），仍执行本地清理并提示“已在本机退出，服务器会话可能仍有效”。
+- `POST /auth/revoke {refresh_token}`（204）→ 清 Keychain 两个 token + 账户缓存 + 回登录页。
+- 若吊销请求失败（离线），仍执行本地清理并提示“已在本机退出；服务器上的登录凭证可能仍有效”。**注意**：离线退出无法吊销服务端 refresh，最长可能保留 30 天（见 ADR-0003 §6）。
+- 退出后不得残留 token 的任何副本（内存、`UserDefaults`、日志）；Web 端的 Cookie 与本流程无关。
 
 ---
 
@@ -657,7 +669,7 @@
 
 校验与安全：
 - 前端校验：≥8 位、两次一致、不与邮箱相同；**最终以服务端策略为准**；
-- 提交中禁用；成功后**强制重新登录**（会话可能已失效，统一按最保守处理）；
+- 提交中禁用；成功后**强制重新登录**（先 `/auth/revoke` 吊销 refresh，再清本地 token，统一按最保守处理）；
 - 错误：`bad_request` → “密码不符合要求（至少 8 位）”；401 → “旧密码不正确”（待后端支持后）。
 
 ---
@@ -714,14 +726,14 @@
 
 | 页面 | API |
 | --- | --- |
-| 登录 | `/auth/login`、`/auth/me`、`/health` |
+| 登录 | `/auth/token`【待后端新增】、`/auth/me`、`/health` |
 | 练习首页 | `/sentences`、`/review`、`/diagnosis`、`/tts` |
 | 跟读 | `/tts`、`/attempts`、`/attempts/:id/retry`、`/audio/:id` |
 | 连读 | `/attempts/async`、`/attempts/status`、`/attempts/:id/retry`、`/tts` |
-| 对话 | `/chat/scenarios`、`/chat/sessions`、`/chat/sessions/:id/turn`、`/tts` |
+| 对话 | `/chat/scenarios`、`/chat/sessions`、`/asr`、`/chat/sessions/:id/turn`、`/chat/sessions/:id/messages`、`/tts` |
 | 故事 | `/ocr`、`/story/rewrite`、`/story/:id/illustrate`、`/materials*`、`/asr`、`/story/retell`、`/health` |
 | 盲测 | `/sentences`、`/tts`、`/attempts` |
 | 成长 | `/diagnosis`、`/review`、`/audio/:id` |
 | 家长 | `/parent/summary`、`/family/members`、`/family/members/:id/password`、`/suggestions` |
-| 设置 | `/health`、`/auth/logout` |
+| 设置 | `/health`、`/auth/revoke` |
 | 修改密码 | `/family/members/:id/password`（孩子）；`/auth/password`【待后端新增】（家长自己） |

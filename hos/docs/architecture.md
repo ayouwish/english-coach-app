@@ -1,6 +1,6 @@
 # 架构设计 · ArkTS / ArkUI 分层
 
-> 适用：HarmonyOS NEXT / API 12+，ArkTS + ArkUI。
+> 适用：HarmonyOS NEXT / API 20+，ArkTS + ArkUI。
 > 本文描述**客户端内部结构**；服务端 API 事实以 [`../README.md`](../README.md) 第 2 节为准。
 
 ---
@@ -50,7 +50,7 @@
                             │ 只调用 HttpClient
 ┌───────────────────────────▼─────────────────────────────────┐
 │ 基础设施层（commons）                                        │
-│  HttpClient / CookieSession / AssetStore / FileCache /       │
+│  HttpClient / TokenSession / AssetStore / FileCache /        │
 │  AvRecorderService / AvPlayerService / AudioCoordinator      │
 └───────────────────────────┬─────────────────────────────────┘
                             ▼
@@ -196,16 +196,18 @@ export class Routes {
 
 ```text
 App 启动
-  → 读 Asset 中的 ec_session
-  → 无 token：进 login
-  → 有 token：GET /auth/me
-       ├─ user != null：写 SessionState → 进首页
-       ├─ user == null（200）：清 token → 进 login
+  → 读 Asset 中的 ec_access_token / ec_refresh_token
+  → 无 refresh：进 login
+  → 有 refresh：GET /auth/me（带 access）
+       ├─ 200 user != null：写 SessionState → 进首页
+       ├─ 401：单飞 refresh → 成功则重放 /auth/me；失败清 token → 进 login
+       ├─ 200 user == null：清 token → 进 login（兼容旧行为）
        └─ 网络失败：显示“连不上家庭 NAS”，提供重试/离线只读入口
 ```
 
 - **不靠前端隐藏菜单做权限**：进入 `parent` 前检查 `role === 'parent'`；服务端仍会 403 兜底。
-- 任何请求返回 401：`SessionService.onUnauthorized()` → 清 token/缓存 → `navStack.clear()` → `push('login')`。
+- 任何业务请求返回 401：先走一次单飞 refresh + 重放；仍 401 才 `SessionService.onUnauthorized()` → 清 token/缓存 → `navStack.clear()` → `push('login')`。
+- `/auth/token`、`/auth/refresh`、`/auth/revoke`、`/health` 不参与该重试，避免递归。
 - 登录成功后按角色决定首页 tab：儿童 4 个（跟读/连读/故事/我的），家长 5 个（+ 家长面板）。
 - 深链（如 `englishcoach://flow?materialId=...`）先在 `DeeplinkService` 做登录检查，再入栈；未登录时暂存 pending route。
 
@@ -233,7 +235,8 @@ export interface ApiRequest {
   headers?: Record<string, string>;
   timeoutMs?: number;
   responseType?: 'json' | 'arrayBuffer';
-  auth?: boolean;                     // 默认 true；login/health 为 false
+  auth?: boolean;                     // 默认 true；/auth/token、/auth/refresh、/health 为 false
+  retryOn401?: boolean;               // 默认 true；/auth/refresh 自身为 false
 }
 
 export interface ApiResponse<T> {
@@ -258,13 +261,20 @@ export interface HttpClient {
 ```
 
 ```ts
-// commons/net/src/main/ets/session/CookieSession.ets
-export interface CookieSession {
+// commons/net/src/main/ets/session/TokenSession.ets
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  accessExpiresAt: number;           // epoch ms；由 expires_in 换算
+}
+
+export interface TokenSession {
   load(): Promise<void>;
-  token(): string | null;
-  saveFromResponse(resp: http.HttpResponse, expiresAt?: string): Promise<void>;
+  accessToken(): string | null;
+  refreshToken(): string | null;
+  save(pair: TokenPair): Promise<void>;   // 原子替换两个 token
   clear(): Promise<void>;
-  isExpired(now?: number): boolean;
+  needsRefresh(now?: number, skewMs?: number): boolean;  // 过期或在 skew 窗口内
 }
 ```
 
@@ -277,7 +287,7 @@ try {
     method: http.RequestMethod.POST,
     header: {
       'Content-Type': 'application/json',
-      'Cookie': `ec_session=${token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/json'
     },
     extraData: JSON.stringify(body),
@@ -302,44 +312,68 @@ try {
 - `expectDataType: STRING` 用于 JSON；音频用 `ARRAY_BUFFER`。
 - 所有 URL 的 query 做 URL 编码（中文/特殊字符；TTS 文本走 POST body，避免 URL 编码问题）。
 
-### 5.3 Cookie 会话（方案 A）
+### 5.3 Bearer Token 认证（方案 B）
 
-现有服务端只认 Cookie，客户端必须手动维护：
+移动端**不使用 Cookie**；Web 端继续用 Cookie，后端双模式并存。认证相关的新端点只有三个：
 
 ```text
-POST /api/auth/login
-  ← 200 { user, expiresAt } + Set-Cookie: ec_session=...; Path=/; HttpOnly; SameSite=Lax
-  → 从 HttpResponse.cookies（API 8+）解析 ec_session
-  → 从 header['set-cookie'] 兜底
-  → AssetStore.save(alias='ec_session', secret=token)
-  → 本地记录 expiresAt
+登录
+  POST /api/auth/token {email, password}
+  ← {access_token, refresh_token, token_type:"Bearer", expires_in:3600, user}
+  → TokenSession.save({accessToken, refreshToken, accessExpiresAt = now + expires_in*1000})
+  → GET /auth/me（带 access）补 usage
 
-后续请求
-  → header['Cookie'] = `ec_session=${token}`
-  → 401 时清除并跳登录
+刷新（单飞）
+  POST /api/auth/refresh {refresh_token}
+  ← {access_token, refresh_token, expires_in}
+  → 原子替换两个 token；旧 refresh 已被服务端作废
+
+退出
+  POST /api/auth/revoke {refresh_token}   → 204
+  → 无论成功失败，都清 Asset 中的两个 token + 页面缓存 + `cacheDir` 音频
 ```
 
+**单飞刷新**（`commons/net` 内实现，VM/页面不可见）：
+
+- 任何带 `auth:true` 的请求返回 401 → 只允许一次 refresh；并发 401 共享**同一个 Promise**，等待后各自重放原请求。
+- 每个请求的自动重放**最多一次**；重放仍 401 → 清 token、发一次全局 `unauthorized` 事件、跳登录。
+- `/auth/token`、`/auth/refresh`、`/auth/revoke`、`/health` 不参与 401 刷新，避免递归。
+- refresh 返回 401/400（refresh 已失效/被吊销/被别的设备轮换掉）→ 清 token 跳登录。
+- refresh 遇到网络错误/5xx → **不清 token**，把原请求以可重试错误抛出，让用户重试；避免一次断网就登出。
+- access 过期前 60s 可主动刷新（可选优化），仍走同一把单飞锁。
+
 ```ts
-// 解析示意：cookies 可能是 "a=1; Path=/; ..., b=2; ..." 或单条
-function extractEcSession(cookies: string | undefined | null): string | null {
-  if (!cookies) return null;
-  const m = cookies.match(/(?:^|[;,]\s*)ec_session=([^;,\s]+)/);
-  return m ? m[1] : null;
+// 示意：不是最终实现
+let refreshing: Promise<void> | null = null;
+
+function refreshOnce(): Promise<void> {
+  if (!refreshing) {
+    refreshing = doRefresh().finally(() => { refreshing = null; });
+  }
+  return refreshing;
+}
+
+async function doRefresh(): Promise<void> {
+  const rt = session.refreshToken();
+  if (!rt) throw new UnauthorizedError();
+  const resp = await raw({ method: POST, path: '/auth/refresh', json: { refresh_token: rt },
+                           auth: false, retryOn401: false });
+  if (resp.status === 401 || resp.status === 400) {
+    await session.clear();
+    throw new UnauthorizedError();
+  }
+  if (resp.status !== 200) throw new ApiError({ retryable: true });  // 不清 token
+  await session.save(toTokenPair(resp.data));                       // 原子替换
 }
 ```
 
-**为什么不用 `enableAutoCookie`**：官方接口文档标注该 API 为 **API 26.0.0**，本项目最低 API 12，不可用；且它只在同一个 `HttpRequest` 实例内共享 Cookie，而我们的设计是每请求一个实例。手动 Cookie 更可控、可持久化、可测试。
-
-> 【待真机验证】`HttpResponse.cookies` 对 `httpOnly` Cookie 的返回行为（是否带属性、是否多条拼接）在不同版本上可能不同；实现必须同时准备 `header['set-cookie']` 兜底，并用真实登录响应做单测/真机验证。
->
-> 另：`@ohos.request` 的 `agent` 是上传/下载任务管理，不是通用 HTTP 会话/Cookie 容器；不要用它替代 `@ohos.net.http` 来“自动管理 Cookie”。
-
 **安全取舍**：
 
-- token 放 **Asset Store Kit**（`asset.add/query/remove`，`Tag.SECRET`），不写 Preferences。
-- `httpOnly` 对原生 HTTP 没有浏览器意义，但 token 仍是敏感凭证：不日志、不埋点、不出现在错误详情。
+- access/refresh 放 **Asset Store Kit**（`@ohos.security.asset`；Kit 聚合导入为 `@kit.AssetStoreKit`），`asset.add/query/remove` + `Tag.SECRET`，不写 Preferences、不写日志、不进备份。
+- token 是敏感凭证：不埋点、不出现在错误详情/诊断导出/剪贴板/通知。
+- refresh 是**一次性**的：保存前若进程被杀，服务端已作废旧 refresh，下次启动会刷新失败并回登录页——这是可接受的失败方式，不做“重试旧 refresh”。
+- 不用“本地过期时间”当唯一依据；以服务端 401 为准。
 - 不实现“记住密码”；登录页可选记住邮箱（默认关）。
-- 退出登录：先 `POST /auth/logout`（失败也继续），再清 Asset、清页面缓存、清 `cacheDir` 音频。
 
 **Asset Store vs Preferences（加密）取舍**：
 
@@ -347,12 +381,14 @@ function extractEcSession(cookies: string | undefined | null): string | null {
 |---|---|---|
 | 加密 | 系统级加密存储，按别名访问 | 默认明文；要加密需自己用 Crypto Framework + 管理密钥 |
 | 访问控制 | 可配 `ACCESSIBILITY`、`AUTH_TYPE`、`REQUIRE_PASSWORD_SET` | 无系统级访问控制 |
-| 同步/备份 | 默认 `SYNC_TYPE.NEVER`，不参与云同步 | 随应用数据，可能进备份 |
-| 容量 | `SECRET` 1–1024 字节 | 适合小配置，不适合长密钥 |
-| 复杂度 | 低（API 11+，`addSync` API 12+） | 自行加密时密钥放哪又是新问题 |
-| 适用 | **会话 token、刷新令牌** | 非敏感配置（baseUrl、lastLevel、ttsRate） |
+| 同步/备份 | 显式设 `SYNC_TYPE.NEVER`，不参与云同步 | 随应用数据，可能进备份 |
+| 容量 | `SECRET` 有单条长度上限（官方文档为 1024 字节，**以 SDK/实测为准【待确认】**） | 适合小配置，不适合长密钥 |
+| 复杂度 | 低（API 20 基线全部可用，含 `add/query/remove` 及同步版本） | 自行加密时密钥放哪又是新问题 |
+| 适用 | **access token、refresh token** | 非敏感配置（baseUrl、lastLevel、ttsRate、token 过期时间戳） |
 
-结论：**token 必须进 Asset Store**；Preferences 只放非敏感配置。不要为了“少一个 API”把 token 塞进 Preferences，也不要用固定密钥自行加密（密钥同样要存，等于没解决）。
+结论：**两个 token 必须进 Asset Store**；Preferences 只放非敏感配置（含 `accessExpiresAt` 时间戳）。不要为了“少一个 API”把 token 塞进 Preferences，也不要用固定密钥自行加密（密钥同样要存，等于没解决）。
+
+> 【待确认】若 access token 用 JWT 且长度接近/超过 Asset 单条上限：优先让后端改用不透明短 token，而不是把 token 拆成多条 secret。refresh token 通常很短，不受影响。
 
 ### 5.4 multipart 上传
 
@@ -381,9 +417,9 @@ const parts: http.MultiFormData[] = [
 
 ### 5.5 下载与图片
 
-`/api/audio/:id`、`/api/materials/:id/image` 都需要 Cookie；其中录音接口明确返回 **`accept-ranges: none`**，图片接口也不是为流式/分块读取设计的：
+`/api/audio/:id`、`/api/materials/:id/image` 都需要 `Authorization: Bearer`；其中录音接口明确返回 **`accept-ranges: none`**，图片接口也不是为流式/分块读取设计的：
 
-- **不要**把 URL 直接交给 `AVPlayer.url` 或 `Image(url)`：它们不会带 Cookie，且可能依赖 Range。
+- **不要**把 URL 直接交给 `AVPlayer.url` 或 `Image(url)`：它们不会带 `Authorization`，且可能依赖 Range。
 - 统一走 `HttpClient.download` → `cacheDir/audio|images/<hash>.<ext>` → 再交给 AVPlayer/ImageSource。
 - 下载用 `requestInStream` 或 `request` + `ARRAY_BUFFER`（≤20MB），写入临时文件后原子 rename。
 - 图片：`image.createImageSource(path).createPixelMap()`，再 `Image(pixelMap)`；避免 `Image('https://...')`。
@@ -394,11 +430,14 @@ const parts: http.MultiFormData[] = [
 | 接口 | 客户端超时 | 服务端上游超时 | 说明 |
 |---|---:|---:|---|
 | `/health` | 5s | 3s | 快速判断 NAS 可达 |
-| `/auth/login` | 15s | — | 慢网络 |
+| `/auth/token` | 15s | — | 慢网络 |
+| `/auth/refresh` | 15s | — | 单飞；网络失败不清 token |
+| `/auth/revoke` | 10s | — | 退出时失败也清本地 |
 | `/sentences` | 15s | — | 可缓存 |
 | `/attempts`（同步） | **120s** | 60s pronounce + 40s feedback | 不要 30s 就断；给足上游重试余量 |
 | `/attempts/async` | 30s | — | 只写 pending |
 | `/attempts/status` | 15s | — | 轮询 |
+| `/chat/sessions/:id/messages` | 15s | — | 轮询 `pron` |
 | `/asr` | 45s | 30s | |
 | `/tts` | 30s | 20s | |
 | `/chat/.../turn` | 60s | 40s | |
@@ -454,7 +493,7 @@ export class UiError {
 |---|---|---|---|
 | 400 | `bad_request` | 服务端 message（如“录音文件过大”） | 返回修改 |
 | 400 | `content_unsafe` | 这段内容暂时画不成插画，换个说法试试 | 返回编辑 |
-| 401 | `unauthorized` | 登录已过期，请重新登录 | 清会话 → 登录 |
+| 401 | `unauthorized` | 登录已过期，请重新登录 | 先单飞 refresh 重放一次；仍 401 才清会话 → 登录 |
 | 403 | `forbidden` | 这个功能只有家长可以用 / 你没有权限看这个内容 | 返回 |
 | 404 | `not_found` | 内容不在了，刷新看看 | 刷新/返回 |
 | 404 | `audio_not_found` | 这条录音找不到了，可能已过期 | 隐藏播放按钮 |
@@ -507,7 +546,7 @@ export class UiError {
 | 文件 | `cacheDir/images/` | 材料图、插画 | LRU，100MB / 30 天 |
 | 文件 | `filesDir/pending/` | 未上传成功的录音 | 最多 3 条 / 24h；登出清空 |
 | Preferences | `ec_prefs` | baseUrl、lastLevel、ttsRate、childScale、lastEmail | 持久 |
-| Asset | Asset Store | `ec_session` | 与服务端 30 天一致 |
+| Asset | Asset Store | `ec_access_token` / `ec_refresh_token` | access 1h、refresh 30 天；刷新时原子替换 |
 
 **不缓存**：家长面板汇总、建议收件箱、家庭成员列表、密码相关响应。这些是敏感/强时效数据，每次进页面重新拉。
 
@@ -549,6 +588,7 @@ export class UiError {
 ### 8.1 单飞（single-flight）
 
 - `/health`：App 启动并发多次时只发一个请求，其余 await 同一个 Promise。
+- **token 刷新**：并发 401 只发一次 `/auth/refresh`，其余 await 同一个 Promise；成功后各自重放原请求，失败则统一登出。
 - 语料加载：同 level 同时只发一个 GET。
 - 图片下载：同 URL 同时只发一个下载。
 - 登录：按钮 loading 期间禁用，避免重复会话。
@@ -598,10 +638,9 @@ PLAYING ──record──► 先 stopPlayback() → RECORDING
 
 ```text
 UI → AuthVM.login(email, pwd)
-  → POST /auth/login（auth:false）
-  ← 200 {user, expiresAt} + Set-Cookie
-  → CookieSession.saveFromResponse()
-  → GET /auth/me（带 Cookie）
+  → POST /auth/token（auth:false）→ 200 {access, refresh, expires_in, user}
+  → TokenSession.save(pair)（两个 token 一起写 Asset）
+  → GET /auth/me（带 Authorization）
   ← {user, usage}
   → AppStorage.session / usage
   → Navigation.replace('home')
@@ -634,11 +673,15 @@ UI → FlowVM.start(items)
 UI 按住/点击录音 → AudioCoordinator.record()
   → 停止 → 文件 m4a
   → POST /asr（audio, language=en）→ text
-  → POST /chat/sessions/:id/turn（audio + text）
-  ← reply / correction / suggested_replies / done
+  → POST /chat/sessions/:id/turn（multipart：text 必填 + audio）
+  ← reply / correction / suggested_replies / done（只有助手文本，无 TTS 音频）
   → POST /tts（text=reply, format=mp3）→ 下载 → AVPlayer
+  → 后台：每 2s GET /chat/sessions/:id/messages，等该轮助手消息出现 pron
+       → 成人补显示发音小分；儿童只用于鼓励/提示，不显示数字
 ```
 
+> `pron` **不在** `/turn` 响应，也**不在** `/sessions/:id` 里；只有 `/sessions/:id/messages` 的助手消息带 `pron`。评分是 `after()` 里的异步任务，可能晚几秒，轮询 3–5 次仍为空就放弃（不阻塞对话）。
+>
 > 若后端未来把 ASR/TTS 收进 `/turn`，只需改 `ChatService.turnByVoice()` 的内部实现，VM/UI 不变。这是分层的主要收益。
 
 ---
@@ -647,7 +690,7 @@ UI 按住/点击录音 → AudioCoordinator.record()
 
 - `hilog` domain 固定 `0xEC00`；tag：`Net`、`Audio`、`VM`、`Nav`。
 - 每次请求生成 `requestId`（8 位随机），日志格式：`requestId method path status code elapsedMs`。
-- 不打印：Cookie/token、邮箱、录音路径、ASR 文本、LLM 回复全文。
+- 不打印：access/refresh token、邮箱、录音路径、ASR 文本、LLM 回复全文。
 - 错误上报只走本地日志（无三方 SDK）；debug 包可在设置页导出最近 500 行日志（脱敏后）。
 - 关键指标（本地计数，不上传）：录音时长分布、上传成功率、TTS 首播耗时、轮询完成率。
 

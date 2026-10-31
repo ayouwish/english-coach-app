@@ -4,9 +4,9 @@
 
 | 模块 | 职责 | 关键文件（M0 创建） |
 |---|---|---|
-| `net` | 唯一 HTTP 出口、Cookie 会话、multipart、下载、错误归一化 | `client/HttpClient.ets`、`session/CookieSession.ets`、`error/ApiError.ets`、`dto/*` |
+| `net` | 唯一 HTTP 出口、Bearer 认证/单飞刷新、multipart、下载、错误归一化 | `client/HttpClient.ets`、`session/TokenSession.ets`、`error/ApiError.ets`、`dto/*` |
 | `audio` | AVRecorder/AVPlayer 封装、音频协调器、权限 | `record/RecorderService.ets`、`play/PlayerService.ets`、`coordinator/AudioCoordinator.ets` |
-| `storage` | Asset token、Preferences、文件缓存/LRU | `secure/SecureStore.ets`、`prefs/PrefStore.ets`、`cache/FileCache.ets` |
+| `storage` | Asset 中 access/refresh token、Preferences、文件缓存/LRU | `secure/SecureStore.ets`、`prefs/PrefStore.ets`、`cache/FileCache.ets` |
 | `design` | Design Tokens、通用组件、图表 | `tokens/Colors.ets`、`tokens/Spacing.ets`、`components/EcButton.ets`、`charts/*` |
 | `model` | 共享 DTO/领域模型/路由常量/配置 | `dto/*`、`router/Routes.ets`、`config/AppConfig.ets` |
 | `util` | 时间/格式化/重试/日志脱敏 | `TimeUtil.ets`、`Retry.ets`、`Redact.ets` |

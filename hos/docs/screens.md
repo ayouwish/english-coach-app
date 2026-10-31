@@ -2,7 +2,7 @@
 
 > 路由名见 [architecture.md](architecture.md) 第 4 节。
 > 所有页面共用：`PageScaffold`（安全区/标题/返回）、`ErrorBanner`、`EmptyState`、`LoadingSkeleton`、`ChildModeFrame`。
-> 本文中的“分数”均指服务端 `scores.pron` / 子项；儿童模式有额外的**不显示低分**规则，见第 0 节。
+> 本文中的“分数”均指服务端评测结果里的 `scores.pron`（跟读/连读）或 `pron`（对话轮次，异步返回）/ 子项；儿童模式有额外的**不显示低分**规则，见第 0 节。
 
 ---
 
@@ -52,7 +52,7 @@
 
 ### 交互
 
-- 启动：`BootstrapService` 读 token → `/auth/me`；成功进首页，失败按错误类型进登录/离线页。
+- 启动：`BootstrapService` 读 Asset 中的 access/refresh → `/auth/me`（401 先单飞刷新）；成功进首页，失败按错误类型进登录/离线页。
 - 顶部状态：`/api/health` 成功 → “NAS 已连接”；失败 → “连不上家庭 NAS” + 点击重试/网络说明。
 - 用量：来自 `/auth/me` 的 `usage`；每次提交评测/对话后更新。
 - 儿童：只保留 4 个 tab，首页卡片更大；不显示“家长面板”。
@@ -106,7 +106,7 @@
 
 - 输入：邮箱键盘、密码键盘；密码可见切换；错误时不抖动（避免儿童焦虑），用内联红字。
 - 提交：按钮 loading“登录中…”，禁用重复点击。
-- 成功：`POST /auth/login` → 保存 Cookie → `GET /auth/me` → 写 Session → `navStack.clear()` → 首页。
+- 成功：`POST /auth/token` → 保存 access/refresh → `GET /auth/me` → 写 Session → `navStack.clear()` → 首页。
 - 失败：
   - 401 → “邮箱或密码不正确”；
   - 400 → 服务端 message；
@@ -120,8 +120,8 @@
 
 | 时机 | 接口 |
 |---|---|
-| 登录 | `POST /auth/login` |
-| 恢复 | `GET /auth/me` |
+| 登录 | `POST /auth/token` |
+| 恢复 | `GET /auth/me`（带 `Authorization`） |
 | 健康 | `GET /health`（可选） |
 
 ### 状态
@@ -331,14 +331,16 @@
 2. `POST /asr`（`language=en`）→ `text`。
 3. 显示识别文本，提供“重说 / 发送”；**不自动发送**（避免误识别直接进 LLM）。
 4. `POST /chat/sessions/:id/turn`（multipart：`audio` + `text`；`text` ≤500 字符）。
-5. 收到 `reply/reply_zh/correction/suggested_replies/done`。
+5. 收到 `reply/reply_zh/correction/suggested_replies/done`；**这一轮没有 TTS 音频，也没有发音分**。
 6. `POST /tts`（`text=reply`, `format=mp3`）→ 下载 → 播放；失败不影响文字展示。
 7. 用户录音回放：`GET /audio/:user_message_id` 或本地 pending 文件。
+8. 后台补齐发音分：每 2s `GET /chat/sessions/:id/messages`，等本轮助手消息的 `pron` 非空；成人补显示“发音 72”小分，儿童不显示数字、只用于鼓励/提示。轮询 3–5 次仍为空就放弃，不阻塞下一轮。
 
 **约束**
 
 - **没有文字输入框**：这是【客户端自行实现】的产品约束（后端 `/turn` 也接受 JSON `text`，但移动端不提供文字入口）；建议回复 chips 点击只“朗读提示”，不发送，用户必须自己说。
 - 一轮未完成前禁用录音；不允许并发 turn。
+- **发音分是异步的**：`pron` 只在 `GET /chat/sessions/:id/messages` 的助手消息里，`GET /chat/sessions/:id` 不返回；没有按时到达不是错误，不弹错、不回滚消息。
 - 第 6 轮或 `done=true`：展示结束卡“今天聊得很棒”，提供“换个场景/再聊一次”。
 - 儿童：纠错只展示 1 条、语气温和；不显示音素；回复语速默认 slow。
 - 安全：`flag=unsafe_filtered` 时正常显示安全回复，不展示被过滤内容；`degraded_llm=true` 时提示“今天 AI 有点忙，先用固定话术陪你练”。
@@ -349,11 +351,12 @@
 |---|---|
 | 场景 | `GET /chat/scenarios` |
 | 开始 | `POST /chat/sessions` |
-| 历史 | `GET /chat/sessions/:id` |
+| 历史 | `GET /chat/sessions/:id`；消息/发音分 `GET /chat/sessions/:id/messages` |
 | 识别 | `POST /asr` |
-| 一轮 | `POST /chat/sessions/:id/turn` |
+| 一轮 | `POST /chat/sessions/:id/turn`（只回助手文本） |
 | 朗读 | `POST /tts` |
 | 回放 | `GET /audio/:id` |
+| 发音分 | 轮询 `GET /chat/sessions/:id/messages` 的 `pron` |
 
 ### 状态
 
@@ -388,7 +391,7 @@
 
 - `GET /materials?kind=story|page`；家庭共享。
 - “只看我的”是**客户端过滤**（`created_by === 当前用户`），后端没有 `mine` 参数；不要伪造接口。
-- 封面：`has_image=true` 时下载 `/materials/:id/image`（带 Cookie）→ PixelMap；无图用渐变占位。
+- 封面：`has_image=true` 时下载 `/materials/:id/image`（带 `Authorization`）→ PixelMap；无图用渐变占位。
 - 点击进详情；长按/更多：编辑/删除（创建者或家长；服务端 403 兜底）。
 - 空：“还没有故事，点右上角用一个中文故事换英文绘本”。
 
@@ -742,7 +745,7 @@
 - 儿童：隐藏/禁用时长与自由话题（服务端 403 兜底）；语速用两个大按钮。
 - 音色：高级项默认折叠；留空用服务端默认；不提供一长串 provider voice id（避免儿童误选）。
 - 清除缓存：清 TTS/图片/回放缓存 + pending 录音（需确认）；不删账号数据。
-- 退出：`POST /auth/logout`（失败也清本地）→ 清 Asset/缓存 → 登录页。
+- 退出：`POST /auth/revoke {refresh_token}`（失败也继续）→ 清 Asset 中两个 token/缓存 → 登录页。
 - 隐私说明：打开 `permissions-and-privacy.md` 的客户端版本（静态页）。
 - 服务器状态：`GET /health`；debug 包可编辑 baseUrl，release 只读。
 
@@ -753,7 +756,7 @@
 | 加载 | `GET /settings` |
 | 保存 | `PATCH /settings` |
 | 健康 | `GET /health` |
-| 退出 | `POST /auth/logout` |
+| 退出 | `POST /auth/revoke` |
 
 ### 状态
 
@@ -783,8 +786,8 @@
 │ 至少 8 位                           │
 │ [保存新密码]                        │
 │                                     │
-│ ⚠️ 修改后，其他设备上已登录的会话     │
-│    可能仍然有效，建议退出后重登。     │
+│ ⚠️ 修改后，其他设备上的 refresh      │
+│    token 可能仍然有效，建议退出重登。 │
 └─────────────────────────────────────┘
 ```
 
@@ -795,7 +798,7 @@
 - 儿童：不显示输入框，显示“请让爸爸妈妈在家长面板帮你改密码”；不提供绕过。
 - **没有旧密码校验**：这是家长管理员重置，不是本人改密；如果要做本人改密，需要 `POST /auth/password`（旧密码 + 新密码）【待后端新增】。
 - 成功：Toast“新密码已保存”；返回设置/成员列表。
-- 安全提示：服务端只更新 `password_hash`，**不会删除现有 sessions**；旧设备会话仍有效。客户端提示“建议在旧设备退出登录”。（是否服务端强制踢下线，见 open-questions）
+- 安全提示：服务端只更新 `password_hash`，**不会吊销现有 refresh token**；旧设备在 refresh 到期/被 revoke 前仍有效。客户端提示“建议在旧设备退出登录”。（是否服务端强制踢下线，见 open-questions Q7）
 - 表单校验：8–128 位；两次一致；不允许空白；不显示密码强度条（家庭场景，降低认知负担）。
 
 ### API
@@ -902,6 +905,6 @@
 - [ ] 每个错误都能对应到一个可执行动作（重试/去设置/换等级/回首页）。
 - [ ] 儿童页面无 IPA、无 <60 数字、无 F0 曲线、按钮 ≥56vp。
 - [ ] 家长页面 child 无法通过深链进入（客户端拦截 + 服务端 403）。
-- [ ] 所有音频播放走“下载后本地播放”，不直接把需要 Cookie 的 URL 交给 AVPlayer。
+- [ ] 所有音频播放走“下载后本地播放”，不直接把需要 `Authorization` 的 URL 交给 AVPlayer。
 - [ ] 所有写操作（评测/对话/改写/插画）在按钮 loading 期间不可重复点击。
 - [ ] 所有页面在切后台/销毁时停止轮询、播放、下载。

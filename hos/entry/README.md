@@ -48,7 +48,7 @@ entry/
 ## M0 要创建的最小文件
 
 1. `AppScope/app.json5`（bundleName、versionCode/Name、icon、label）
-2. `build-profile.json5`（signingConfigs、products、compileSdk 12）
+2. `build-profile.json5`（signingConfigs、products、compileSdk 20）
 3. `hvigorfile.ts`、`oh-package.json5`
 4. `entry/build-profile.json5`、`entry/hvigorfile.ts`、`entry/oh-package.json5`
 5. `entry/src/main/module.json5`（`EntryAbility` + `INTERNET`/`MICROPHONE`）

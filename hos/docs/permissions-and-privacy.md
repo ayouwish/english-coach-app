@@ -2,7 +2,7 @@
 
 > 范围：HarmonyOS 客户端 + 家庭 NAS 服务端的数据边界。
 > 本文不是法律意见；上架/合规前需按应用市场与所在地法规复核。
-> **最重要的结论先说**：客户端只把数据传到家庭 NAS，但“录音不出户”目前**不能作为默认承诺**——仓库 `deploy/.env` 当前是 `PROVIDER_MODE=hybrid`（云为主 + 本地兜底），录音/文本可能由 NAS 转发到云端 provider。详见第 5 节。
+> **最重要的结论先说**：客户端只把数据传到家庭 NAS，但当前部署 `PROVIDER_MODE=hybrid` 会把**音频发给 Azure、文本发给 DeepSeek、书页图片/插画提示发给 DeepSeek/智谱**；这些内容**会离开家庭网络**。因此不能承诺音频/文本/图片留在家庭网络。完全本地需要切 `local` 模式并备好本地模型，**当前未部署**。详见第 5 节。
 
 ---
 
@@ -91,7 +91,7 @@
                ├─ 授权 → 开录
                └─ 拒绝 → 不重复弹窗
                     → “需要麦克风才能练习”
-                    → [去设置] requestPermissionOnSetting（API 12+）
+                    → [去设置] requestPermissionOnSetting
                     → 或提示手动路径
 ```
 
@@ -125,20 +125,20 @@
 | 证书 | 使用系统默认 CA 校验；**不提供“忽略证书错误”开关** |
 | Pinning | MVP 不做；M4 评估证书 pinning（家庭自签/换证书会导致失联） |
 | 代理 | 不主动配置代理；遵循系统网络；不使用第三方中转 |
-| Cookie | `ec_session` 经 HTTPS 传输；`Secure` 由服务端 `COOKIE_SECURE=1` 决定 |
-| Token 存储 | Asset Store Kit；不进 Preferences/日志/备份 |
+| 凭据传输 | `Authorization: Bearer <access>` 只走 HTTPS；refresh 只发给 `/auth/refresh`；不写 URL/日志 |
+| Token 存储 | Asset Store Kit（`@ohos.security.asset`）的两个别名；不进 Preferences/日志/备份 |
 | 明文例外 | debug 包可临时用 `http://192.168.x.x:3000`；release 不允许 |
 
 > 【待真机验证】HarmonyOS 对明文 HTTP 的拦截行为与网络配置项；以目标 SDK/机型实测为准。若被拦截，不要绕过，改用 HTTPS。
 
 ---
 
-## 5. 数据流与“录音不出户”的真实边界
+## 5. 数据流与出网边界
 
 ### 5.1 两条链路
 
 ```text
-客户端 ──HTTPS/Cookie──► web (Next.js :3000) ──HTTP──► voice (FastAPI :8100)
+客户端 ──HTTPS/Bearer──► web (Next.js :3000) ──HTTP──► voice (FastAPI :8100)
                               │                           │
                               │ SQLite + data/audio       ├─ 本地模型（faster-whisper / piper / 本地 OCR）
                               │ data/materials            └─ 云 API（Azure Speech / DeepSeek / 智谱 GLM）
@@ -147,7 +147,7 @@
 - **客户端只与 web 通信**；不直连 voice，不持有任何云 provider 密钥。
 - web 是否把音频/文本/图片转发到云，取决于 **voice 的 `PROVIDER_MODE` 与分项 provider 配置**。
 
-### 5.2 当前部署事实
+### 5.2 当前部署事实（`PROVIDER_MODE=hybrid`）
 
 仓库 `deploy/.env` 当前为：
 
@@ -157,26 +157,31 @@ PROVIDER_MODE=hybrid
 
 （仅核对模式行，未读取任何密钥。）
 
-根据 `deploy/.env.example` 的说明：
+当前数据去向：
 
-- `hybrid` = **云为主 + 本地兜底**；
-- 可能使用 Azure AI Speech（ASR/发音评测/TTS）、DeepSeek（LLM/多模态 OCR）、智谱 GLM（插画）；
-- 具体以 `/v1/health` 的 `providers_effective` 为准（该字段只在 voice 侧，web 的 `/api/health` 目前只暴露 `mode` 与 `capabilities`）。
+| 数据类型 | 处理方 | 用途 |
+|---|---|---|
+| 录音音频 | **Azure AI Speech** | ASR、发音评测、TTS |
+| 文本（对话/改写/复述） | **DeepSeek** | LLM 对话、故事改写、复述评估 |
+| 书页图片 / 插画提示 | **DeepSeek / 智谱 GLM** | 多模态 OCR、文生图 |
+
+- 具体以 `/v1/health` 的 `providers_effective` 为准（该字段只在 voice 侧；web 的 `/api/health` 目前只暴露 `mode` 与 `capabilities`）。
+- 这意味着：**音频、文本、图片都会离开家庭网络**，由 NAS 转发给上述服务商；客户端无法阻止或保证云端不留存。
 
 ### 5.3 结论表
 
-| voice 模式 | 数据路径 | 能否说“录音不出户” |
+| voice 模式 | 数据路径 | 数据是否离开家庭网络 |
 |---|---|---|
-| `mock` | 不调用外部；假数据 | 可以，但没有真实评分 |
-| `local` | NAS 本地模型 | 可以（前提：所有分项都是 local，且无云 OCR/LLM/插画） |
-| `cloud` | NAS → 云 provider | **不可以** |
-| `hybrid` | 部分云、部分本地 | **不能笼统承诺**；需逐项确认 ASR/PA/TTS/LLM/OCR/Image 的 provider |
+| `mock` | 不调用外部；假数据 | 否（但没有真实评分） |
+| `local` | NAS 本地模型 | 否（前提：所有分项都是 local，且无云 OCR/LLM/插画） |
+| `cloud` | NAS → 云 provider | **是** |
+| `hybrid`（当前） | 部分云、部分本地 | **是**（音频→Azure、文本→DeepSeek、图片→DeepSeek/智谱） |
 
 **因此：**
 
-- 对用户的隐私文案**不能写死**“录音绝不会离开你家”。
-- 当前 `hybrid` 部署下，应明确告知“录音会由家庭 NAS 转发给云端语音服务商用于识别/评分/合成”，并给出服务商类别。
-- 若产品必须承诺“不出户”，需要把 voice 切成 `local`（或分项 local）并关闭云 OCR/LLM/插画；这是**部署配置变更**，不是客户端能控制的。
+- 对用户的隐私文案**必须如实写“会离开家庭网络”**，不能写“绝不离开”“本地处理”。
+- 当前 `hybrid` 部署下，应明确告知“录音会由家庭 NAS 转发给云端语音服务商（Azure）用于识别/评分/合成；对话文本会发给 DeepSeek；书页图片/插画提示会发给 DeepSeek/智谱”。
+- 若产品必须做到完全本地，需要把 voice 切成 `local`（或分项 local）并关闭云 OCR/LLM/插画；这是**部署配置变更**，不是客户端能控制的，**当前未部署**。
 - 建议后端在 `/api/health` 增加一个面向客户端的 `privacy` 摘要（如 `{cloud_audio:true, providers:["azure"], ...}`），供隐私文案动态展示【待后端新增】。
 
 ### 5.4 各类数据的去向
@@ -184,11 +189,11 @@ PROVIDER_MODE=hybrid
 | 数据 | 客户端 | 家庭 NAS | 是否可能到云 |
 |---|---|---|---|
 | 邮箱、密码 | 不存密码；邮箱可选记住 | SQLite（密码 bcrypt hash） | 否 |
-| 会话 token | Asset Store | sessions 表（token） | 否 |
-| 录音 | pending/cache，登出清理 | `data/audio/` | **是**（ASR/PA，取决于 provider） |
+| access/refresh token | Asset Store | 服务端会话表（refresh 哈希/记录） | 否 |
+| 录音 | pending/cache，登出清理 | `data/audio/` | **是**（Azure：ASR/PA/TTS） |
 | 评测分数/错音 | 结果缓存 | SQLite | 否（结果可能由云算出） |
-| 对话文本/回复 | 页面内存 | SQLite chat_messages | **是**（LLM/TTS） |
-| 书页/故事/插画 | 临时图/缓存 | SQLite + `data/materials/` | **是**（OCR/LLM/文生图） |
+| 对话文本/回复 | 页面内存 | SQLite chat_messages | **是**（DeepSeek；TTS 走 Azure） |
+| 书页/故事/插画 | 临时图/缓存 | SQLite + `data/materials/` | **是**（OCR/LLM/文生图：DeepSeek/智谱） |
 | 建议内容 | 草稿本地 | SQLite suggestions | 否 |
 | 用量统计 | 本地计数 | SQLite practice_sessions | 否 |
 | 设备信息 | 不采集 | web 日志可能有 IP/UA | 视日志配置 |
@@ -206,12 +211,12 @@ PROVIDER_MODE=hybrid
 3. App 不后台录音；只在用户点击录音/“跟我读”时打开麦克风，停止后立即释放。
 4. App 只与 `https://english.dreamsearch.top` 通信，不直连第三方 AI 服务。
 5. 录音/图片只写入应用沙箱，不上传系统相册/公共目录。
-6. 退出登录会清除本机会话、待上传录音和音频/图片缓存。
+6. 退出登录会清除本机 token、待上传录音和音频/图片缓存。
 7. 儿童界面不显示 IPA、不显示低分；不基于儿童数据做广告画像。
 
 **不能**由客户端承诺：
 
-- “录音永远不会离开家庭网络”（取决于 voice provider）。
+- “录音/文本/图片只在家庭网络内处理”（当前 hybrid 会发给 Azure/DeepSeek/智谱）。
 - “NAS 上的数据会被自动删除”（当前没有自动保留期/用户删除入口）。
 - “云端 provider 不会记录数据”（取决于其条款）。
 - “家长可以随时远程注销所有设备”（当前没有 logout-all 接口）。
@@ -223,7 +228,7 @@ PROVIDER_MODE=hybrid
 | 项 | 现状 | 建议 |
 |---|---|---|
 | 传输 | HTTPS（Caddy） | 保持；证书自动续期 |
-| 账号 | bcrypt hash；Cookie 会话 30 天 | 保持；支持注销全部会话【待后端新增】 |
+| 账号 | bcrypt hash；Token（access 1h / refresh 30d，可轮换/吊销） | 保持；补“本人改密 + 注销全部设备”【待后端新增】 |
 | 录音存储 | `data/audio/`，按用户/尝试 | 明确保留期；提供家长删除入口【待后端新增】 |
 | 聊天/评测 | SQLite | 明确保留期；备份加密 |
 | 材料/插画 | `data/materials/` | 删除材料时同步删图（已有） |
@@ -253,7 +258,7 @@ PROVIDER_MODE=hybrid
 
 | 数据 | 位置 | 保护 |
 |---|---|---|
-| 会话 token | Asset Store Kit（`Tag.SECRET`，别名 `ec_session`） | 系统加密；默认不同步（`SYNC_TYPE.NEVER`）；卸载即删（`IS_PERSISTENT=false`） |
+| access/refresh token | Asset Store Kit（`Tag.SECRET`，别名 `ec_access_token` / `ec_refresh_token`） | 系统加密；显式设置 `SYNC_TYPE.NEVER`（不同步）；`IS_PERSISTENT=false`（卸载即删） |
 | 邮箱（可选） | Preferences | 明文；仅用于登录预填；可关闭 |
 | 用户资料缓存 | Preferences | 只存 `displayName/role/ageBand/cefrLevel/avatar`；不存邮箱 |
 | baseUrl/lastLevel/ttsRate | Preferences | 非敏感 |
@@ -263,7 +268,7 @@ PROVIDER_MODE=hybrid
 
 - 不使用 `IS_PERSISTENT=true`（避免卸载后残留）。
 - 不把 token 写入 `preferences`、`AppStorage` 持久化、剪贴板、通知。
-- 设备丢失：远程无法注销（无 logout-all）；短期靠 30 天过期；建议后端补“注销全部会话”。
+- 设备丢失：只能吊销该设备的 refresh token（`/auth/revoke`），**没有 logout-all**；短期靠 refresh 30 天过期；建议后端补“注销全部会话”。
 
 ---
 
@@ -279,10 +284,10 @@ PROVIDER_MODE=hybrid
 >
 > **会不会用到云端**
 > 当前语音服务模式为「{mode}」。{cloud_note}
-> 如果模式是 hybrid/cloud，NAS 会把录音/文字/图片转发给云端语音或大模型服务商（可能包括 Azure Speech、DeepSeek、智谱）用于识别、评分、合成或生成；具体以部署配置为准。
+> 若当前为 hybrid/cloud：录音会由 NAS 转发给 Azure（识别/评分/合成），对话与故事文本会发给 DeepSeek，书页图片/插画提示会发给 DeepSeek/智谱。**这些内容会离开家庭网络**；具体以部署配置为准。
 >
 > **保留多久 / 怎么删除**
-> 会话 30 天过期；练习记录和录音的保留期由家庭 NAS 管理。你可以在设置里清除本机缓存；如需删除 NAS 上的数据，请联系家庭管理员。
+> 登录状态最长 30 天（refresh token 到期后需重新登录）；练习记录和录音的保留期由家庭 NAS 管理。你可以在设置里清除本机缓存；如需删除 NAS 上的数据，请联系家庭管理员。
 >
 > **儿童**
 > 儿童账号由家长创建；家长可以查看孩子的练习记录。儿童界面不显示音素符号和低分，不使用儿童数据做广告画像。
@@ -293,8 +298,8 @@ PROVIDER_MODE=hybrid
 `{cloud_note}` 按 `voice.mode` 动态替换：
 
 - `mock`：“当前为演示模式，不调用云端 AI。”
-- `local`：“当前使用 NAS 本地模型，录音不出家庭网络（前提：OCR/LLM/插画也为本地）。”
-- `hybrid`：“当前为混合模式：部分能力在 NAS 本地运行，部分会调用云端服务。”
+- `local`：“当前使用 NAS 本地模型；只有 OCR/LLM/插画等分项也全部为本地时，数据才不离开家庭网络。”
+- `hybrid`：“当前为混合模式：音频会发给 Azure，文本会发给 DeepSeek，图片/插画会发给 DeepSeek/智谱；这些内容会离开家庭网络。”
 - `cloud`：“当前为云端模式：录音/文字会发送到云端服务商。”
 - 未知/不可达：“暂时无法确认云端使用情况，请向家庭管理员核实。”
 
@@ -303,7 +308,8 @@ PROVIDER_MODE=hybrid
 ### 10.2 儿童版（首次进入儿童账号）
 
 > 你的声音只用来帮你练英语。
-> 你说的话会送到家里的 NAS；如果家里的服务用了云端助手，它只用来帮你练英语，不会给广告商。
+> 你的声音会先送到家里的 NAS，再交给云端服务商（Azure）帮你识别和评分；这些声音会离开家里的网络，但只用来帮你练英语，不会给广告商。
+> 你说的话、拍的书页也会交给云端的大模型服务商（DeepSeek/智谱）。
 > 如果不想录了，点“取消”就可以；麦克风会马上关掉。
 > 你写的建议，爸爸妈妈可以看到。
 
@@ -336,8 +342,8 @@ PROVIDER_MODE=hybrid
 
 | 事件 | 立即动作 | 后续 |
 |---|---|---|
-| 设备丢失 | 当前没有远程注销接口；只能等待会话 30 天过期，或由管理员在服务端删除该会话 | 建议后端补 logout-all；不要把“改密码”当成踢下线 |
-| token 泄露 | 由管理员删除该会话（服务端 sessions 表）/退出登录 | 审计日志；缩短 TTL |
+| 设备丢失 | 在另一台设备登录后吊销该设备 refresh token（`/auth/revoke`）；没有 logout-all，其余设备仍有效；也可等 30 天过期 | 建议后端补 logout-all；不要把“改密码”当成踢下线 |
+| token 泄露 | 立即吊销对应 refresh token + 重新登录；管理员可在服务端删会话 | 审计日志；缩短 access TTL |
 | 录音误上传 | 停止使用；管理员用清理脚本按账号+时间点删除 | 备份留存策略 |
 | 云 provider 泄露 | 联系 provider；评估影响范围 | 告知家长；必要时切换 local |
 | NAS 被入侵 | 断网、改密钥、恢复备份 | 通知家庭；轮换 provider keys |

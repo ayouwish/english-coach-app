@@ -61,23 +61,31 @@
 
 ## 3. 认证与会话
 
-### 3.1 现状（后端已有）
+### 3.1 现状（后端已有 / 待新增）
 
-- `POST /api/auth/login` 成功后下发 **httpOnly Cookie**（`sameSite=lax`，HTTPS 部署时 `secure`）
-- 所有接口靠 Cookie 识别用户
-- `GET /api/auth/me` 返回当前用户（含 `role: parent|child`、`cefrLevel`、`ageBand`）
+| 能力 | 状态 |
+|---|---|
+| `POST /api/auth/login` → **Cookie 会话**（Web 端在用）| ✅ 已实现 |
+| `POST /api/auth/token` → `{access_token, refresh_token}` | **【待后端新增】P0，阻塞 M0** |
+| `POST /api/auth/refresh`（轮换）| **【待后端新增】** |
+| `POST /api/auth/revoke` | **【待后端新增】** |
+| `GET /api/auth/me` | ✅ 已实现（两种凭据都能识别）|
 
-### 3.2 客户端策略（**选 A，见 ADR-0001**）
+### 3.2 客户端策略：**Bearer Token**（ADR-0002，取代 ADR-0001）
 
-| 方案 | 做法 | 结论 |
-|---|---|---|
-| **A. Cookie 持久化**（首版）| 用系统 HTTP 栈的 Cookie 存储（iOS `HTTPCookieStorage`；鸿蒙**手动**解析 `Set-Cookie`/`HttpResponse.cookies` 并每请求带 `Cookie` 头——API 12 没有自动 Cookie 管理，`request.agent` 是上传/下载任务管理，不是 Cookie 管理器）持久化会话 | ✅ 零后端改动，先跑通 |
-| B. Bearer Token | 后端加 `POST /api/auth/token` + refresh | 【待后端新增】第二版再做（多设备、免 Cookie 策略限制）|
+用户已决定**直接上 Bearer Token**，移动端不使用 Cookie：
 
-**首版必须实现**：
-- 登录态持久化（重启 App 仍登录）
-- 401 时**跳登录页**（不要在子页面弹出无意义错误）
-- 「退出登录」清 Cookie + 清本地缓存
+```
+登录 → POST /api/auth/token → {access_token(1h), refresh_token(30d), user}
+每个请求 → Authorization: Bearer <access_token>
+401（access 过期）→ POST /api/auth/refresh（单飞，一次）→ 重放原请求
+refresh 也失败 → 清 token → 跳登录
+退出 → POST /api/auth/revoke + 清本地
+```
+**存储**：`access_token` / `refresh_token` 存 Keychain（iOS）或 Asset Store Kit（鸿蒙），**不写日志**。
+**实现要求**：网络层必须做「单飞刷新」（并发 401 只 refresh 一次，其余等待后重放），否则会出现 token 轮换竞争导致掉登录。
+
+> 后端保留 Cookie 模式给 Web；两种凭据解析必须落到同一 `userId`，禁止出现权限分叉。
 
 ### 3.3 账号体系（后端已有）
 
@@ -91,13 +99,15 @@
 
 ### 4.1 录音
 
-| 项 | 建议值 | 原因 |
+| 项 | 值（已定） | 说明 |
 |---|---|---|
 | 容器/编码 | **m4a / AAC-LC** | iOS/鸿蒙原生支持，服务端 PyAV 可解 |
-| 采样率 | **16kHz**（推荐）或 44.1kHz | 16kHz 够 ASR/PA 用，体积小；44.1kHz 也能被服务端重采样 |
-| 声道 | **单声道** | 服务端只吃单声道逻辑 |
-| 码率 | **64–96 kbps** | 12MB 上限内，1 分钟 ≈ 0.5–0.7MB |
-| 最长时长 | 服务端有 `max_audio_seconds` 限制（默认几十秒）| 超时会被截断/拒绝 |
+| 采样率 | **16 kHz** | 够 ASR/PA 用，体积小 |
+| 声道 | **单声道** | 服务端只处理单声道逻辑 |
+| 码率 | **65 kbps** | ≈ 0.49 MB/分钟；12 MB 上限约 24 分钟（仍受服务端时长上限约束）|
+| 最长时长 | 服务端有 `max_audio_seconds` 限制 | 超时会被截断/拒绝 |
+
+> 统一参数（两端一致），避免"某端能上传、另一端失败"。若真机验证服务端解码异常，再单点调整并回写本文。
 
 **硬性约束**：单次上传 ≤ **12MB**；**不要**把一句话切成多段发送（服务端 ASR 已修复"停顿丢后半句"，整段发送才能正确识别）。
 
@@ -245,7 +255,7 @@
 
 | 里程碑 | 内容 | 验收 |
 |---|---|---|
-| **M0** | 登录/会话、语料列表、跟读评测、示范音播放 | 一首儿歌难度的句子能完整走通；错误可见 |
+| **M0** | **Bearer Token 登录/刷新/吊销**、语料列表、跟读评测、示范音播放 | 杀掉重开仍登录；access 过期能自动刷新；退出后 token 失效 |
 | **M1** | 连读（异步+轮询）、对话训练（语音）、鼓励语 | 连读 5 句不停顿；对话 3 轮不卡 |
 | **M2** | 故事模式（中文语音/文字→改写→连读→复述）、插画 | 讲一个今天的事，得到英文+插画+复述反馈 |
 | **M3** | 盲测、诊断、家长面板、家庭成员管理、建议 | 家长能看趋势、建账号、看建议 |
@@ -261,5 +271,6 @@
 | 服务端 AI provider 出错 | 功能不可用 | 客户端展示 503 可读提示；不伪造结果 |
 | 录音格式不兼容 | 评测失败 | 首版固定 m4a/AAC 16kHz 单声道；真机验证 |
 | 蓝牙设备切换模式导致"声音变闷" | 误判为软件 bug | 录音前停播；文档写入 FAQ |
-| Cookie 会话在原生栈的持久化差异 | 频繁掉登录 | 先做 Cookie 方案并在两端真机验证；不行则上 Token（ADR-0001）|
+| Token 轮换竞争（并发 401 各自 refresh）| 掉登录 | 网络层**单飞刷新**（见 §3.2）；服务端 refresh 一次性轮换 + 宽限处理 |
+| Token 泄漏 = 账号被盗 | 安全 | access 短（1h）、refresh 轮换、可吊销；存 Keychain/Asset Store |
 | 儿童误触/退出 | 体验断裂 | 儿童模式大按钮、关键操作二次确认 |

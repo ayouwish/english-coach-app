@@ -1,9 +1,10 @@
 # English Coach · HarmonyOS 客户端设计
 
-> 状态：**设计稿 v0.1（2026-10-31）**
+> 状态：**设计稿 v0.2（2026-10-31 修订）**
 > 范围：只包含设计文档 + DevEco Studio 工程目录骨架，**不包含可编译的 App 代码**。
 > 后端：`english-coach/web`（Next.js :3000）+ `english-coach/voice`（FastAPI :8100）已存在并跑通。
 > **本目录不修改后端**；凡是需要后端配合的地方，统一标注为【待后端新增】或【待后端确认】。
+> v0.2 修订：认证改为 Bearer Token、最低 API 提升到 20、录音统一 16kHz/单声道/65kbps，并按真实代码修正对话链路、发音分字段与隐私边界。
 
 ---
 
@@ -11,13 +12,14 @@
 
 | 决策点 | 结论 | 依据 / 备注 |
 |---|---|---|
-| 系统与语言 | HarmonyOS NEXT，ArkTS + ArkUI，**最低 API 12**（5.0.0） | 只面向 NEXT，不做 Android 兼容层 |
+| 系统与语言 | HarmonyOS NEXT，ArkTS + ArkUI，**最低 API 20**（HarmonyOS 6.0.0） | 只面向 NEXT，不做 Android 兼容层；API 20 以下不安装 |
 | 工程形态 | **单 HAP（entry）+ 多个 HAR（features/commons）** | 先保证可维护，不引入 HSP 的运行时共享复杂度 |
 | 服务端入口 | 只访问 `https://english.dreamsearch.top/api/*` | **绝不直连 voice :8100**；AI 能力全部在服务端 |
-| 认证 | **方案 A：Cookie 会话**，手动管理 `Cookie` 请求头 | API 12 没有 `enableAutoCookie`（该 API 为 API 26）；token 存 Asset Store Kit |
-| 录音 | AVRecorder → **m4a / AAC、单声道、44.1kHz、96kbps**；低带宽回退 16kHz/64kbps | 整段上传，**不切片**；上限 12MB |
-| 播放 | 先下载到 `cacheDir`，再 `AVPlayer` 用 `fd://` 播放 | `/api/audio/:id` 返回 `accept-ranges: none`，不适合边下边播；且要带 Cookie |
+| 认证 | **Bearer Token**：access 1h / refresh 30d，网络层单飞刷新；两个 token 存 Asset Store Kit（`@ohos.security.asset`） | Web 端继续用 Cookie，**双模式并存**；`/auth/token`、`/auth/refresh`、`/auth/revoke` 为【待后端新增·P0】 |
+| 录音 | AVRecorder → **m4a / AAC、单声道、16kHz、65kbps** | 统一参数，不设低带宽分支；整段上传、不切片；上限 12MB |
+| 播放 | 先下载到 `cacheDir`，再 `AVPlayer` 用 `fd://` 播放 | `/api/audio/:id` 返回 `accept-ranges: none`，不适合边下边播；且需要 `Authorization` |
 | TTS | 跟读示范用 `wav`（命中缓存快），对话用 `mp3` | 客户端只负责取字节、落盘、播放 |
+| 分发 | iOS 用 **TestFlight**；鸿蒙建议内部签名/企业内部分发或应用市场内测，**【待用户确认】** | 见 [docs/open-questions.md](docs/open-questions.md) Q3 |
 | 第三方依赖 | **运行时零三方**，只用 `@kit.*` 系统能力 | 不引入 axios、图片库、统计 SDK、WebView |
 | 儿童模式 | 不显示 IPA、不显示低分、大按钮、慢速默认 | 服务端只保证剥离 IPA；**低分隐藏是客户端策略** |
 | 深色模式 | MVP 不做，M4 再用资源限定符补齐 | 先把颜色 token 化，禁止硬编码 |
@@ -37,14 +39,14 @@
 
 | 文档 | 内容 |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | ArkTS/ArkUI 分层、状态管理、路由、HTTP/Cookie、错误映射、离线缓存 |
-| [docs/audio.md](docs/audio.md) | AVRecorder 参数、麦克风权限、AVPlayer 播放、录放互斥、后台/锁屏 |
+| [docs/architecture.md](docs/architecture.md) | ArkTS/ArkUI 分层、状态管理、路由、HTTP/Token 认证、单飞刷新、错误映射、离线缓存 |
+| [docs/audio.md](docs/audio.md) | AVRecorder 参数（16kHz/单声道/65kbps）、麦克风权限、AVPlayer 播放、录放互斥、后台/锁屏 |
 | [docs/screens.md](docs/screens.md) | 13 个界面（含首页/错音本）的结构、交互、API、loading/error/empty、儿童差异 |
 | [docs/design-system.md](docs/design-system.md) | 颜色/字号/间距/圆角/阴影/按钮层级、组件清单、深色模式取舍 |
 | [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md) | 权限声明、数据流、NAS/云端边界、隐私文案、合规注意 |
 | [docs/roadmap.md](docs/roadmap.md) | M0–M4 范围、验收标准、风险 |
-| [docs/open-questions.md](docs/open-questions.md) | 需要拍板的问题（Token、分发、平板、严格模式等） |
-| [docs/adr/](docs/adr/) | 架构决策记录（已有 ADR-0001：Cookie 会话） |
+| [docs/open-questions.md](docs/open-questions.md) | 需要拍板的问题（分发、平板、账号安全等） |
+| [docs/adr/](docs/adr/) | 架构决策记录（ADR-0001 已被取代、ADR-0002 现行：Bearer Token） |
 
 ---
 
@@ -58,18 +60,25 @@
 
 | 方法 | 路径 | 说明 | 状态 |
 |---|---|---|---|
-| POST | `/auth/login` | `{email,password}` → `{user, expiresAt}`，同时下发 `ec_session` Cookie | 【已实现·后端现有】 |
-| POST | `/auth/logout` | 清服务端会话 + 清 Cookie | 【已实现·后端现有】 |
-| GET | `/auth/me` | 已登录 → `{user, usage}`；**未登录返回 200 + `{user:null}`**，不是 401 | 【已实现·后端现有】 |
+| POST | `/auth/token` | `{email,password}` → `{access_token, refresh_token, token_type:"Bearer", expires_in:3600, user}` | 【待后端新增·P0】 |
+| POST | `/auth/refresh` | `{refresh_token}` → 新的一对 token（**一次性轮换**，旧 refresh 立即失效） | 【待后端新增·P0】 |
+| POST | `/auth/revoke` | `{refresh_token}` → 204；退出登录时调用 | 【待后端新增·P0】 |
+| POST | `/auth/login` | Web 用的 Cookie 登录；**移动端不使用** | 【已实现·后端现有】 |
+| POST | `/auth/logout` | Web 用的会话登出；移动端改用 `/auth/revoke` | 【已实现·后端现有】 |
+| GET | `/auth/me` | 已登录 → `{user, usage}`；Cookie 未登录返回 200 + `{user:null}`（Web 行为） | 【已实现·后端现有】 |
 | GET/PATCH | `/settings` | 偏好 + 今日用量；儿童不能改时长/自由话题 | 【已实现·后端现有】 |
 | POST | `/family/members/:id/password` | 家长重置成员密码；**没有本人改密接口** | 【已实现·后端现有】 |
 | POST | `/auth/password` | 本人改密（旧密码校验） | 【待后端新增】 |
 
 关键事实：
 
-- Cookie 名 **`ec_session`**，`httpOnly`、`sameSite=lax`、`path=/`、有效期 **30 天**；HTTPS 部署由 `COOKIE_SECURE=1` 决定是否加 `Secure`。
-- 登录响应里的 `expiresAt` 可用于本地过期判断；但**以服务端 401 为准**。
-- 登录失败：400 `bad_request`（缺字段）或 401 `unauthorized`（邮箱或密码不正确）。
+- 所有现有接口同时接受 `Authorization: Bearer <access_token>` 与 Cookie；**Web 端继续用 Cookie**，两套身份解析必须落到同一个 `userId`。
+- 三个 Token 端点后端**正在实现（P0）**；联调前客户端用 Fake 网络层，不阻塞 UI/VM 开发。
+- access 有效期 **1h**，refresh **30 天且一次性轮换**：每次 refresh 都返回新 refresh，客户端必须原子替换旧值；旧 refresh 不可重放。
+- 退出登录：`POST /auth/revoke {refresh_token}` → 204，然后清本地 token 与缓存；revoke 失败也继续清本地。
+- 刷新失败（401/400/refresh 已失效）→ 清两个 token → 跳登录；网络失败不要误清 token，提示重试。
+- 登录失败：400 `bad_request`（缺字段）或 401 `unauthorized`（邮箱或密码不正确）；错误码细节以最终后端实现为准【待后端确认】。
+- 【待后端确认】带无效/过期 Bearer 调用 `/auth/me` 时返回 401 还是 200 + `{user:null}`；客户端两种都要处理（401 走刷新，200+null 直接跳登录）。
 - 儿童账号的每日时长上限、自由话题开关由家长设置；客户端隐藏入口只是体验，服务端会 403。
 
 ### 2.2 语料与评测
@@ -101,16 +110,18 @@
 | GET | `/chat/scenarios` | 按年龄过滤的场景列表 | 【已实现·后端现有】 |
 | POST | `/chat/sessions` | `{scenario_id}` → 新会话 + 开场白 | 【已实现·后端现有】 |
 | GET | `/chat/sessions` | 最近 30 个会话 | 【已实现·后端现有】 |
-| GET | `/chat/sessions/:id` | 会话消息 | 【已实现·后端现有】 |
-| POST | `/chat/sessions/:id/turn` | 一轮对话；multipart `audio` + **必填 `text`** | 【已实现·后端现有】 |
+| GET | `/chat/sessions/:id` | 会话详情；**不含 `messages[].pron`** | 【已实现·后端现有】 |
+| GET | `/chat/sessions/:id/messages` | 消息列表；助手轮次带 `pron`（后台异步评分，需轮询） | 【已实现·后端现有】 |
+| POST | `/chat/sessions/:id/turn` | 一轮对话；multipart `audio` + **必填 `text`**；**只返回助手文本** | 【已实现·后端现有】 |
 
 > **重要核对结论（与“内部 ASR→LLM→TTS”的说法不同）**
-> 现有 `/turn` 路由**不替客户端做 ASR**：它要求 `text` 非空，`audio` 只用于后台发音评估；响应也**不返回 TTS 音频字节**。
+> 现有 `/turn` 路由**不替客户端做 ASR**：它要求 `text` 非空，`audio` 只用于在 `after()` 里做后台发音评估；响应也**不返回 TTS 音频字节**。
 > 因此“只有语音输入”的移动端一轮对话需要三步：
 > 1) `POST /asr` 得到 `text`；
-> 2) `POST /chat/sessions/:id/turn`（multipart，带同一份 `audio` + `text`）；
+> 2) `POST /chat/sessions/:id/turn`（multipart，带同一份 `audio` + `text`）→ 助手文本；
 > 3) `POST /tts` 朗读 `reply`。
-> 若希望后端在 `/turn` 内部完成 ASR 并直接返回 TTS，需要【待后端新增】。已列入 `open-questions.md`。
+> 发音分**不在 turn 响应里**，也不在 `/sessions/:id` 里：turn 之后轮询 `GET /chat/sessions/:id/messages`，读助手消息的 `pron` 字段（`pron/accuracy/fluency/completeness/weak_phonemes/words`）。页面可以先展示文字，评分到了再补；儿童端只用它决定鼓励/提示，不显示数字。
+> 若希望后端在 `/turn` 内部完成 ASR 并直接返回 TTS，需要【待后端新增】。已列入 `open-questions.md` Q2（不阻塞 M1）。
 
 ### 2.4 材料 / 故事 / OCR
 
@@ -119,7 +130,7 @@
 | GET | `/materials?kind=page`、`kind=story` | 家庭共享材料列表 | 【已实现·后端现有】 |
 | POST | `/materials` | `{title,text,image_b64?,kind?,source?,source_zh?,level?}` | 【已实现·后端现有】 |
 | GET/PATCH/DELETE | `/materials/:id` | 详情 / 改名改文 / 删除（创建者或家长） | 【已实现·后端现有】 |
-| GET | `/materials/:id/image` | 图片；**需要 Cookie**，不能直接用 `Image(url)` | 【已实现·后端现有】 |
+| GET | `/materials/:id/image` | 图片；**需要 `Authorization`**，不能直接用 `Image(url)` | 【已实现·后端现有】 |
 | POST | `/ocr` | multipart `image`，≤10MB；`return_image=1` 时返回 `image_jpeg_b64` | 【已实现·后端现有】 |
 | POST | `/story/rewrite` | `{text_zh,level,max_sentences,use_weak_phonemes?}` → 英文句子 | 【已实现·后端现有】 |
 | POST | `/story/retell` | `{material_id,story_sentences,transcript,level}` → 覆盖度/反馈，**不评发音分** | 【已实现·后端现有】 |
@@ -210,7 +221,7 @@ hos/
 │   ├── parent/                       # 家长面板 + 成员管理
 │   └── settings/                     # 设置 + 提建议
 └── commons/                          # HAR：跨业务复用，禁止反向依赖
-    ├── net/                          # HttpClient / CookieSession / ApiError / DTO
+    ├── net/                          # HttpClient / TokenSession / ApiError / DTO
     ├── audio/                        # Recorder / Player / AudioCoordinator
     ├── storage/                      # AssetStore / Preferences / FileCache
     ├── design/                       # DesignTokens / 通用组件 / 图表
@@ -266,9 +277,9 @@ commons/*   ──✗──► features/*, entry # commons 必须可独立复用
 
 | 模块 | 职责 | 明确不做 |
 |---|---|---|
-| `commons/net` | 唯一 HTTP 出口；Cookie；multipart；下载；错误归一化；取消 | 不拼业务 URL 语义、不做页面跳转 |
+| `commons/net` | 唯一 HTTP 出口；Bearer 认证与单飞刷新；multipart；下载；错误归一化；取消 | 不拼业务 URL 语义、不做页面跳转 |
 | `commons/audio` | 录音/播放状态机；权限；文件生命周期；互斥 | 不做上传、不做评分 UI |
-| `commons/storage` | Asset token、Preferences 非敏感配置、文件缓存/LRU | 不存明文密码、不存录音长期副本 |
+| `commons/storage` | Asset 中的 access/refresh token、Preferences 非敏感配置、文件缓存/LRU | 不存明文密码、不存录音长期副本 |
 | `commons/design` | token、基础组件、图表、儿童尺寸 | 不依赖业务 DTO |
 | `features/*` | 页面 + VM + 业务组件 | 不直接 `http.createHttp()` |
 | `entry` | 壳、路由、会话门禁、全局错误 | 不承载具体业务 |
@@ -277,21 +288,24 @@ commons/*   ──✗──► features/*, entry # commons 必须可独立复用
 
 ## 4. 最低 API 与兼容策略
 
-| 项 | 建议 | 说明 |
+| 项 | 值 | 说明 |
 |---|---|---|
-| `compileSdkVersion` | **12** | HarmonyOS NEXT 5.0.0；`@kit.*` 聚合导入从 API 12 起稳定 |
-| `compatibleSdkVersion` | **12** | 低于 12 不安装 |
-| `targetSdkVersion` | **12** | 首个版本不追新 |
+| SDK 基线 | **API 20**（HarmonyOS 6.0.0） | 最低、编译、目标三处都取 20；不面向更低版本的旧设备 |
+| `compileSdkVersion` | **20** | 以 DevEco Studio 6.0.0 安装的 SDK 为准；`@kit.*` 聚合导入稳定 |
+| `compatibleSdkVersion` | **20** | 低于 20 不安装（节省兼容分支） |
+| `targetSdkVersion` | **20** | 首个版本不追 API 21+ |
 | 语言 | ArkTS（严格子集） | 不使用 `any`、动态属性、原型改写、`eval` |
 | 状态管理 | V1：`@State/@Prop/@Link/@Observed/@ObjectLink` + AppStorage | V2（`@ObservedV2/@Trace`）暂不使用 |
 | 路由 | `Navigation` + `NavPathStack` | 不使用 `router.pushUrl` 作为主路由 |
 | 媒体 | `@kit.MediaKit` 的 AVRecorder/AVPlayer | 不引入 FFmpeg/第三方播放器 |
-| 网络 | `@kit.NetworkKit` 的 `http` | 不引入 axios/okhttp 风格库 |
+| 网络 | `@kit.NetworkKit` 的 `http` + `Authorization` | 不引入 axios/okhttp 风格库 |
+| 安全存储 | `@ohos.security.asset` / `@kit.AssetStoreKit` | access/refresh 两个 token；不写 Preferences |
 
-**明确不使用的高版本 API**：
+**兼容策略（API 20 基线）**：
 
-- `http.HttpRequest.enableAutoCookie`：文档标注 **API 26**，API 12 不可用；因此走手动 Cookie。
-- API 15+ 的 `addressFamily`、API 18+ 的证书校验选项、API 20+ 的 `caData`：首个版本不用。
+- 只使用 API 20 及以下已公开的能力；API 21+ 的能力即使更方便，也不作为首版依赖。
+- 认证改 Token 后，**不再需要 Cookie 自动管理**；`http` 的 `enableAutoCookie` 官方 d.ts 标注 `@since 26.0.0`，API 20 不可用（以本机 SDK 的 `@ohos.net.http.d.ts` 为准【待确认】），本方案不依赖它。
+- 所有 `@kit.*`、Asset Store、AVRecorder 的实际行为仍以 DevEco 编译 + 真机为准；本文不做“已验证”的承诺。
 
 > 【待真机验证】以上 API 在目标机型/系统版本上的实际可用性，以 DevEco Studio 编译 + 真机安装为准；本文不做“已验证”的承诺。
 
@@ -301,15 +315,15 @@ commons/*   ──✗──► features/*, entry # commons 必须可独立复用
 
 ### 5.1 环境
 
-- DevEco Studio 5.0.0 Release 或更高（随 SDK API 12）；以实际安装的 SDK 为准。
-- HarmonyOS NEXT 真机（录音/播放/权限必须真机验证，模拟器不作为验收依据）。
+- DevEco Studio 6.0.0 Release 或更高（随 SDK API 20）；以实际安装的 SDK 为准。
+- HarmonyOS NEXT 真机（API 20 / HarmonyOS 6.0.0 及以上；录音/播放/权限必须真机验证，模拟器不作为验收依据）。
 - Node.js 版本按 DevEco 自带工具链，不额外安装全局包。
 
 ### 5.2 首次创建工程
 
 1. DevEco Studio → Create Project → **Empty Ability**，语言 ArkTS，设备 Phone。
 2. `bundleName` 建议 `com.family.englishcoach`（**待拍板**，见 open-questions）。
-3. `compileSdkVersion = 12`、`compatibleSdkVersion = 12`。
+3. `compileSdkVersion = 20`、`compatibleSdkVersion = 20`、`targetSdkVersion = 20`。
 4. 按第 3 节创建 `features/*`、`commons/*` 的 HAR 模块，并在 `entry/oh-package.json5` 中通过本地路径依赖。
 5. 把本文档的目录骨架作为占位；M0 再填实现。
 
@@ -368,7 +382,7 @@ hdc shell aa start -a EntryAbility -b com.family.englishcoach
 - `@kit.CameraKit`（cameraPicker，系统拍照，无需 CAMERA 权限）
 - `@kit.ImageKit`（图片解码为 PixelMap）
 - `@kit.ArkUI` / `@kit.AbilityKit` / `@kit.BasicServicesKit`
-- `@kit.AssetStoreKit`（会话 token）
+- `@kit.AssetStoreKit` / `@ohos.security.asset`（access/refresh token）
 - `@kit.ArkData`（preferences；如使用 relationalStore 也在其中）
 - `@kit.PerformanceAnalysisKit`（hilog，仅调试）
 
@@ -377,7 +391,7 @@ hdc shell aa start -a EntryAbility -b com.family.englishcoach
 禁止：
 
 - 任何统计/推送/广告/崩溃上报 SDK（隐私与“零外联”要求）。
-- WebView 承载业务页面（Cookie/权限/隐私都不可控）。
+- WebView 承载业务页面（认证/权限/隐私都不可控）。
 - 第三方音频转码库（服务端已解码）。
 - 第三方图标字体/图片加载库（用系统 SymbolGlyph + ImageSource）。
 
@@ -394,7 +408,7 @@ HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是“带类型
 - 禁止 `eval`、`Function` 构造、原型改写、`with`、动态 `import()`。
 - 对象字面量必须有明确类型；不用 `as object` 绕过检查。
 - 不使用 `@ObservedV2/@Trace`（状态管理 V2）；统一 V1。
-- 不使用 API 26 的 `enableAutoCookie`；不依赖未在 API 12 文档中稳定的 Kit。
+- 以 API 20 为基线，不使用 API 21+ 的新能力；认证不依赖 Cookie 自动管理。
 - 装饰器只用于 ArkUI/状态管理；不在普通类上自定义装饰器。
 - 所有 `Promise` 都要 `await` 或显式 `void`；不允许“发出去就不管”的写操作。
 
@@ -406,7 +420,7 @@ HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是“带类型
 - 每个 feature 只暴露 `Index.ets`；内部实现不跨模块导出。
 - 所有用户可见文案走 `resources/base/element/string.json`；儿童版文案单独 key（`child_` 前缀），不要在代码里三元表达式堆文案。
 - 所有颜色/字号/圆角走 token（`$r('app.color.ec_*')` / `$r('app.float.ec_*')`），禁止 `#hex` 散落页面。
-- 日志脱敏：不打印 token、Cookie、邮箱、录音路径、识别文本；只打印 `requestId/status/code/耗时`。
+- 日志脱敏：不打印 access/refresh token、邮箱、录音路径、识别文本；只打印 `requestId/status/code/耗时`。
 - 网络层不得吞错：统一抛 `ApiError`，由 VM 决定展示；页面不得直接解析 `error.code`。
 - 所有异步操作可取消：页面 `aboutToDisappear` 取消轮询/下载/播放；HTTP 请求调用 `destroy()`。
 
@@ -416,13 +430,14 @@ HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是“带类型
 
 - 只与 `https://english.dreamsearch.top` 通信；release 禁止明文 HTTP。
 - 依赖系统默认 CA 校验；不做“忽略证书错误”的开关。是否加证书 pinning 留到 M4（见 open-questions）。
-- 会话 token 存 **Asset Store Kit**，不写 Preferences、不写日志、不进备份。
+- access/refresh token 存 **Asset Store Kit**（`@ohos.security.asset`，别名 `ec_access_token`/`ec_refresh_token`），不写 Preferences、不写日志、不进备份。
+- 刷新只在 `commons/net` 内做，单飞 + 一次性轮换；只有 refresh 被拒（401/400）才清 token 跳登录，网络失败保留 token 并提示重试。
 - 客户端不缓存密码；登录页“记住邮箱”只存邮箱（可选，默认关）。
 - 录音/图片只落 `cacheDir`，上传成功后按策略清理；退出登录清空。
 - 儿童账号不显示 IPA、不显示低分；不上传通讯录/位置/设备标识。
 - 所有 AI 能力在服务端；客户端不内置模型、不直连 voice。
 
-> 隐私边界的关键提醒：**“录音不出户”只在服务端使用 local/mock provider 时成立**。若 NAS 上的 voice 配置了 Azure/DeepSeek/GLM 等云 provider，音频/文本/图片可能由 NAS 转发到云端。客户端无法保证端到端不出户。详见 [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md) 与 open-questions。
+> 隐私边界的关键提醒：当前部署是 `PROVIDER_MODE=hybrid`，**录音/文本/图片会离开家庭网络**——音频由 NAS 发往 Azure（ASR/发音评测/TTS），文本发往 DeepSeek（对话/改写/复述），书页图片与插画提示发往 DeepSeek/智谱。客户端不能承诺录音不离开家庭网络。要做到完全本地，需要服务端切到 `local` 模式并备好本地模型，**当前未部署**。详见 [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md) 与 open-questions Q1。
 
 ---
 
@@ -430,7 +445,7 @@ HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是“带类型
 
 本目录当前交付：
 
-- 8 份核心设计文档（本 README + `docs/` 下 7 份）+ 1 份 ADR；
+- 8 份核心设计文档（本 README + `docs/` 下 7 份）+ 2 份 ADR（0001 已被取代、0002 现行）；
 - 目录骨架：`entry/`、`features/*`、`commons/*`，以及 `.gitkeep` 占位；
 - **没有** `module.json5`、`app.json5`、`oh-package.json5` 等可编译配置，避免留下“看起来能跑其实跑不起来”的半成品。
 
@@ -443,7 +458,8 @@ M0 开始时按 [docs/roadmap.md](docs/roadmap.md) 创建工程文件，并以�
 - AVRecorder 录音指导：<https://github.com/openharmony/docs/blob/master/en/application-dev/media/media/using-avrecorder-for-recording.md>
 - AVPlayer 播放指导：<https://github.com/openharmony/docs/blob/master/en/application-dev/media/media/using-avplayer-for-playback.md>
 - Media Kit 支持格式（wav/mp3/m4a 等）：<https://github.com/openharmony/docs/blob/master/en/application-dev/media/media/media-kit-intro.md>
-- `@ohos.net.http`（`HttpResponse.cookies`、`multiFormDataList`、`maxLimit`）：<https://github.com/openharmony/docs/blob/master/en/application-dev/reference/apis-network-kit/js-apis-http.md>
+- `@ohos.net.http`（`multiFormDataList`、`maxLimit`、请求头）：<https://github.com/openharmony/docs/blob/master/en/application-dev/reference/apis-network-kit/js-apis-http.md>
 - 申请用户授权（MICROPHONE）：<https://github.com/openharmony/docs/blob/master/en/application-dev/security/AccessToken/request-user-authorization.md>
 - Asset Store Kit 新增资产：<https://github.com/openharmony/docs/blob/master/en/application-dev/security/AssetStoreKit/asset-js-add.md>
+- HarmonyOS 6.0.0(20) 版本说明（API 20 基线）：<https://developer.huawei.com/consumer/cn/doc/doccenter-release-notes/overview-600>
 - CameraPicker（无需 CAMERA 权限）：<https://github.com/openharmony/docs/blob/master/en/application-dev/media/camera/camera-picker.md>

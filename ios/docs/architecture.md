@@ -54,15 +54,17 @@
 ```
 启动
  └─ AppRoot
-     ├─ 读取 Keychain（上次登录邮箱/用户 id）→ 用于占位与预填，不做鉴权
-     ├─ 并发：GET /auth/me （带 Cookie，超时 8s）
+     ├─ 读取 Keychain：access_token / refresh_token / 上次登录标识（仅用于预填）
+     ├─ 无 token → LoginView
+     ├─ 有 token：若 access 已过期 → 单飞 refresh；成功则继续，失败（401/403）→ 清 token → LoginView
+     ├─ 并发：GET /auth/me （带 Bearer，超时 8s）
      │    ├─ 200 → SessionStore.user = profile → 角色化 RootTabView
-     │    ├─ 401 → 清理本地会话 → LoginView
-     │    └─ 网络错误 → 进入“离线外壳”：显示登录页 + 顶部横幅“连不上服务器”
+     │    ├─ 401 → refresh 一次 → 重试 /me；仍 401 → 清 token → LoginView
+     │    └─ 网络错误 → 进入“离线外壳”：显示登录页 + 顶部横幅“连不上服务器”，**保留 token**，恢复网络后可自动重试（不要求重输密码）
      └─ 冷启动预算：≤1.5s 出首屏（不含网络），见 §9
 ```
 
-**不要**在 `/auth/me` 返回前就渲染主界面，否则儿童模式/家长 Tab 会闪一下再切换。
+**不要**在 `/auth/me` 返回前就渲染主界面，否则儿童模式/家长 Tab 会闪一下再切换。**网络错误不要清 token**，否则 NAS 短暂不可达会把用户登出；只有服务端明确拒绝 refresh 才清（见 ADR-0003 §5）。
 
 ### 2.2 角色化 Tab
 
@@ -162,6 +164,11 @@ struct ScorePresentation {          // 由 ScorePresenter 生成
 ### 4.1 端点抽象
 
 ```swift
+enum AuthPolicy: Sendable {
+    case none        // /health、/auth/token、/auth/refresh、/auth/revoke
+    case bearer      // 业务接口：注入 access token；401 走单飞刷新后重放一次
+}
+
 protocol Endpoint: Sendable {
     var method: HTTPMethod { get }
     var path: String { get }                       // "/sentences"
@@ -169,7 +176,7 @@ protocol Endpoint: Sendable {
     var headers: [String: String] { get }
     var body: Body { get }                         // .none / .json(Encodable) / .multipart(MultipartPayload)
     var timeout: TimeInterval { get }
-    var authPolicy: AuthPolicy { get }             // .required / .none(仅 /health)
+    var authPolicy: AuthPolicy { get }
     var cachePolicy: URLRequest.CachePolicy { get }
 }
 ```
@@ -189,9 +196,8 @@ protocol APITransport: Sendable {
 
 ```swift
 let cfg = URLSessionConfiguration.default
-cfg.httpCookieStorage = .shared            // 与 WebView/系统共享同一 Cookie 存储
-cfg.httpShouldSetCookies = true
-cfg.httpCookieAcceptPolicy = .always        // 纯 API 客户端不需要“仅主文档域”限制
+cfg.httpCookieStorage = nil                 // 不读写 Cookie：移动端凭据只有 Bearer
+cfg.httpShouldSetCookies = false
 cfg.timeoutIntervalForRequest = 15
 cfg.timeoutIntervalForResource = 90
 cfg.waitsForConnectivity = false            // 需要快速失败以展示离线状态
@@ -202,14 +208,25 @@ cfg.urlCache = nil
 > 上面是**会话级默认值**；`Endpoint.timeout` 通过 `URLRequest.timeoutInterval` 逐请求覆盖（见 §4.5），两者不冲突。
 >
 > `waitsForConnectivity = true` 会让请求静默挂起直到超时，对“录音后立即要评分”的场景是灾难；必须显式设 `false`。
+>
+> 只有一个 `URLSession` 的理由不再是 Cookie，而是连接池复用与配置一致性；**token 由请求构造阶段注入**，不依赖 session 的可变状态。
 
-### 4.3 认证（Cookie 会话）【已实现·后端现有】
+### 4.3 认证（Bearer Token）【待后端新增·P0，阻塞 M0】
 
-- 登录：`POST /auth/login`，服务端 `Set-Cookie`；`URLSession` 自动写入 `HTTPCookieStorage.shared`，后续请求自动携带。
-- `httpOnly` 对原生客户端**不构成障碍**（它只是禁止 JS 读取；`HTTPCookie` 仍可持久化并由 URLSession 自动回传）。
-- `Secure` 要求 https；`SameSite=lax` 主要约束浏览器跨站场景，原生请求通常不受影响（**【待确认】**：以真机实测为准）。
-- 401 统一处理：`APIClient` 抛 `APIError.unauthorized`，`SessionStore.handleUnauthorized()` 清 Cookie + 清账户缓存 + 跳登录；**不要在 APIClient 里直接操作 UI**。
-- 会话持久化的风险与兜底（Cookie 无 `Max-Age` 时重启丢失）：**完整方案见 [ADR-0001](adr/0001-cookie-session-vs-bearer-token.md)**。结论是选 **方案 A**，并要求后端补 `Max-Age`；Keychain 只存“上次登录邮箱 + 用户 id + 角色 + baseURL”，**不存密码、不存完整 Cookie**。
+| 端点 | 用途 | 客户端动作 |
+| --- | --- | --- |
+| `POST /auth/token` | 邮箱+密码换 token | 存 Keychain（两个 token + `expiresAt`），用响应里的 `user` 初始化页面；冷启动用 `/auth/me` 校验 |
+| `POST /auth/refresh` | 用 refresh 换新一对（**一次性轮换**） | 只能由单飞刷新任务调用；成功后原子写回；**不得重试/并发调用** |
+| `POST /auth/revoke` | 吊销 refresh | 退出登录时调用；204 视为成功 |
+| `GET /auth/me` | 拉 profile | 带 Bearer；401 走刷新规则 |
+
+- **存储**：`access_token` / `refresh_token` 只进 Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`），**不写日志、不进 UserDefaults**。完整方案见 [ADR-0003](adr/0003-bearer-token.md)。
+- **注入**：`APIClient` 对 `.bearer` 端点注入 `Authorization: Bearer <access>`；登录/刷新/吊销/`/health` 不注入，且它们的 401 **不触发**刷新（避免递归）。
+- **单飞刷新**：并发 401 只允许一个 refresh 任务在飞，其余等待同一结果，成功后各自重放原请求一次；重放仍 401 → 登出。
+- **失败语义**：refresh 被服务端拒绝（401/403）→ 清 token → 登出；**网络错误 → 保留 token、按离线处理**；业务 403 → `forbidden`，不登出。
+- **退出**：`POST /auth/revoke {refresh_token}` → 清 Keychain + 账户缓存 + 跳登录。离线时无法吊销，服务端 refresh 仍可能有效（记录为已知限制）。
+- **切换 base URL**：token 与服务器绑定，必须清 token 并重新登录。
+- Web 端继续用 Cookie；服务端双模式并存，客户端不读写 Cookie。
 
 ### 4.4 Multipart 构造（`POST /attempts`、`/asr`、`/ocr`、`/chat/.../turn`）
 
@@ -217,12 +234,22 @@ cfg.urlCache = nil
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `audio` | file | 是 | `filename="attempt.m4a"`，`Content-Type: audio/mp4` |
+| `audio` | file | 视端点 | `/attempts`、`/attempts/async`、`/asr` 必填；`/chat/.../turn` 可选（带 audio 时服务端会顺带存录音并后台评分）；`/ocr` 不用 audio，用 `image` |
+| `text` | text | `/chat/.../turn` **必填** | 对话的 ASR 文本；空字符串会被 400 `bad_request` 拒绝（≤500 字符） |
 | `sentence_id` | text | 跟读/连读必填 | 语料 id |
 | `reference_text` | text | 跟读/连读必填 | 句子英文原文；盲测时用隐藏句原文 |
 | `mode` | text | 是 | `scripted` \| `unscripted` |
 | `duration_ms` | text | 是 | 录音实际时长（整数毫秒） |
-| `language` | text | 仅 `/asr` | `en` \| `zh-CN` |
+| `language` | text | 仅 `/asr` | `en`（默认，对话/复述） \| `zh-CN`（中文语音输入） |
+
+各端点的最小字段集：
+
+| 端点 | 字段 |
+| --- | --- |
+| `POST /attempts`、`/attempts/async` | `audio` + `sentence_id` + `reference_text` + `mode` + `duration_ms` |
+| `POST /asr` | `audio` + 可选 `language` |
+| `POST /chat/sessions/:id/turn` | **`text`** + 可选 `audio`；**不再由 turn 内部做 ASR/TTS** |
+| `POST /ocr` | `image`（不是 `audio`） |
 
 约束：
 - 文件名与 `Content-Type` 必须与真实编码一致（`audio/mp4` ↔ `.m4a`），否则可能命中 `unsupported_audio`；
@@ -234,8 +261,10 @@ cfg.urlCache = nil
 
 | 端点 | 请求超时 | 说明 |
 | --- | --- | --- |
-| `/auth/*`、`/health`、`/family/*`、`/suggestions` | 10s | 轻量 JSON |
-| `/sentences`、`/diagnosis`、`/review`、`/materials`、`/parent/summary` | 15s | 可缓存 |
+| `/health`、`/family/*`、`/suggestions` | 10s | 轻量 JSON |
+| `/auth/token`、`/auth/refresh` | 10s | 登录/刷新；refresh 已在单飞任务里，不要叠加应用层重试 |
+| `/auth/revoke` | 5s | 退出时调用；失败不阻塞本地清理 |
+| `/sentences`、`/diagnosis`、`/review`、`/materials`、`/parent/summary`、`/chat/sessions/:id/messages` | 15s | 可缓存 / 轮询 |
 | `/tts` | 20s | 首次合成 1–3s，留足余量 |
 | `/asr`、`/ocr`、`/story/rewrite`、`/story/retell`、`/attempts`(同步) | 60s | 服务端推理 |
 | `/attempts/async`、`/story/:id/illustrate`、`/chat/.../turn` | 30s | 生图/对话可能慢，超时走重试 UI |
@@ -259,7 +288,9 @@ cfg.urlCache = nil
 | POST 提交类（`/attempts`、`/ocr`、`/story/*`） | **不自动重试** | 推理有成本且可能非幂等；交给用户点“重试”，并在 UI 上明确 |
 | `/attempts/async` | 可重试 1 次（仅在请求未发出时） | 连接失败不会产生服务端记录 |
 | `/tts` | 可重试 2 次 | 幂等且便宜 |
-| 401 | 不重试 | 直接走重新登录 |
+| 401（业务接口） | **不按网络重试** | 由 `TokenRefresher` 单飞 refresh 一次，成功后重放原请求一次；refresh 被拒 → 登出 |
+| `/auth/refresh` | **不重试** | 一次成败即结论；重试会撞“一次性轮换” |
+| `/auth/token`、`/auth/revoke` | 不自动重试 | 凭据/副作用操作；交给用户重新提交或下次启动补吊销 |
 | 取消 | 不重试 | `CancellationError` 原样上抛 |
 
 > 连读模式的可靠性靠 **async + 轮询**，而不是 HTTP 重试；同步 `/attempts` 只用于单句跟读。
@@ -273,7 +304,7 @@ cfg.urlCache = nil
 ```swift
 enum APIError: Error, Equatable, Sendable {
     case transport(URLError.Code)                    // 连接/超时/DNS
-    case unauthorized                                 // 401，会话失效
+    case unauthorized                                 // 刷新后仍 401：会话失效，需重新登录
     case forbidden                                    // 403，孩子调家长接口
     case server(code: ServerErrorCode, message: String?, status: Int)
     case decoding(path: String)                       // 契约漂移，需上报
@@ -282,7 +313,9 @@ enum APIError: Error, Equatable, Sendable {
 }
 ```
 
-`ServerErrorCode` 覆盖 `bad_request / unsupported_audio / payload_too_large / provider_error / provider_timeout / provider_unavailable / audio_not_found / internal_error / unknown(String)`。
+> **401 不直接冒泡到页面**：`APIClient` 先走单飞刷新；只有刷新被服务端拒绝（或重放仍 401）才转换为 `.unauthorized`，由 `SessionStore.handleUnauthorized()` 清 token 并跳登录。纯网络错误不能被映射成 `.unauthorized`（见 §4.3）。
+
+`ServerErrorCode` 覆盖 `bad_request / unsupported_audio / payload_too_large / provider_error / provider_timeout / provider_unavailable / audio_not_found / session_closed / internal_error / unknown(String)`。
 
 ### 5.2 映射表（唯一事实来源）
 
@@ -299,6 +332,7 @@ enum APIError: Error, Equatable, Sendable {
 | `provider_unavailable` | 语音服务暂时不可用，稍后再试 | 现在不能评分，先听一听吧 | 稍后重试 / 去听示范 | 是 |
 | `provider_error` | 服务处理失败，请重试（若持续失败请联系家长） | 出了点小问题，再试一次 | 重试 | 是 |
 | `audio_not_found` | 找不到这段录音，可能已被清理 | 录音找不到了 | 重新录制 | 否 |
+| `session_closed` (409) | 这段对话已经结束了，换个场景继续吧 | 这个场景结束啦，换一个吧 | 返回场景列表 | 否 |
 | `internal_error` / 5xx | 服务器内部错误，请稍后再试 | 服务器打了个嗝，等一下再试 | 重试 | 是 |
 | `decoding` | 版本不匹配，请更新 App（并告知家长） | — | 上报 | 否 |
 | `cancelled` | 不显示 | 不显示 | — | 否 |
@@ -325,7 +359,8 @@ enum APIError: Error, Equatable, Sendable {
 | 类型 | 隔离 | 原因 |
 | --- | --- | --- |
 | 所有 `View`、`*Store` | `@MainActor` | 直接驱动 UI，避免手动 hop |
-| `APIClient` | `final class: Sendable`（非 actor） | `URLSession` 自身线程安全；无共享可变状态 |
+| `APIClient` | `final class: Sendable`（非 actor） | `URLSession` 自身线程安全；token 由不可变的请求构造注入，不在 client 内缓存可变凭据 |
+| `TokenStore` / `TokenRefresher` | `actor` | Keychain 读写与单飞刷新必须串行；并发 401 等待同一个 `Task` |
 | `DiskCache`、`AudioCache`、`ImageCache` | `actor` | 文件读写 + 索引更新需要串行化 |
 | `CorpusRepository` | `actor` | 合并并发请求（同一 level 只请求一次） |
 | `AudioSessionController` | `actor` | category/active 切换必须串行，避免两处同时 `setCategory` |
@@ -352,6 +387,22 @@ polling ──页面消失/用户取消──▶ cancelled       // 任务取消
 - App 进入后台 → 暂停轮询（`scenePhase`），回前台立刻补一次，而不是继续后台烧电；
 - 服务端可能返回 `pending`/`scoring` 之外的未知状态 → 视为 `pending` 并记录日志。
 
+### 6.2 对话发音（后台评分）轮询
+
+`turn` 只返回助手文本；用户那一轮的发音评分由服务端在响应之后异步写入，**不会**随 turn 返回，也不在 `GET /sessions/:id` 里。客户端要：
+
+```
+turn 200（拿到 user_message_id + user_audio_url）
+  → 开始轮询 GET /chat/sessions/:id/messages（1s、2s、3s…，上限 ~15s）
+  → 在 messages[].pron 中找这轮 user 消息：pron != null → 展示/停止
+  → 超时仍为 null → 显示“稍后可在历史中查看”，不报错、不阻塞下一轮
+  → 重新进入会话：先 GET /sessions/:id 渲染历史（无 pron），再拉一次 /messages 补齐 pron
+```
+
+- 轮询是**低优先级**的：用户再次录音/播放时暂停，避免抢带宽；
+- 儿童端只拿 `pron` 做鼓励文案（服务端已剥离 IPA），**不显示数字**；
+- 每次轮询限制为一次会话的 messages，不做全量历史同步。
+
 ---
 
 ## 7. 缓存与离线
@@ -364,7 +415,7 @@ polling ──页面消失/用户取消──▶ cancelled       // 任务取消
 | 磁盘-可淘汰 | `Caches/` | TTS 音频、插画、录音副本、语料快照 | TTS 200MB、图片 100MB、录音 300MB |
 | 磁盘-不可淘汰 | `Application Support/` | 小体积 JSON：最近练习、诊断快照、偏好 | < 5MB |
 | 偏好 | `UserDefaults` | baseURL、TTS 语速偏好、是否自动播放 | — |
-| 敏感 | Keychain | 上次登录邮箱、用户 id、角色、baseURL 校验值 | — |
+| 敏感 | Keychain | access/refresh token（本机专用）、上次登录标识（邮箱/用户 id/角色） | — |
 
 ### 7.2 缓存键
 
@@ -385,7 +436,7 @@ func cacheKey(_ parts: [String], userId: String) -> String {
 | 错音本 | `review\|userId` | 每次打开强制刷新（可先展示缓存） |
 | 录音 | `recording\|attemptId` | 7 天 |
 
-**退出登录必须清空**：`Caches/audio`、`Caches/images`、`Application Support/recent-*`、内存缓存、Cookie。语料可保留（不涉及个人数据），但实现上统一走 `CacheJanitor.clearUserScoped(userId:)`。
+**退出登录必须清空**：Keychain 中的两个 token、`Caches/audio`、`Caches/images`、`Application Support/recent-*`、内存缓存。语料可保留（不涉及个人数据），但实现上统一走 `CacheJanitor.clearUserScoped(userId:)`；token 与账户缓存由 `SessionStore.logout()` 先调 `/auth/revoke` 再清（离线退出时仍清本地，见 ADR-0003 §6）。
 
 ### 7.3 离线能力矩阵
 
@@ -414,12 +465,15 @@ func cacheKey(_ parts: [String], userId: String) -> String {
 
 | 项 | 做法 |
 | --- | --- |
-| 凭据 | 不存密码；Cookie 由系统 `HTTPCookieStorage` 持有（数据保护级别随 App 容器）；Keychain 只存非敏感的“上次登录标识” |
-| Keychain 项 | `kSecClassGenericPassword`，`service = "top.dreamsearch.englishcoach.session"`，`account = "lastUser"`，值 = JSON{email,userId,role,baseURLHash}；`kSecAttrAccessibleAfterFirstUnlock` |
-| 传输 | 仅 https；禁止在 Release 打开 `NSAllowsArbitraryLoads` |
-| ATS | 不自签例外；LAN IP 场景需要用户明确在设置里开启并二次确认（默认关闭） |
+| 凭据 | 不存密码；access/refresh token 只存 Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）；**不进 UserDefaults、不进日志、不进崩溃上报** |
+| Keychain 项 | `kSecClassGenericPassword`：`service = "top.dreamsearch.englishcoach.auth"`，`account = accessToken / refreshToken / tokenMeta`；另一个 service（`.session`）只存 `lastUser`（email/userId/role，无凭据） |
+| 刷新 | 单飞刷新（actor），并发 401 只 refresh 一次；refresh 被拒才清 token；网络错误保留 token（见 ADR-0003） |
+| 传输 | 仅 https；禁止在 Release 打开 `NSAllowsArbitraryLoads`；http 只允许 Debug 排障 |
+| ATS | 不自签例外；NAS 证书必须被设备信任（换受信任证书或安装内网 CA）；LAN IP 场景需用户明确开启并二次确认（默认关闭） |
 | 本地文件 | 录音/缓存目录 `.completeUntilFirstUserAuthentication`（后台播放需要） |
-| 日志 | 不打印 Cookie/邮箱/音频；URL 中若含 id 可保留 |
+| 日志 | 不打印 access/refresh token、Cookie、密码、邮箱、音频；URL 中若含 id 可保留；`OSLog` 敏感字段用 `privacy: .private` |
+| 隐私（必须如实告知） | 当前后端 `PROVIDER_MODE=hybrid`：**音频 → Azure**（ASR/发音评测/TTS）、**文本 → DeepSeek**（对话/改写/复述）、**图片 → DeepSeek/智谱**（OCR 视觉/插画）。**音频与照片会离开家庭网络**，不得写“录音不出户”；完全本地需 `PROVIDER_MODE=local` + 本地模型（**当前未部署**） |
+| 隐私清单 | App bundle 内提供 `PrivacyInfo.xcprivacy`（Required Reason API + 收集数据声明），见 README §6.6 |
 | 儿童数据 | 只上传评分必需的音频与文本；不做行为分析 SDK；不上报设备广告标识 |
 | 截屏/后台快照 | 在 `scenePhase == .background` 时用模糊遮罩覆盖（家长面板可见孩子姓名） |
 | 删除权 | 设置页提供“清除本机数据”（不影响服务端数据，服务端删除不在本期） |
@@ -433,7 +487,7 @@ func cacheKey(_ parts: [String], userId: String) -> String {
 | 冷启动到首屏 | ≤1.5s | 启动不阻塞网络；语料走缓存后置刷新 |
 | 语料首屏（局域网） | ≤1s | 单次请求 + 本地快照 |
 | 录音开始延迟 | ≤150ms | 提前配置好 AVAudioSession，按下即录（见 audio.md） |
-| 上传 10s 录音 | ≤1s（局域网） | m4a 64kbps ≈ 80KB |
+| 上传 10s 录音 | ≤1s（局域网） | m4a 16kHz/65kbps ≈ 81KB |
 | TTS 起播 | 缓存 <300ms / 首次 ≤4s | 本地 TTS 缓存 + 首句预取 |
 | 结果页渲染 | ≤1 帧丢弃 | 图表用 Swift Charts，数据点降采样 ≤200 点 |
 
@@ -446,9 +500,10 @@ func cacheKey(_ parts: [String], userId: String) -> String {
 | 层 | 方式 | 必测用例 |
 | --- | --- | --- |
 | 纯逻辑 | XCTest | `ErrorMapper` 全 code 覆盖、`ScorePresenter`（孩子/成人）、`RetryPolicy`、`CacheKey`、Multipart 字节结构（含中文文本、CRLF） |
-| 网络 | `URLProtocol` 桩 或 `APITransport` fake | 401 触发登出、413 映射、坏 JSON → `decoding`、超时、取消 |
-| 状态机 | XCTest（注入 fake transport + fake audio） | 连读轮询：全成功/部分超时/页面退出取消 |
-| UI | XCUITest | 登录 → 选句 → 录音（用预置 fixture 音频注入）→ 结果 → 下一句 |
+| 认证 | XCTest + `URLProtocol` 桩 | Keychain 存取（fake store）、401 单飞刷新（并发 3 个 401 只发 1 次 refresh）、refresh 被拒 → 清 token、网络错误不清 token、重放只一次、base URL 切换清 token |
+| 网络 | `URLProtocol` 桩 或 `APITransport` fake | 401 触发刷新/登出、413 映射、坏 JSON → `decoding`、超时、取消 |
+| 状态机 | XCTest（注入 fake transport + fake audio） | 连读轮询：全成功/部分超时/页面退出取消；对话 pron 轮询：按时出现/超时/null |
+| UI | XCUITest | 登录 → 选句 → 录音（用预置 fixture 音频注入）→ 结果 → 下一句；退出后回登录页 |
 | 音频真机 | 手工矩阵 | 见 `audio.md` §10（权限三态、耳机插拔、蓝牙、来电中断、静音开关） |
 
 **不可自动化但必须人工验的**：麦克风权限流程（系统弹窗）、蓝牙路由、来电中断、后台播放。UI 测试里不要尝试点系统权限弹窗。
@@ -459,14 +514,15 @@ func cacheKey(_ parts: [String], userId: String) -> String {
 
 | # | 未知 | 影响 | 归属 |
 | --- | --- | --- | --- |
-| B1 | `/chat/sessions/:id/turn` 的音频如何返回（JSON base64？multipart 双 part？URL？） | Chat 解码策略、是否要二次 GET | 后端 |
 | B3 | `/story/rewrite` 是否返回句子数组及 story id | 复述页需要 `story_sentences`，否则要客户端拆分 | 后端 |
 | B6 | `/parent/summary` 字段 | 家长面板布局（必须先拿到样例） | 后端 |
 | B7 | `/suggestions` POST 的字段与状态语义 | 提建议表单 | 后端 |
 | B9 | `/attempts` 响应中音素/词/语调曲线的确切结构 | 结果页与图表 | 后端 |
 | B10 | `/sentences` 是否分页、是否支持 ETag | 缓存与刷新策略 | 后端 |
 | B11 | `/diagnosis` 是否含历史趋势 | 成长页是否能画趋势线 | 后端 |
-| B12 | Cookie 是否带 `Max-Age`、`Secure`、`Domain`、`Path` | 登录持久化（ADR-0001 前提） | 后端 |
 | B13 | 服务端是否对并发评分/生图限流 | 连读批量大小、生图重试 | 后端 |
+| B17 | token 三端点的错误码、refresh 轮换/重放检测、`/revoke` 后 access 是否立即失效 | 认证实现与失败语义（ADR-0003） | 后端 |
+
+> **已确认（不再是未知项）**：`/chat/sessions/:id/turn` 只返回助手文本（含 `reply`/`reply_zh`/`correction`/`user_audio_url` 等），**不做 ASR、不返回 TTS 音频**；对话链路是 `/asr` → `/turn`（`text` 必填）→ `/tts`；发音评分在 `GET /sessions/:id/messages` 的 `pron`（异步，需轮询），`GET /sessions/:id` 不含该字段。原 B1 已确认；原 B12（Cookie 属性）随 ADR-0001 作废，由 B17（token 端点）替代。
 
 以上均已登记到 `open-questions.md`，并标注阻塞的里程碑。

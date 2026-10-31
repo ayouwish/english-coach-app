@@ -6,8 +6,8 @@
 
 | 页面 | 接口 | 说明 | 儿童差异 |
 |---|---|---|---|
-| 登录 | `POST /api/auth/login`、`GET /api/auth/me` | 邮箱+密码；错误可见「邮箱或密码不正确」| 用**演示账号快捷按钮**（只填邮箱，不猜密码）|
-| 退出 | `POST /api/auth/logout` | 清 Cookie + 本地缓存 | — |
+| 登录 | `POST /api/auth/token`（Bearer）、`GET /api/auth/me` | 邮箱+密码 → access(1h)+refresh(30d)；网络层单飞刷新；退出调 `/api/auth/revoke` | 用**演示账号快捷按钮**（只填邮箱，不猜密码）|
+| 退出 | `POST /api/auth/revoke`（+ 清本地 token） | 吊销 refresh；清 Keychain/Asset Store 与缓存 | — |
 | 修改我的密码（🆕 web 侧已排 task-59）| `POST /api/auth/password` | 需当前密码 | 文案口语化 |
 | 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码 | 儿童不可见 |
 

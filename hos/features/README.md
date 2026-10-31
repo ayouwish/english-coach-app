@@ -6,15 +6,15 @@
 
 | 模块 | 页面 | 主要 API |
 |---|---|---|
-| `auth` | 登录、登出、修改密码 | `/auth/login`、`/auth/logout`、`/auth/me`、`/family/members/:id/password` |
+| `auth` | 登录、登出、修改密码 | `/auth/token`、`/auth/refresh`、`/auth/revoke`、`/auth/me`、`/family/members/:id/password` |
 | `practice` | 跟读练习 | `/sentences`、`/attempts`、`/attempts/:id/retry`、`/tts`、`/audio/:id` |
 | `flow` | 连读 | `/attempts/async`、`/attempts/status`、`/materials`、`/ocr`、`/tts` |
-| `chat` | 场景/会话 | `/chat/scenarios`、`/chat/sessions`、`/asr`、`/tts`、`/audio/:id` |
+| `chat` | 场景/会话 | `/chat/scenarios`、`/chat/sessions`、`/chat/sessions/:id/messages`（`pron` 轮询）、`/asr`、`/tts`、`/audio/:id` |
 | `story` | 故事/材料/插画/复述 | `/materials`、`/story/rewrite`、`/story/retell`、`/story/:id/illustrate`、`/ocr` |
 | `blindtest` | 盲测/周报 | `/blind-tests`、`/attempts/async`、`/attempts/status` |
 | `diagnosis` | 诊断/错音本 | `/diagnosis`、`/review`、`/sentences?focus=` |
 | `parent` | 家长面板/成员/建议 | `/parent/summary`、`/family/members`、`/suggestions`、`/health` |
-| `settings` | 设置/建议 | `/settings`、`/suggestions`、`/auth/logout` |
+| `settings` | 设置/建议 | `/settings`、`/suggestions`、`/auth/revoke` |
 
 ## 标准布局
 

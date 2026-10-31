@@ -1,6 +1,6 @@
 # 音频设计 · 录音 / 播放 / 互斥 / 生命周期
 
-> 目标平台：HarmonyOS NEXT / API 12+。
+> 目标平台：HarmonyOS NEXT / API 20+（HarmonyOS 6.0.0）。
 > 所有“可用/支持”结论都必须经过真机验证；本文只给设计约束与参数建议，不冒充验证报告。
 > 相关服务端事实：录音上限 **12MB**，服务端 PyAV 解码支持 webm/opus、wav、mp3、**m4a/aac**；ASR 已修复“停顿只识别前半句”，**客户端不要把录音切碎发送**。
 
@@ -56,7 +56,7 @@
                ├─ 授权：开录
                └─ 拒绝：显示“需要麦克风才能练习”
                     → 提供“去设置”
-                    → requestPermissionOnSetting(context, ['ohos.permission.MICROPHONE'])（API 12+）
+                    → requestPermissionOnSetting(context, ['ohos.permission.MICROPHONE'])
 ```
 
 ```ts
@@ -69,7 +69,7 @@ const granted = result.authResults[0] === 0;
 ### 2.3 拒绝处理（必须做）
 
 - 第一次拒绝：不重复弹系统框（系统不会再弹），改为应用内卡片 + “去设置”。
-- 用户点“去设置”：优先 `requestPermissionOnSetting`（API 12）；失败则提示手动路径“设置 → 隐私 → 权限管理 → 应用 → 家庭英语教练 → 麦克风”。
+- 用户点“去设置”：优先 `requestPermissionOnSetting`；失败则提示手动路径“设置 → 隐私 → 权限管理 → 应用 → 家庭英语教练 → 麦克风”。
 - **每次录音前都检查**：用户可能在系统设置里撤销权限；不能只在首次启动检查。
 - 儿童模式：说明文案用“要听到你的声音，需要打开麦克风”，不出现“权限”“授权”等术语。
 - 录音按钮在无权限时仍可点：点了走申请/引导，而不是直接置灰（否则用户不知道为什么）。
@@ -80,7 +80,7 @@ const granted = result.authResults[0] === 0;
 |---|---|---|
 | `requestPermissionsFromUser` 返回非 0 | 用户拒绝 | “需要麦克风才能练习” + 去设置 |
 | 创建 AVRecorder 失败 | 系统媒体服务异常 | “录音功能暂时不可用，重启 App 再试” |
-| `prepare` 失败 | 参数不支持/文件 fd 无效 | 降级 16k/64k 重试一次；仍失败提示 |
+| `prepare` 失败 | 参数不支持/文件 fd 无效 | 用同一组参数重试一次（先查 fd）；仍失败提示，不自动降码率 |
 | `start` 失败 | 麦克风被占用（通话/其他录音） | “麦克风被占用了，关掉其他录音 App 再试” |
 | 录音中途 error | 设备切换/系统回收 | 停止、保留已录部分？**不保留**，提示重录 |
 
@@ -88,24 +88,28 @@ const granted = result.authResults[0] === 0;
 
 ## 3. 录音（AVRecorder）
 
-### 3.1 参数建议
+### 3.1 录音参数（统一，无回退分支）
 
-| 参数 | 默认 | 低带宽回退 | 说明 |
+| 参数 | 值 | 字段 / 枚举 | 说明 |
 |---|---|---|---|
-| 容器 | `CFT_MPEG_4A`（m4a） | 同左 | 服务端按 mime/扩展名识别为 m4a |
-| 编码 | `AUDIO_AAC` | 同左 | 不用 AMR/MP3，AAC 兼容性与体积更稳 |
-| 声道 | **1（单声道）** | 1 | 口语练习不需要立体声；减半体积 |
-| 采样率 | **44100 Hz** | **16000 Hz** | 44.1k 保留更多辅音细节，利于 PA；16k 用于弱网 |
-| 码率 | **96000 bps** | **64000 bps** | 64–96kbps 足够语音；再高对 ASR/PA 收益很小 |
-| AAC profile | 不显式设置（用默认）或 `AAC_LC` | 同左 | 64–96kbps 不适合 HE-AAC；不要依赖 `AAC_HE` |
-| 音频源 | `AUDIO_SOURCE_TYPE_MIC` | 同左 | 系统麦克风 |
-| 输出 | `fd://<fd>` | 同左 | 本地文件只支持 fd，不支持路径 |
+| 容器 | **m4a** | `media.ContainerFormatType.CFT_MPEG_4A`（`'m4a'`） | 服务端按 mime/扩展名识别为 m4a |
+| 编码 | **AAC** | `media.CodecMimeType.AUDIO_AAC`（`'audio/aac'`） | 不用 AMR/MP3，AAC 兼容性与体积更稳 |
+| 声道 | **1（单声道）** | `audioChannels: 1` | AVRecorder 的字段是 `audioChannels`；`audioChannelCount` 属于 AVScreenCapture，**不要混用** |
+| 采样率 | **16000 Hz** | `audioSampleRate: 16000` | 与服务端 16k 处理管线一致；语音足够 |
+| 码率 | **65000 bps** | `audioBitrate: 65000` | 官方 AAC 支持范围 32000–500000，65000 在范围内 |
+| AAC profile | 不设置 | — | API 20 的 `AVRecorderProfile` 没有 `aacProfile` 字段（`@since 22`）；默认 AAC_LC |
+| 音频源 | 麦克风 | `AUDIO_SOURCE_TYPE_MIC` | 系统麦克风 |
+| 输出 | `fd://<fd>` | — | 本地文件只支持 fd，不支持路径 |
 
-**为什么默认 44.1k 而不是 16k**：
+**为什么是 16kHz / 65kbps**：
 
-- 服务端内部会统一转 16k 单声道，但 44.1k 源保留了更多高频辅音（/s/、/θ/、/f/），对发音评测更友好。
-- 96kbps 下 60s 约 720KB，远低于 12MB 上限；Wi-Fi 家庭网络不是瓶颈。
-- 若真机 PA 对 44.1k 支持不佳，或上传明显慢，切 16k/64k；这是**配置项**，不是硬编码。
+- 服务端本来就会把音频统一转成 16k 单声道；源端直接用 16k，少一次重采样、上传体积也小。
+- 65kbps 是 16k 语音的舒适码率（约 4 bit/采样），比更高码率省约 1/3；再高对 ASR/PA 的收益很小。
+- **体积核算**：65000 bit/s ÷ 8 = 8125 B/s ≈ **0.49 MB/分钟**（二进制约 0.465 MiB）；60s 上限约 **0.49 MB**。
+- **12MB 换算**：12 MiB ÷ 8125 B/s ≈ **1548s ≈ 25.8 分钟**（按十进制 12MB 约 24.6 分钟）。也就是说，正常一次录音（≤60s）**远不会碰到 12MB**；12MB 只是服务端兜底上限，客户端仍保留大小校验。
+- **已知取舍**：16k 采样率的奈奎斯特上限是 8kHz，/s/、/θ/、/f/ 等辅音的高频能量会被截掉一部分；这版按“统一 16k、保证链路稳定”拍板，PA 分数需在真机上按语料对比确认。**不因此增加更高采样率/码率分支**。
+- 统一参数后，准备/启动失败只做“同参数重试一次”，不做自动降码率；避免一次失败后悄悄换参数，导致评分口径不一致。
+- 【待真机确认】65000 不是常见的离散 AAC 码率档位，编码器可能取整到邻近值；以录音文件实际码率为准，**不因此增加码率分支**。
 
 ### 3.2 配置片段（示意）
 
@@ -114,12 +118,12 @@ import { media } from '@kit.MediaKit';
 import { fileIo } from '@kit.CoreFileKit';
 
 const profile: media.AVRecorderProfile = {
-  audioBitrate: 96000,
-  audioChannels: 1,
-  audioCodec: media.CodecMimeType.AUDIO_AAC,
-  audioSampleRate: 44100,
-  fileFormat: media.ContainerFormatType.CFT_MPEG_4A
-  // 不设置 aacProfile，使用系统默认；如需显式：AAC_LC
+  audioBitrate: 65000,             // 65kbps
+  audioChannels: 1,                // 单声道（不是 audioChannelCount）
+  audioCodec: media.CodecMimeType.AUDIO_AAC,        // 'audio/aac'
+  audioSampleRate: 16000,          // 16kHz
+  fileFormat: media.ContainerFormatType.CFT_MPEG_4A // 'm4a'
+  // 不设置 aacProfile：API 20 无此字段，系统默认 AAC_LC
 };
 
 const file = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE);
@@ -173,7 +177,7 @@ idle
 | 准备态 | 显示“麦克风准备中…”；就绪后自动开始，不需要再点一次 |
 | 录音态 | 红色脉冲动画 + 计时 `0:03`；按钮变“说完啦” |
 | 最短 | 600ms；低于则丢弃并提示（不提交） |
-| 最长 | 60s 自动停止并提交；或 12MB 预估到达时提前停 |
+| 最长 | 60s 自动停止并提交；12MB 仅作兜底校验（65kbps 下 60s 约 0.49MB，正常不会触发） |
 | 取消 | 停止 → 删除文件 → 释放 → 不提交 |
 | 切后台 | 立即停止 → **丢弃** → 释放；返回时提示“刚才的录音已取消” |
 | 来电/音频打断 | 停止 → 丢弃 → 释放；恢复后不自动续录 |
@@ -212,7 +216,7 @@ cacheDir/audio/<attemptOrMessageId>.<ext>            // 回放缓存
 
 `GET /api/audio/:id`：
 
-- 需要 Cookie 鉴权；
+- 需要 `Authorization: Bearer` 鉴权；
 - 响应头 `accept-ranges: none`；
 - 音频可能是 webm/opus（网页端历史录音）或 m4a（移动端新录音）。
 
@@ -220,7 +224,7 @@ cacheDir/audio/<attemptOrMessageId>.<ext>            // 回放缓存
 
 ```text
 不要：AVPlayer.url = 'https://english.dreamsearch.top/api/audio/xxx'
-      （无法带 Cookie；无 Range；可能被 302/401 干扰）
+      （无法带 Authorization；无 Range；可能被 302/401 干扰）
 
 要：  HttpClient.download('/audio/xxx', cachePath)
       → AVPlayer.url = 'fd://' + fd
@@ -400,7 +404,7 @@ fileIo.closeSync(file.fd);
 
 > 以下是**必须做**的验证项；未执行前不要在文档/汇报里写“已验证”。
 
-- [ ] 44.1kHz/96kbps、16kHz/64kbps 两种参数在目标机型上 `prepare/start/stop` 成功，产出 m4a 可被服务端评测。
+- [ ] 16kHz / 单声道 / 65kbps / AAC-LC 在目标机型上 `prepare/start/stop` 成功，产出 m4a 可被服务端评测。
 - [ ] m4a 文件前 12 字节含 `ftyp`，服务端识别为 `audio/mp4`，时长/大小正确。
 - [ ] 录音 60s 自动停止，文件 <12MB；上传成功。
 - [ ] 拒绝麦克风后再次点击：不重复弹系统框，能引导到设置；设置授权后返回可录。
@@ -423,6 +427,7 @@ fileIo.closeSync(file.fd);
 | `audio` | 文件 | 字段名固定 |
 | MIME | `audio/mp4` | 服务端据此存 `.m4a` |
 | 文件名 | `recording.m4a` | 仅用于服务端命名 |
+| 编码参数 | AAC-LC / 16kHz / 单声道 / 65kbps | 与第 3.1 节一致；服务端会再统一处理 |
 | `duration_ms` | 实际毫秒 | 服务端用于统计/兜底 |
 | `mode` | `scripted` / `unscripted` | 跟读/自由说 |
 | `reference_text` | 句子原文 | scripted 必填 |
@@ -438,10 +443,10 @@ fileIo.closeSync(file.fd);
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| 44.1k AAC 在部分设备 PA 支持不佳 | 评分异常/上传失败 | 16k/64k 回退；真机矩阵验证 |
+| 16k AAC 截掉部分高频辅音，PA 分数偏低 | 评分偏低/误判 | 固定参数下做真机语料对比；异常时再评估，不静默换码率 |
 | 蓝牙耳机麦克风采样率低 | 音质差、评分低 | 提示“建议用有线耳机/手机麦克风” |
 | 外放回声 | 录到 TTS、评分异常 | 先播后录；提示戴耳机 |
 | webm 历史录音无法播 | 家长听不到网页旧录音 | 明确提示；后端转码【待后端新增】 |
 | 系统后台策略差异 | 切后台录音未停 | 页面生命周期 + `stopAll()` 双保险 |
-| 12MB 上限 | 长录音失败 | 60s 自动停；本地预估大小 |
+| 12MB 上限 | 长录音失败 | 60s 自动停；65kbps 下 60s 仅约 0.49MB，实际上限不构成瓶颈 |
 | 麦克风被占用 | 无法录音 | 捕获错误并提示关闭其他 App |

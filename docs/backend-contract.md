@@ -6,9 +6,10 @@
 
 ---
 
-## 1. Bearer Token 认证【待后端新增】
+## 1. Bearer Token 认证【待后端新增 · **P0，阻塞 M0**】
 
-**动机**：原生 HTTP 栈的 Cookie 持久化在两端行为不一致（尤其鸿蒙 `request.agent`），且未来多设备/推送需要更清晰的会话管理。
+**动机（用户决定）**：**直接上 Bearer Token**，移动端不用 Cookie（ADR-0002 取代 ADR-0001）。
+理由：原生栈 Cookie 管理不可靠（鸿蒙 API 20 亦无自动管理）、多设备/吊销/推送都更需要 Token，且避免"先 Cookie 再迁移"的返工。
 
 ```
 POST /api/auth/token
@@ -83,7 +84,7 @@ POST /api/attempts/async 支持 header: Idempotency-Key: <client-uuid>
 
 | 项 | 何时做 | 阻塞客户端吗 |
 |---|---|---|
-| Bearer Token | 第二版（M2 前后）| 不阻塞（首版用 Cookie）|
+| **Bearer Token** | **现在（P0）** | **阻塞移动端 M0** |
 | `/api/version` | M0 之后尽快 | 不阻塞，但建议早做 |
 | 音频格式字段 | 可与 M0 同期 | 不阻塞（仅改善错误提示）|
 | 对话轮次发音 | 已实现（web）| 不阻塞 |

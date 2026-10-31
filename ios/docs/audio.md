@@ -26,21 +26,22 @@
 
 ```xml
 <key>NSMicrophoneUsageDescription</key>
-<string>需要使用麦克风录制你的朗读，音频只会上传到家里的学习服务器用于发音评分，不会上传到其他地方。</string>
+<string>需要使用麦克风录制你的朗读。录音会上传到家里的学习服务器，并转发给云端语音服务用于识别和发音评分。</string>
 ```
 
 > 只说“需要麦克风”会被用户（尤其是家长）拒绝。文案必须回答**为什么**和**传给谁**。
+>
+> **必须如实**：当前后端 `PROVIDER_MODE=hybrid`，音频会经家里服务器转发给 **Azure**（ASR/发音评测/TTS），**会离开家庭网络**。不得写成“录音只留在家里/不出户”。完全本地需要 `PROVIDER_MODE=local` + 本地模型，当前**未部署**。
 
 ### 2.2 请求时机与 API
 
 - **不在启动时请求**。在用户第一次点“开始录音”时，先展示一屏**自研的前置说明**（图标 + 两句文案 + “继续”按钮），再触发系统弹窗。此举能明显提高通过率，也符合“不在冷启动索要权限”的体验要求。
-- iOS 17+：`AVAudioApplication.requestRecordPermission(completionHandler:)`（`AVAudioSession.recordPermission` 在 17 起被弃用）。
-- iOS 16（若采纳 ADR-0002 的备选）：`AVAudioSession.sharedInstance().requestRecordPermission { }`。
+- 最低版本 iOS 26，直接使用 `AVAudioApplication.requestRecordPermission(completionHandler:)`（`AVAudioSession.recordPermission` 已被弃用），**不需要 `#available` 分支**。
 
 ```swift
 @MainActor
 func ensureRecordPermission() async -> PermissionStatus {
-    switch AVAudioApplication.shared.recordPermission {   // iOS 17+
+    switch AVAudioApplication.shared.recordPermission {   // iOS 26，无需 #available
     case .granted: return .granted
     case .denied:  return .denied
     case .undetermined:
@@ -88,7 +89,7 @@ func ensureRecordPermission() async -> PermissionStatus {
 - 不要用 `.ambient`：会被静音键静音，孩子以为“没声音”。
 - 不要用 `.voiceChat`：带 AEC 与窄带处理，TTS 音质差；本 App 不做实时双向通话。
 - `mode = .measurement` 会关闭系统音效处理，理论上更适合评测输入，但也会改变输出路由（易走听筒）并可能放大底噪。**本期用 `.default`**；若实测评测分数异常再单独评估（作为 ADR 候选）。
-- 采样率：录音前 `setPreferredSampleRate(16_000)`、`setPreferredIOBufferDuration(0.005)`；系统可能不接受，**以 `AVAudioSession.sampleRate` 实际值为准**，不要假设。
+- 采样率：录音前 `setPreferredSampleRate(16_000)`、`setPreferredIOBufferDuration(0.005)`；硬件 IO 采样率可能被系统定在 48kHz，**但 `AVAudioRecorder` 会按 `AVSampleRateKey=16000` 编码输出**。以最终文件的实际参数为准（用 `AVURLAsset` / `afinfo` 复核），不要假设 session 的 `sampleRate` 就是文件采样率。
 
 ```swift
 // AudioSessionController
@@ -125,31 +126,33 @@ func activateForPlayback() async throws {
 
 ### 4.1 参数（唯一推荐配置）
 
+**统一：m4a / AAC-LC、16kHz、单声道、65kbps。** 不设可选码率/采样率分支。
+
 ```swift
 let settings: [String: Any] = [
     AVFormatIDKey: kAudioFormatMPEG4AAC,       // m4a 容器 / AAC 编码
-    AVSampleRateKey: 16_000,                   // 16kHz 单声道，语音识别/评测的常规输入
-    AVNumberOfChannelsKey: 1,
-    AVEncoderBitRateKey: 64_000,               // 64kbps
-    AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+    AVSampleRateKey: 16_000,                   // 16kHz：ASR/PA 的常规输入，体积小
+    AVNumberOfChannelsKey: 1,                  // 单声道
+    AVEncoderBitRateKey: 65_000,               // 65kbps（固定码率）
+    AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue  // 有码率时基本被忽略，仅作声明
 ]
 // 文件：Caches/Recordings/<uuid>.m4a
 ```
 
-- **16kHz / 单声道 / AAC 64kbps**：体积小、服务端 PyAV 直接可解、满足 ASR 与 PA 的常见输入要求。
-- 若评测对高频音素（/s/ /ʃ/ /θ/）区分不佳，可在真机 A/B 后改 **44.1kHz / 96kbps**（仍是 AAC/m4a），体积翻倍但仍远低于上限。此项属**【待实测】**。
-- **不要**用 44.1kHz 立体声 PCM/WAV：`44.1k × 2ch × 16bit = 176KB/s`，70 秒就会触顶 12MB。
+- **65kbps** 是按每秒 8.125KB 计（65,000 bit/s ÷ 8），1 分钟约 **0.49MB**；12MB 上限约 **24 分钟**。实际时长仍受**服务端 `max_audio_seconds`** 限制（voice 默认 120s，可用 `VOICE_MAX_AUDIO_SECONDS` 配置，**【待确认】**生产取值），客户端另有 60s 硬上限。
+- `AVEncoderAudioQualityKey` 对 AAC 在给定 `AVEncoderBitRateKey` 时基本不起作用；填 `.high` 只是表达意图。**不要**靠它调音质，要改就改码率并同步本文。
+- 不要用 44.1kHz / 立体声 / PCM/WAV：`44.1k × 2ch × 16bit = 176KB/s`，70 秒就会触顶 12MB，且服务端 ASR/评测不需要。
+- **统一参数，不做 A/B 分支**：若真机验证服务端解码异常（`unsupported_audio` 或评分明显异常），先回报现象（设备、系统、文件实际参数、服务端错误码），再单点调整并回写本文；**不要**在客户端预先写“失败就换一套参数”的兜底。
 
 ### 4.2 体积核算（12MB 上限）
 
 | 配置 | 码率 | 每秒 | 1 分钟 | 12MB 可容纳 |
 | --- | --- | --- | --- | --- |
-| AAC 16kHz mono 64kbps（推荐） | 64 kbps | 8 KB | 480 KB | ≈25 分钟 |
-| AAC 44.1kHz mono 96kbps | 96 kbps | 12 KB | 720 KB | ≈17 分钟 |
-| WAV 16kHz mono 16bit | 256 kbps | 32 KB | 1.9 MB | ≈6 分钟 |
-| WAV 44.1kHz stereo 16bit | 1411 kbps | 176 KB | 10.6 MB | ≈71 秒 |
+| **AAC 16kHz mono 65kbps（唯一配置）** | 65 kbps | 8.1 KB | **≈0.49 MB** | **≈24 分钟** |
+| AAC 16kHz mono 32kbps（对比参考，不使用） | 32 kbps | 4 KB | 0.24 MB | ≈48 分钟 |
+| WAV 16kHz mono 16bit（不使用） | 256 kbps | 32 KB | 1.9 MB | ≈6 分钟 |
 
-结论：m4a 下 12MB 上限几乎不可能触发；客户端仍要做 **60 秒硬上限 + 提交前体积预检**，因为限制本身是服务端契约，不能靠“应该不会超”。
+结论：65kbps 下 12MB 上限**几乎不可能触发**（约 24 分钟），真正先到的是**服务端时长上限**与客户端 **60s 硬上限**。客户端仍要做提交前体积预检，因为 12MB 是服务端契约，不能靠“应该不会超”。
 
 ### 4.3 录音时长与句长
 
@@ -190,7 +193,7 @@ let level = max(0, min(1, (db + 50) / 50))         // 映射到 0...1
 | 上传失败 | 保留 `.pending` 标记 | 用户重试或 24h 后清 |
 | 取消/过短/被中断 | 立即删除 | — |
 
-`Caches/` 天然不进 iCloud 备份，符合“录音不上云”的预期。
+`Caches/` 天然不进 iCloud 备份，避免录音副本被同步到 iCloud；**这不代表录音不离开设备**——录音仍会上传家里服务器并转发云端语音服务（见 §1、§5.1）。
 
 ### 4.7 duration_ms
 
@@ -220,6 +223,8 @@ POST {base}/attempts          multipart/form-data
 - 提交前：`attributesOfItem[.size] <= 12MB`，否则本地拦截并提示；
 - 上传进度：≤2MB 用不确定态转圈即可；照片 OCR（可达数 MB）必须显示百分比进度。
 
+> **对话/复述的音频不走 `/attempts`**：对话是 `POST /asr`（multipart `audio`，`language=en`）拿文本 → `POST /chat/sessions/:id/turn`（multipart，**`text` 必填** + `audio`）→ `POST /tts` 播回复；复述是 `POST /asr` → `POST /story/retell`。详见 `screens.md` §5、§6.3。
+
 ### 5.2 失败与重试
 
 | 失败 | 处理 |
@@ -241,8 +246,8 @@ POST {base}/attempts          multipart/form-data
 | --- | --- | --- |
 | TTS 示范音 | `POST /tts` → 字节 → 写 `Caches/TTS/<cacheKey>.(mp3\|wav)` | `AVAudioPlayer` |
 | 我的录音回放 | 本地文件（刚录完）或 `GET /audio/:id` 下载后缓存 | `AVAudioPlayer` |
-| 对话回复 | `/chat/.../turn` 返回的音频（**【待确认】** 返回形态） | 先落盘再 `AVAudioPlayer` |
-| 故事/插画 | 图片，非音频 | — |
+| 对话助手回复 | **文本来自 turn 响应**；音频由 `POST /tts {text: reply, format:"mp3"}` 合成后落盘（turn 不返回音频） | 先落盘再 `AVAudioPlayer` |
+| 对话开场白 | `POST /chat/sessions` 返回的 `opening_line` 文本 → `POST /tts` | 同上 |
 
 统一约定：**先把音频落到本地文件再播**。原因：`AVAudioPlayer` 需要 URL/Data；落盘后可缓存、可重播、可后台，且避免 Data 常驻内存。
 
@@ -254,7 +259,8 @@ POST {base}/attempts          multipart/form-data
 
 ### 6.3 格式
 
-- 默认请求 **mp3**（体积小，缓存友好）；服务端若对某 voice 只出 wav，则按响应 `Content-Type` 落 `.wav`；
+- **示范音默认 `format=wav`**：与参考音分析共用服务端预热缓存，命中时几乎零等待（【已实现·后端现有】，`/api/tts` 默认 `wav`）；
+- **对话回复/长文本用 `format=mp3`**：每次都是新文本、必然 cache miss，mp3 体积约 1/3，局域网传输更快；
 - `AVAudioPlayer` 对 mp3/wav/m4a 均原生支持，无需转码；
 - 24kHz wav 单声道 3 秒 ≈ 144KB，mp3 约 12–20KB；缓存上限 200MB 下足够存上千条。
 
@@ -371,6 +377,8 @@ final class AudioCoordinator {
 | 7 | 录音中来电 | 录音中止，提示重录；通话后播放正常 |
 | 8 | AirPods 连接 → 播放 → 录音 | 播放音质正常；录音可用（HFP） |
 | 9 | 静音开关打开 | TTS 仍可听见 |
-| 10 | 录音 59s / 61s | 60s 自动停止并提交；文件 <12MB |
+| 10 | 录音 59s / 61s | 60s 自动停止并提交；文件约 0.5MB，远小于 12MB |
 | 11 | 蓝牙音箱 + 录音 | 输入回退手机麦克风，提示可见 |
 | 12 | 后台播放 TTS 30s | 锁屏继续播放；回前台状态正确 |
+| 13 | 16kHz/65kbps m4a（10s、60s）上传 | 服务端解码、ASR、评分均正常，无 `unsupported_audio`；用 `afinfo` 确认文件实际为 16kHz mono AAC |
+| 14 | access token 过期时录音提交 | 401 → 单飞刷新 → 自动重放，用户无感；不出现“登录过期”误报 |

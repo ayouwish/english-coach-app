@@ -5,50 +5,51 @@
 
 ---
 
-## 0. 最需要先拍板的 3 件事
+## 0. 已拍板的三件事（2026-10-31）
 
-| # | 问题 | 为什么现在就要定 | 建议 |
+| # | 问题 | 结论 | 记录位置 |
 | --- | --- | --- | --- |
-| **Q1** | 登录态怎么持久化：只靠 Cookie（方案 A），还是加 Bearer Token（方案 B）？如果选 A，后端是否愿意给会话 Cookie 加 `Max-Age`？ | 决定 M0 的认证实现、Keychain 存什么、重启后是否掉登录。**这是唯一一个会波及所有页面的决策。** | **选 A**，并请后端给 Cookie 加 `Max-Age=30d`（改动极小）。Bearer 作为上线后可评估的 ADR，不在 M0 做。 |
-| **Q2** | 最低支持 iOS 17 还是 iOS 16？ | iOS 17 才能用 `@Observable`（团队效率、代码量），iOS 16 则要退回 `ObservableObject`，并影响能覆盖的旧设备（iPhone 8/X 等）。 | **iOS 17.0+**。若家里有 iPhone X 及更早设备必须支持，改 16 并接受 +2 人日与更多样板代码。 |
-| **Q3** | 分发方式：个人开发者账号 TestFlight / 免费账号自签 / 上 App Store？ | 决定签名、过期（免费证书 7 天）、Bundle ID、是否需要隐私清单与审核素材；也决定 `NSLocalNetworkUsageDescription` 与 ATS 的处理方式。 | 若只在家用：**TestFlight（付费开发者账号）** 最省心；免费自签 7 天过期对家庭使用很折磨。上架则需先解决"公网不可达"的产品叙事。 |
+| **Q1** | 登录态怎么持久化？ | **Bearer Token**：access 1h / refresh 30d（一次性轮换）、Keychain 存储、网络层单飞刷新、退出 `/revoke`。Web 端继续用 Cookie，双模式并存。 | [ADR-0003](adr/0003-bearer-token.md)（取代 [ADR-0001](adr/0001-cookie-session-vs-bearer-token.md)） |
+| **Q2** | 最低支持哪个 iOS？ | **iOS 26.0**。用户设备可控、长期维护，不做 17/16 兼容分支。 | [ADR-0002](adr/0002-min-ios-version-and-observation.md) |
+| **Q3** | 如何分发？ | **TestFlight 内部测试**（≤100 名内部测试员，无需 Beta 审核；构建 90 天过期）。不上 App Store、不做免费自签。 | `README.md` §6.6、`roadmap.md` M0/M4 |
 
-> 除此之外，Q4（共用设备/儿童 PIN）与 Q7（推送）会影响 M1/M4 的交互设计，建议在同一轮讨论中一并定。
+> **当前唯一的硬阻塞**：后端 token 三接口（`/auth/token`、`/auth/refresh`、`/auth/revoke`）尚未上线，见 B17。其余 M0 事项（最低版本、分发、录音参数）已定。
+>
+> Q4（共用设备/儿童 PIN）与 Q7（推送）会影响 M1/M4 的交互设计，仍建议尽早拍板。
 
 ---
 
 ## 1. 产品 / 体验决策（Q）
 
-### Q1 · 登录态持久化方案（阻塞 M0）
+### Q1 · 登录态持久化方案（已决 · 2026-10-31）
 
 | 项 | 内容 |
 | --- | --- |
-| 现状 | 服务端 Cookie 会话，`httpOnly, sameSite=lax, 可选 Secure`；**是否带 `Max-Age`/`Expires` 未知**（B12） |
-| 方案 A | 客户端用 `HTTPCookieStorage` 持久化（零后端改动） |
-| 方案 B | 后端加 Bearer + refresh token（需改后端） |
-| 关键风险 | 若 Cookie 是"会话 Cookie"（无 `Max-Age`），iOS 重启 App 后大概率丢失 → 每次打开都要登录，家庭场景不可接受 |
-| 选项 | A1：后端加 `Max-Age`（推荐）；A2：客户端把 Cookie 快照进 Keychain 并在启动时回写（可行但绕、且 `httpOnly` 语义变味）；A3：直接上 Bearer |
-| 建议 | **A1 + 方案 A**；A2 仅在"后端短期不能改"时作为兜底；Bearer 写成 ADR 备选，等有跨端/多设备需求再上 |
-| 归属 | 产品 + 后端（一个 `Set-Cookie` 属性） |
+| 结论 | **Bearer Token**（不是 Cookie）。后端新增 `/auth/token`、`/auth/refresh`、`/auth/revoke`（P0）；所有接口接受 `Authorization: Bearer`，Web 仍用 Cookie。 |
+| 客户端 | access 1h / refresh 30d；两个 token 存 **Keychain**；网络层**单飞刷新**（并发 401 只 refresh 一次，其余等待后重放）；refresh 被服务端拒绝 → 清 token 跳登录；退出 → `/revoke` + 清本地。 |
+| 关键约束 | refresh **一次性轮换**，所以客户端**不得并发/重试** refresh；网络错误不清 token（只对 401/403 生效）。 |
+| 记录 | [ADR-0003](adr/0003-bearer-token.md)；原 Cookie 方案 [ADR-0001](adr/0001-cookie-session-vs-bearer-token.md) 标记 Superseded |
+| 归属 | 后端（实现三接口）/ 客户端（刷新与存储） |
+| 剩余验证 | B17；见 C3、C5 |
 
-### Q2 · 最低 iOS 版本（阻塞 M0）
-
-| 项 | 内容 |
-| --- | --- |
-| 选项 | 17.0（`@Observable`、`ContentUnavailableView`） / 16.0（`ObservableObject` + `@Published`） |
-| 影响 | 17：代码更少、SwiftUI 新 API 更多；16：覆盖 iPhone 8/X，但需要两套状态写法或全面退回旧写法 |
-| 需要的信息 | 家庭实际在用的设备型号与系统版本（**需用户提供**） |
-| 建议 | 若所有在用设备 ≥ iPhone XS/XR → **17.0**；否则 16.0 并同步改 ADR-0002 |
-| 归属 | 产品 |
-
-### Q3 · 分发方式与签名（阻塞 M0）
+### Q2 · 最低 iOS 版本（已决 · 2026-10-31）
 
 | 项 | 内容 |
 | --- | --- |
-| 选项 | TestFlight（需付费开发者账号，90 天一批） / 免费账号自签（7 天过期） / App Store |
-| 影响 | 签名配置、Bundle ID、隐私清单、审核文案；App Store 还要求说明"服务器仅家庭内网"，否则审核可能质疑可用性 |
-| 建议 | 家庭自用优先 **TestFlight**；不做免费自签（7 天重签对家长是负担） |
-| 归属 | 产品 |
+| 结论 | **iOS 26.0** |
+| 理由 | 用户设备可控、长期维护；避免 17/16 双套状态写法与 `#available` 分支；TestFlight 内部测试员的设备也统一升级。 |
+| 影响 | 低于 iPhone 11 / SE(第二代) 的设备无法安装（以 Apple 官方兼容列表为准）；Xcode 需 26+。 |
+| 记录 | [ADR-0002](adr/0002-min-ios-version-and-observation.md) |
+| 剩余验证 | 家庭实际设备清单与 Xcode 就绪情况（未在仓库记录） |
+
+### Q3 · 分发方式与签名（已决 · 2026-10-31）
+
+| 项 | 内容 |
+| --- | --- |
+| 结论 | **TestFlight 内部测试** |
+| 细节 | 内部测试员最多 100 名、**无需 Beta App Review**；构建 **90 天过期**，需定期重传；Bundle ID `top.dreamsearch.englishcoach`（待确认唯一性）；需 Apple Developer Program 付费账号、App Store Connect 记录、`PrivacyInfo.xcprivacy`。 |
+| 不再评估 | 免费账号自签（7 天重签）；App Store 上架（需解释“服务器仅家庭内网可达”，无收益）。 |
+| 记录 | `README.md` §6.6；`roadmap.md` M0（通道）/ M4（Beta 运维） |
 
 ### Q4 · 共用设备与账号切换（影响 M1）
 
@@ -136,16 +137,16 @@
 
 ## 2. 后端契约确认（B）
 
-> 每条都需要后端给一个**真实响应样例**（脱敏即可），客户端按样例写解码与测试。**在拿到样例前不要写解析代码。**
+> 未决项需要后端给一个**真实响应样例**（脱敏即可），客户端按样例写解码与测试；**已确认项（B1）可直接实现**，不要再按旧猜测写双解码分支。
 
-### B1 · `/chat/sessions/:id/turn` 的响应形态（阻塞 M1）
+### B1 · `/chat/sessions/:id/turn` 的响应形态（已确认 · 2026-10-31，不再阻塞）
 
 | 项 | 内容 |
 | --- | --- |
-| 未知 | 助手文本字段名？音频是 base64、二进制 part、还是 URL？是否包含用户 ASR transcript？是否包含中文翻译？ |
-| 影响 | 对话页解码、音频落盘、是否要二次请求 |
-| 建议契约 | `{ "user_transcript": "...", "reply_text": "...", "reply_text_zh": "...", "audio": {"format":"mp3","base64":"..."} }`（或返回 `audio_url`） |
-| 备注 | 若返回 base64，注意 12MB 内的内存峰值；建议后端直接返回音频 URL 更省事 |
+| 已确认 | turn **只返回助手文本与纠错**（`reply`、`reply_zh`、`correction`、`suggested_replies`、`target_words`、`done`、`turn_index`、`message_id`、`user_message_id`、`user_audio_url` 等），**不做 ASR、不返回 TTS 音频**。 |
+| 客户端链路 | `POST /asr`（multipart audio → `text`）→ `POST /chat/sessions/:id/turn`（multipart，**`text` 必填** + audio）→ `POST /tts`（用 `reply` 合成音频）。 |
+| 发音评分 | 后台异步写库，由 `GET /chat/sessions/:id/messages` 返回用户消息的 `pron`；`GET /chat/sessions/:id` **不含** `pron`，需轮询。 |
+| 实现位置 | `screens.md` §5.3/§5.4、`audio.md` §5.1/§6.1、`architecture.md` §6.2 |
 
 ### B2 · `/attempts/status` 的状态枚举与字段（阻塞 M1）
 
@@ -227,13 +228,9 @@
 | 影响 | 成长页趋势图：无历史则用客户端本地统计 |
 | 建议 | 返回 `history:[{date, mastery}]` 更好；否则客户端自算 |
 
-### B12 · `Set-Cookie` 属性与会话时长（阻塞 M0，与 Q1 联动）
+### B12 · ~~`Set-Cookie` 属性与会话时长~~（作废）
 
-| 项 | 内容 |
-| --- | --- |
-| 未知 | 是否带 `Max-Age`/`Expires`、`Secure`、`Domain`、`Path=/`；会话有效期多久；是否滑动续期 |
-| 影响 | 是否需要重新登录、是否需要开启 Keychain 兜底 |
-| 建议 | `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000` |
+原问题是“Cookie 是否带 `Max-Age`/`Secure`/`Domain`/`Path`”，用于支撑 ADR-0001 的 Cookie 方案。该方案已被 **Bearer Token** 取代（Q1 / ADR-0003），本问题**作废**，由 **B17** 替代。不要再按 Cookie 方案写客户端。
 
 ### B13 · 并发与限流（影响 M1/M2）
 
@@ -267,6 +264,17 @@
 | 影响 | 家长面板未来做"查看孩子录音"的可行性；也是安全边界 |
 | 建议 | 服务端按 family 关系鉴权，并在文档中写明 |
 
+### B17 · Bearer Token 三端点细节（阻塞 M0，替代 B12）
+
+| 项 | 内容 |
+| --- | --- |
+| 已定契约 | `POST /auth/token {email,password}` → `{access_token, refresh_token, token_type:"Bearer", expires_in:3600, user}`；`POST /auth/refresh {refresh_token}` → 新一对（**一次性轮换**）；`POST /auth/revoke {refresh_token}` → 204；所有接口接受 `Authorization: Bearer`，Web 继续用 Cookie。 |
+| 仍需后端确认 | ① 各失败场景的 `error.code`（密码错误、refresh 过期/已吊销/已轮换、revoke 重复调用）；② 轮换是否做**重放检测/宽限期**（旧 refresh 被第二次使用时是 401 还是短暂容忍）；③ `/revoke` 后已签发的 access 是否立即失效（JWT 无状态时最长再活 1h）；④ 是否有登录/刷新限流（429）。 |
+| 影响 | 客户端单飞刷新与登出语义、错误文案；ADR-0003 的“失败即清 token”只在**服务端拒绝**时生效。 |
+| 建议 | 轮换严格一次性 + 重放直接 401；`/revoke` 同时记入吊销表让 access 也尽快失效；错误统一 `{error:{code,message}}`。 |
+| 归属 | 后端（P0） |
+| 验证 | `README.md` §6.4 的 curl 自检 + ADR-0003 验证清单 |
+
 ---
 
 ## 3. 客户端待实测（C）
@@ -275,16 +283,16 @@
 
 | # | 待实测 | 影响 | 方法 |
 | --- | --- | --- | --- |
-| C1 | 16kHz/64kbps 与 44.1kHz/96kbps 的评测分数差异 | 录音参数定稿 | 同一人同句各录 10 次，比较音素分差异 |
+| C1 | **16kHz / 单声道 / AAC 65kbps** 的 m4a 在服务端解码与评分是否正常 | 录音参数定稿（已定 16k/65k，不再做码率 A/B） | 真机录 10s/60s → `afinfo` 复核参数 → `/attempts` 看是否 `unsupported_audio` 与分数是否合理 |
 | C2 | 同步 `/attempts` 的真实耗时分布 | 同步 vs 异步选择（Q10） | 20 次请求记录 P50/P90 |
-| C3 | 重启 App 后 Cookie 是否保留 | 认证持久化（Q1） | 登录 → 杀进程 → 冷启动 → `/auth/me` |
+| C3 | 杀进程重开是否保持登录（Keychain token + access 过期刷新） | 认证持久化（Q1） | 登录 → 杀进程 → 冷启动 → `/auth/me`；再把 access 置为过期看是否单飞刷新 |
 | C4 | `AVAudioRecorder.currentTime` 在 `stop()` 后的行为 | `duration_ms` 取值 | 打印对比文件真实时长 |
-| C5 | `httpCookieAcceptPolicy` 与 `SameSite=Lax` 在 URLSession 的实际表现 | Cookie 方案是否可靠 | 真机抓包 + 服务端日志 |
+| C5 | 并发 401 时是否只发一次 refresh（单飞刷新） | 是否会因轮换竞争掉登录 | `URLProtocol` 桩并发 3 个 401；真机抓包复核 |
 | C6 | TTS 缓存命中率与首次/二次起播延迟 | 预取策略、体验预算 | 打点统计 |
 | C7 | HEIC 原始体积与转 JPEG 后的体积/清晰度 | 故事模式上传 | iPhone 实拍多张对比 |
 | C8 | 局域网内 NAS 域名与证书情况（是否受信任） | ATS 配置、是否要自签例外 | 真机 Safari 访问；`nscurl --ats-diagnostics` |
 | C9 | AirPods 连接下录音输入是否可用（HFP 切换） | 蓝牙体验 | 真机按 `audio.md` §10 矩阵 |
-| C10 | 60s 录音的实际文件体积 | 12MB 预检 | 实测 16k/64k 配置 |
+| C10 | 60s 录音的实际文件体积（16k/65k） | 12MB 预检 | 实测并核对 ≈0.49MB/分钟 |
 
 ---
 
@@ -295,4 +303,4 @@
    - 若是**产品规则**（儿童模式、分发、语言）→ 更新 `screens.md` / `roadmap.md` 对应小节；
    - 若是**接口契约**（B 系列）→ 用样例更新 `architecture.md` 的 DTO 说明与单测 fixture。
 2. 本文档保留问题与结论（不删除），状态改 `已决` 并附日期与决策人。
-3. 未决项不得"先猜着实现"：契约类问题（B1–B9）明确阻塞对应里程碑，宁可延后一天，不要写两套解析。
+3. 未决项不得"先猜着实现"：契约类问题（B2–B17 中未决者）明确阻塞对应里程碑，宁可延后一天，不要写两套解析。
