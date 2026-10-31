@@ -225,7 +225,9 @@ final class AudioRecorder {
         limitTask?.cancel()
         limitTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Self.maxDuration))
-            guard let self, self.isRecording else { return }
+            // sleep 被取消时 try? 会吞掉 CancellationError，必须显式检查，
+            // 否则上一轮的 60s 计时器可能把刚开始的新一轮录音停掉。
+            guard !Task.isCancelled, let self, self.isRecording else { return }
             self.recorder?.stop()
             self.limitReached = true
         }

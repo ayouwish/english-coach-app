@@ -2,6 +2,14 @@
 
 跨 feature 复用的基础设施与设计系统；**禁止依赖 entry/features**。
 
+> **M0 现状（2026-10-31）**：M0 收敛为**单 HAP**，下表规划的 `commons/*` HAR **没有创建**（仍是 `.gitkeep` 占位）。
+> 等价实现目前在：
+> [`entry/src/main/ets/core/`](../entry/src/main/ets/core)（net / audio / session / service / error / router / config / util）、
+> [`entry/src/main/ets/design/`](../entry/src/main/ets/design)、
+> [`entry/src/main/ets/components/`](../entry/src/main/ets/components)。
+> 迁移关系见 [../README.md §0.1.1](../README.md#011-与设计文档的一处取舍m0-收敛为单-hap)；M1 拆 HAR 时按下表一一搬迁。
+> 代码**未编译验证**，不要据此认为"已可用"。
+
 | 模块 | 职责 | 关键文件（M0 创建） |
 |---|---|---|
 | `net` | 唯一 HTTP 出口、Bearer 认证/单飞刷新、multipart、下载、错误归一化 | `client/HttpClient.ets`、`session/TokenSession.ets`、`error/ApiError.ets`、`dto/*` |

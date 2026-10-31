@@ -140,7 +140,7 @@ private struct LoginForm: View {
                 icon: "arrow.right.circle.fill",
                 isLoading: viewModel.isSubmitting,
                 isEnabled: viewModel.isFormValid,
-                action: submit
+                action: { submit() }
             )
             .padding(.top, Tokens.Spacing.s4)
 

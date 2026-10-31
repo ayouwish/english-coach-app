@@ -60,11 +60,7 @@ struct Endpoint: Sendable {
 
 extension Endpoint {
     static func authToken(email: String, password: String) throws -> Endpoint {
-        struct Body: Encodable {
-            let email: String
-            let password: String
-        }
-        let data = try JSONEncoder().encode(Body(email: email, password: password))
+        let data = try JSONEncoder().encode(TokenBody(email: email, password: password))
         return Endpoint(
             method: .post,
             path: "auth/token",
@@ -137,13 +133,8 @@ extension Endpoint {
     }
 
     static func tts(text: String, rate: TTSRate, format: TTSFormat) throws -> Endpoint {
-        struct Body: Encodable {
-            let text: String
-            let rate: String
-            let format: String
-        }
         let data = try JSONEncoder().encode(
-            Body(text: text, rate: rate.rawValue, format: format.rawValue)
+            TTSBody(text: text, rate: rate.rawValue, format: format.rawValue)
         )
         return Endpoint(
             method: .post,
@@ -158,13 +149,25 @@ extension Endpoint {
         Endpoint(method: .get, path: "health", timeout: 10, authPolicy: .none)
     }
 
-    private struct RefreshBody: Encodable {
-        let refreshToken: String
+}
 
-        enum CodingKeys: String, CodingKey {
-            case refreshToken = "refresh_token"
-        }
+private struct TokenBody: Encodable {
+    let email: String
+    let password: String
+}
+
+private struct RefreshBody: Encodable {
+    let refreshToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case refreshToken = "refresh_token"
     }
+}
+
+private struct TTSBody: Encodable {
+    let text: String
+    let rate: String
+    let format: String
 }
 
 // MARK: - Multipart

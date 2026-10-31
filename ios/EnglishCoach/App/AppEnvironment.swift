@@ -90,8 +90,8 @@ final class AppEnvironment {
 
         do {
             if !stored.refreshToken.isEmpty {
-                // 主动刷新而不是等 /auth/me 的 401：后端 `/auth/me` 在 Bearer 失效时
-                // 返回 200 `{user:null}`，不会触发网络层的 401 单飞刷新（实测后端行为）。
+                // 主动刷新而不是等 /auth/me 的 401：后端源码里 `/auth/me` 在 Bearer 失效时
+                // 返回 200 `{user:null}`，不会触发网络层的 401 单飞刷新（待运行时复核）。
                 let response = try await auth.refresh(refreshToken: stored.refreshToken)
                 guard let access = response.accessToken else {
                     throw APIError.unauthorized
@@ -129,8 +129,11 @@ final class AppEnvironment {
             throw APIError.invalidBaseURL
         }
 
-        // 手动登录是明确的账号切换：先清掉旧凭据，避免登录失败后旧 refresh 继续自动登录。
-        await tokens.clear()
+        // 切换服务器必须先清旧凭据（token 与服务器绑定）；同一服务器登录失败则保留旧 token，
+        // 这样离线/输错密码不会把仍可用的会话顺手清掉。
+        if config.baseURL?.absoluteString != baseURL.absoluteString {
+            await tokens.clear()
+        }
         config.updateBaseURL(baseURL.absoluteString)
 
         let transport = makeTransport(baseURL: baseURL)
@@ -163,7 +166,7 @@ final class AppEnvironment {
     /// 主动退出：先吊销 refresh（204 视为成功），再清本地。
     /// 离线时吊销失败仍然清本地——服务端 refresh 可能继续有效，属已知限制（ADR-0003 §6）。
     func signOut() async {
-        if let transport, let stored = await tokens.load(), !stored.refreshToken.isEmpty {
+        if let transport = self.transport, let stored = await tokens.load(), !stored.refreshToken.isEmpty {
             try? await AuthAPI(transport: transport).revoke(refreshToken: stored.refreshToken)
         }
         await tokens.clear()

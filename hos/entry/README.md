@@ -1,6 +1,12 @@
 # entry（HAP）· 应用壳
 
 > 这是 DevEco Studio 的 **entry HAP** 模块占位目录；M0 才创建 `module.json5`、`oh-package.json5`、`build-profile.json5` 等可编译文件。
+>
+> **M0 现状（2026-10-31）**：本目录**已经生成**单 HAP 的可编译配置与 M0 页面代码
+> （`module.json5`、`build-profile.json5`、`oh-package.json5`、`hvigorfile.ts`、`src/main/ets/**`、`src/main/resources/**`），
+> **未编译验证**（生成环境无 DevEco/SDK），详见 [../README.md §0.1](../README.md#01-m0-代码现状2026-10-31)。
+> 下文列出的 `AppShell` / `LaunchPage` / `NotFoundPage` / `viewmodel/AppVM` 等是**原多模块规划**，M0 未创建；
+> M0 的实际文件以 `entry/src/main/ets/` 目录为准（`core/`、`design/`、`components/`、`viewmodel/`、`pages/`、`entryability/`）。
 > 职责：启动、登录门禁、导航壳、全局状态/错误、把各 feature 的 `NavDestination` 装配进根 `Navigation`。
 
 ## 目录
