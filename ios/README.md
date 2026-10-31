@@ -73,6 +73,7 @@ open EnglishCoach.xcodeproj
 - 单元测试目标（ErrorMapper、Multipart、ScorePresenter、TokenRefresher 并发 401）与 UI 测试。
 - `UIBackgroundModes=audio` 已声明但 M0 没有锁屏控制逻辑；若不需要后台播放可先移除。
 - 登录页“记住邮箱”、设置页、家长面板、连读、对话、故事、盲测、诊断。
+- **分层偏差（M0 有意简化）**：`Features/Auth`、`Features/Practice` 的 ViewModel 直接持有 `AppEnvironment`，严格来说违反“App → Features → Core”的单向依赖；M1 抽 `SessionStore` / API 协议后注入，避免 Feature 依赖 App。
 
 ### 0.6 M0 验收清单（在 Mac/真机上逐条勾）
 

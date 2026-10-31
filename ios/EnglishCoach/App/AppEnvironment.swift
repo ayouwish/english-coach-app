@@ -170,6 +170,7 @@ final class AppEnvironment {
             try? await AuthAPI(transport: transport).revoke(refreshToken: stored.refreshToken)
         }
         await tokens.clear()
+        clearUserScopedCache()
         currentUser = nil
         self.transport = nil
         startupError = nil
@@ -179,10 +180,22 @@ final class AppEnvironment {
     /// 业务接口返回 401 且刷新失败：清本地并回登录页。
     func handleSessionExpired() async {
         await tokens.clear()
+        clearUserScopedCache()
         currentUser = nil
         transport = nil
         startupError = .unauthorized
         phase = .signedOut
+    }
+
+    /// 退出/会话失效时清掉用户相关音频（录音副本、TTS），避免共用设备串号。
+    /// 语料快照 M0 尚未落盘；M1 统一走 CacheJanitor。
+    private func clearUserScopedCache() {
+        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return
+        }
+        for name in ["Recordings", "TTS"] {
+            try? FileManager.default.removeItem(at: caches.appendingPathComponent(name, isDirectory: true))
+        }
     }
 
     // MARK: - API 访问

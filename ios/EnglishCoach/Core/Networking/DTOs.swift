@@ -161,7 +161,7 @@ private extension KeyedDecodingContainer {
         if let raw = try? decodeIfPresent(String.self, forKey: key) {
             return raw
                 .split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "，" || $0 == "、" })
-                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
         }
         return []

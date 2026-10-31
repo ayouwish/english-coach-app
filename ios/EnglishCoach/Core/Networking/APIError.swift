@@ -26,7 +26,7 @@ enum ServerErrorCode: Sendable, Equatable {
     case unknown
 
     init(rawCode: String?) {
-        switch rawCode {
+        switch rawCode ?? "" {
         case "bad_request": self = .badRequest
         case "unauthorized": self = .unauthorized
         case "forbidden": self = .forbidden

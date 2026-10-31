@@ -154,6 +154,9 @@ final class PracticeViewModel {
             if !error.isCancelled {
                 demoErrorMessage = error.userMessage(forChild: app.capabilities.isChild)
             }
+            if error.isUnauthorized {
+                await app.handleSessionExpired()
+            }
         } catch is CancellationError {
             return
         } catch {
