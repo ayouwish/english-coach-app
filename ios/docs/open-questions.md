@@ -228,9 +228,9 @@
 | 影响 | 成长页趋势图：无历史则用客户端本地统计 |
 | 建议 | 返回 `history:[{date, mastery}]` 更好；否则客户端自算 |
 
-### B12 · ~~`Set-Cookie` 属性与会话时长~~（作废）
+### B12 · ~~Cookie 会话属性~~（作废）
 
-原问题是“Cookie 是否带 `Max-Age`/`Secure`/`Domain`/`Path`”，用于支撑 ADR-0001 的 Cookie 方案。该方案已被 **Bearer Token** 取代（Q1 / ADR-0003），本问题**作废**，由 **B17** 替代。不要再按 Cookie 方案写客户端。
+原 B12（Cookie 会话属性与会话时长）只服务于 ADR-0001 的 Cookie 方案；该方案已被 **Bearer Token** 取代（Q1 / ADR-0003），本问题**作废**，由 **B17** 替代。不要再按 Cookie 方案写客户端。
 
 ### B13 · 并发与限流（影响 M1/M2）
 

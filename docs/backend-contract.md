@@ -1,7 +1,7 @@
 # 移动端所需的【待后端新增】接口
 
 > 现状：后端 `english-coach` 已提供 Web 端所需的全部接口（`docs/api-contract.md`）。
-> 原生客户端**首版可以完全复用 Cookie 会话 + 现有接口**（见 ADR-0001）。
+> **认证已定为 Bearer Token**（[ADR-0002](adr/0002-bearer-token.md)，取代 ADR-0001 的 Cookie 方案），后端已实现 `/api/auth/token`、`/api/auth/refresh`、`/api/auth/revoke`（契约 v1.10 §18）。
 > 本文列出**第二版**建议新增/调整的接口，全部需在 `english-coach` 仓库实现，并升契约版本。
 
 ---

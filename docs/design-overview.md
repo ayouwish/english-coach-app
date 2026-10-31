@@ -30,7 +30,7 @@
 │  （本仓库）       │
 └────────┬─────────┘
          │ HTTPS（一个 base URL）
-         │ Cookie 会话（首版）
+         │ Bearer Token（access 1h / refresh 30d）
          ▼
 ┌──────────────────────────────┐
 │ web（Next.js, 3000）          │
@@ -114,13 +114,13 @@ refresh 也失败 → 清 token → 跳登录
 ### 4.2 语音识别与评测（服务端）
 
 - 跟读/连读：`POST /api/attempts`（同步）或 `POST /api/attempts/async`（异步，连读用）
-- 自由说/对话：`POST /api/chat/sessions/:id/turn`（内部 ASR → LLM → TTS）
+- 自由说/对话：客户端先 `POST /api/asr` 拿文本，再 `POST /api/chat/sessions/:id/turn`（**text 必填** + audio；服务端只返回助手文本并后台跑发音评估）——turn **不内部做 ASR、不返回 TTS 音频**
 - 中文语音（讲故事输入）：`POST /api/asr`，`language=zh-CN`
 
 ### 4.3 播放
 
 - 示范音：`POST /api/tts`（`format=wav` 默认，`mp3` 更小）
-- 对话助手回复：随 turn 接口返回音频
+- 对话助手回复：客户端拿到 turn 的文本后，用 `POST /api/tts` 单独取音频播放
 - 录音回放：`GET /api/audio/:id`
 - **互斥规则**：开始录音前必须停止播放（否则蓝牙设备会切到通话模式导致"声音变闷"）
 
