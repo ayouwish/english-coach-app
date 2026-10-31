@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import UIKit
 
@@ -22,7 +23,17 @@ struct SentenceView: View {
                     recordSection
                     errorSections
                     if let message = viewModel.attemptMessage {
-                        statusNote(message)
+                        VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
+                            statusNote(message)
+                            if viewModel.lastRecording != nil, !viewModel.isScoring {
+                                AppButton(
+                                    title: "重新提交这次录音",
+                                    icon: "arrow.clockwise",
+                                    kind: .ghost,
+                                    action: { Task { await viewModel.retrySubmission() } }
+                                )
+                            }
+                        }
                     }
                     if let score = viewModel.score {
                         scoreCard(score)
@@ -51,7 +62,7 @@ struct SentenceView: View {
                 }
             }
         }
-        .task {
+        .onAppear {
             if !didSelectInitialIndex {
                 didSelectInitialIndex = true
                 viewModel.select(index: initialIndex)
@@ -128,14 +139,14 @@ struct SentenceView: View {
                     title: "播放示范",
                     icon: viewModel.isPreparingDemo ? "hourglass" : "play.fill",
                     kind: .ghost,
-                    isEnabled: !viewModel.isScoring,
+                    isEnabled: !viewModel.isScoring && !viewModel.isRecording,
                     action: { Task { await viewModel.playDemo() } }
                 )
                 AppButton(
                     title: "跟我读",
                     icon: "mic.fill",
                     kind: .primary,
-                    isEnabled: !viewModel.isScoring && viewModel.permission != .denied,
+                    isEnabled: !viewModel.isScoring && !viewModel.isRecording && viewModel.permission != .denied,
                     action: {
                         followTask?.cancel()
                         followTask = Task { await viewModel.followAndRecord() }
@@ -169,6 +180,9 @@ struct SentenceView: View {
         } else {
             VStack(spacing: Tokens.Spacing.s12) {
                 Button {
+                    // 若“跟我读”还在等示范音播完，这里手动录音要取消它，避免二次开录。
+                    followTask?.cancel()
+                    followTask = nil
                     Task { await viewModel.toggleRecording() }
                 } label: {
                     recordOrb
@@ -243,21 +257,23 @@ struct SentenceView: View {
         if let error = viewModel.submissionError {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
                 InlineErrorView(message: error.userMessage(forChild: caps.isChild))
-                HStack(spacing: Tokens.Spacing.s8) {
-                    if error.canRetry {
+                if !isDailyLimit(error) {
+                    HStack(spacing: Tokens.Spacing.s8) {
+                        if error.canRetry {
+                            AppButton(
+                                title: "重试提交",
+                                icon: "arrow.clockwise",
+                                kind: .ghost,
+                                action: { Task { await viewModel.retrySubmission() } }
+                            )
+                        }
                         AppButton(
-                            title: "重试提交",
-                            icon: "arrow.clockwise",
-                            kind: .ghost,
-                            action: { Task { await viewModel.retrySubmission() } }
+                            title: "重新录音",
+                            icon: "mic.fill",
+                            kind: error.canRetry ? .ghost : .primary,
+                            action: { Task { await viewModel.recordAgain() } }
                         )
                     }
-                    AppButton(
-                        title: "重新录音",
-                        icon: "mic.fill",
-                        kind: error.canRetry ? .ghost : .primary,
-                        action: { Task { await viewModel.recordAgain() } }
-                    )
                 }
             }
         }
@@ -287,7 +303,12 @@ struct SentenceView: View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s16) {
             HStack(alignment: .center, spacing: Tokens.Spacing.s16) {
                 if caps.showsNumericScore {
-                    ScoreRing(score: score.numericScore)
+                    VStack(spacing: Tokens.Spacing.s4) {
+                        ScoreRing(score: score.numericScore)
+                        Text("发音")
+                            .font(AppFont.caption(caps))
+                            .foregroundStyle(Tokens.Colors.textSecondary)
+                    }
                 } else {
                     StarRow(stars: score.stars)
                 }
@@ -445,6 +466,13 @@ struct SentenceView: View {
     }
 
     // MARK: - 小工具
+
+    private func isDailyLimit(_ error: APIError) -> Bool {
+        if case .server(let code, _, _) = error {
+            return code == .dailyLimitReached
+        }
+        return false
+    }
 
     private func openSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }

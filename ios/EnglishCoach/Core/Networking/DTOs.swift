@@ -31,8 +31,22 @@ struct AuthTokenResponse: Decodable, Sendable {
 }
 
 /// `GET /api/auth/me` 真实返回 `{ user, usage }`；未认证时是 `{ user: null }`。
+/// 同时兼容直接返回 user 对象的写法。
 struct MeResponse: Decodable, Sendable {
     let user: UserProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case user
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.user) {
+            user = try container.decodeIfPresent(UserProfile.self, forKey: .user)
+        } else {
+            user = try? UserProfile(from: decoder)
+        }
+    }
 }
 
 // MARK: - 语料
@@ -89,6 +103,35 @@ struct AttemptResponse: Decodable, Sendable {
         case message
         case result
         case feedback
+        case scores
+        case words
+        case issues
+    }
+
+    /// 真实后端把评测放在 `result` 下；同时兼容任务描述里的“顶层 scores/words/issues”形状，
+    /// 避免契约微调后整页解不出来（Unknown fields are ignored by Codable）。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        attemptId = try container.decodeIfPresent(String.self, forKey: .attemptId)
+        degraded = try container.decodeIfPresent(Bool.self, forKey: .degraded)
+        retryable = try container.decodeIfPresent(Bool.self, forKey: .retryable)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+
+        if let nested = try? container.decodeIfPresent(AttemptResult.self, forKey: .result) {
+            result = nested
+        } else if container.contains(.scores) || container.contains(.words) || container.contains(.issues) {
+            result = try? AttemptResult(from: decoder)
+        } else {
+            result = nil
+        }
+
+        if let text = try? container.decodeIfPresent(String.self, forKey: .feedback), !text.isEmpty {
+            feedback = AttemptFeedback(summary: text, praise: nil, closing: nil, points: nil)
+        } else if let feedbackObject = try? container.decodeIfPresent(AttemptFeedback.self, forKey: .feedback) {
+            feedback = feedbackObject
+        } else {
+            feedback = nil
+        }
     }
 }
 

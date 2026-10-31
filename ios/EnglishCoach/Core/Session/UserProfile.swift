@@ -1,6 +1,6 @@
 import Foundation
 
-enum UserRole: String, Sendable, Decodable {
+enum UserRole: String, Sendable, Decodable, Equatable {
     case parent
     case child
 }

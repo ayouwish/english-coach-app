@@ -84,17 +84,18 @@ enum APIError: Error, Equatable, Sendable {
     /// 是否值得给“重试”按钮。401/403/格式错误重试没有意义。
     var canRetry: Bool {
         switch self {
-        case .transport, .payloadTooLarge:
+        case .transport:
             return true
         case .server(let code, _, _):
             switch code {
             case .providerError, .providerTimeout, .providerUnavailable,
-                 .internalError, .unknown, .tooManyRequests:
+                 .internalError, .unknown:
                 return true
             default:
                 return false
             }
-        case .decoding, .unauthorized, .forbidden, .cancelled, .invalidBaseURL, .credentialStorage:
+        case .decoding, .unauthorized, .forbidden, .cancelled, .invalidBaseURL,
+             .credentialStorage, .payloadTooLarge:
             return false
         }
     }
@@ -109,6 +110,15 @@ enum APIError: Error, Equatable, Sendable {
                 return isChild
                     ? "服务器睡着了，叫爸爸妈妈看一下"
                     : "连不上学习服务器（NAS 可能未开机，或手机不在同一网络）"
+            case .appTransportSecurityRequiresSecureConnection,
+                 .secureConnectionFailed,
+                 .serverCertificateUntrusted,
+                 .serverCertificateHasUnknownRoot,
+                 .serverCertificateHasBadDate,
+                 .serverCertificateNotYetValid:
+                return isChild
+                    ? "连不上服务器，叫爸爸妈妈看一下证书设置"
+                    : "HTTPS 连接被系统拒绝：请确认服务器证书受信任（自签/内网 CA 需在设备上安装并信任）"
             case .cancelled:
                 return ""
             default:
@@ -165,7 +175,7 @@ enum APIError: Error, Equatable, Sendable {
             return ""
 
         case .invalidBaseURL:
-            return "服务器地址不正确，请填写以 https:// 开头、包含 /api 的地址"
+            return "服务器地址不正确，请填写以 https:// 开头的地址（只填主机名会自动补 /api）"
 
         case .credentialStorage:
             return isChild ? "登录状态没保存好，再试一次" : "无法安全保存登录状态，请重试"
@@ -176,6 +186,8 @@ enum APIError: Error, Equatable, Sendable {
         switch self {
         case .unauthorized:
             return "重新登录"
+        case .payloadTooLarge:
+            return isChild ? "再录一次" : "重新录制"
         case .server(let code, _, _):
             switch code {
             case .unsupportedAudio, .audioTooLong, .payloadTooLarge, .audioNotFound, .audioGone:

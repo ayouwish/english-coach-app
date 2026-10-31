@@ -26,12 +26,6 @@ final class AuthViewModel {
             }
         }
 
-        var password: String {
-            switch self {
-            case .child: return "Girl12345!"
-            case .parent: return "Dad12345!"
-            }
-        }
     }
 
     let app: AppEnvironment
@@ -68,9 +62,11 @@ final class AuthViewModel {
         AppConfig.normalize(baseURLText)?.scheme?.lowercased() == "http"
     }
 
+    /// 只填邮箱、不填密码：共享文档（`docs/screens-matrix.md`）明确要求“不猜密码”，
+    /// 也避免把种子密码编译进 App。密码请按 README 的演示账号手动输入。
     func useDemoAccount(_ account: DemoAccount) {
         email = account.email
-        password = account.password
+        password = ""
         if baseURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             baseURLText = app.demoBaseURL
         }

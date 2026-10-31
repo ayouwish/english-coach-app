@@ -14,7 +14,7 @@ struct LoginView: View {
                     .tint(Tokens.Colors.primary)
             }
         }
-        .task {
+        .onAppear {
             if viewModel == nil {
                 viewModel = AuthViewModel(app: app)
             }
@@ -145,11 +145,15 @@ private struct LoginForm: View {
             .padding(.top, Tokens.Spacing.s4)
 
             if let errorMessage = viewModel.errorMessage {
-                InlineErrorView(
-                    message: errorMessage,
-                    retryTitle: viewModel.errorCanRetry ? "重试" : nil,
-                    onRetry: viewModel.errorCanRetry ? { submit() } : nil
-                )
+                if viewModel.errorCanRetry {
+                    InlineErrorView(
+                        message: errorMessage,
+                        retryTitle: "重试",
+                        onRetry: { submit() }
+                    )
+                } else {
+                    InlineErrorView(message: errorMessage)
+                }
             }
         }
         .cardStyle()
@@ -173,7 +177,7 @@ private struct LoginForm: View {
                 .foregroundStyle(Tokens.Colors.textSecondary)
 
             if viewModel.usesInsecureBaseURL {
-                Text("当前是 HTTP：登录凭据会明文传输，仅限局域网排障使用。")
+                Text("当前是 HTTP：ATS 默认会拒绝连接，且凭据会明文传输；M0 不提供 ATS 例外，请改用 HTTPS。")
                     .font(AppFont.caption(caps))
                     .foregroundStyle(Tokens.Colors.warning)
             }
@@ -212,7 +216,7 @@ private struct LoginForm: View {
             Text("演示账号")
                 .font(AppFont.footnote(caps).weight(.semibold))
                 .foregroundStyle(Tokens.Colors.textSecondary)
-            Text("联调快捷填充（会同时填入种子密码）。正式使用时请改为 NAS 上的真实账号。")
+            Text("联调快捷填充：只填演示邮箱，密码请按 README 手动输入。正式使用时请改为 NAS 上的真实账号。")
                 .font(AppFont.caption(caps))
                 .foregroundStyle(Tokens.Colors.textSecondary)
 
@@ -225,7 +229,7 @@ private struct LoginForm: View {
             } label: {
                 HStack(spacing: Tokens.Spacing.s8) {
                     Image(systemName: "person.crop.circle.badge.checkmark")
-                    Text("填入演示账号")
+                    Text("填入演示邮箱")
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption)

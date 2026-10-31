@@ -166,7 +166,7 @@ final class PracticeViewModel {
 
     /// “播放示范”：点击后立即开始（若已预取则零等待）。
     func playDemo() async {
-        guard let sentence = currentSentence else { return }
+        guard !isRecording, !isScoring, let sentence = currentSentence else { return }
         let rate = defaultDemoRate
         guard let url = await ensureDemoURL(text: sentence.text, rate: rate) else { return }
         try? player.play(url: url)
@@ -227,13 +227,14 @@ final class PracticeViewModel {
     }
 
     func beginRecording() async {
-        guard recordingPhase != .scoring else { return }
+        guard recordingPhase != .scoring, !isRecording else { return }
 
         permission = recorder.currentPermission()
         if permission == .undetermined {
             permission = await recorder.requestPermission()
         }
-        guard permission == .granted else { return }
+        // 页面在系统权限弹窗期间被取消（返回/切后台）时不要再开录。
+        guard !Task.isCancelled, permission == .granted else { return }
 
         do {
             try await recorder.start()
@@ -242,6 +243,9 @@ final class PracticeViewModel {
             levelValue = 0
             audioError = nil
             submissionError = nil
+            attemptMessage = nil
+            score = nil
+            lastRecording = nil
             startTicker()
         } catch let error as AudioError {
             audioError = error
@@ -290,7 +294,7 @@ final class PracticeViewModel {
     }
 
     func playMyRecording() {
-        guard let recording = lastRecording else { return }
+        guard !isRecording, !isScoring, let recording = lastRecording else { return }
         try? player.play(url: recording.url)
     }
 
@@ -302,6 +306,7 @@ final class PracticeViewModel {
         submissionError = nil
         attemptMessage = nil
         score = nil
+        let submittedSentenceID = sentence.id
 
         guard let data = try? Data(contentsOf: audio.url) else {
             audioError = .fileUnavailable
@@ -323,20 +328,27 @@ final class PracticeViewModel {
                 recordingPhase = .idle
                 return
             }
-            apply(response)
+            // 用户可能在上传期间返回列表并选了别的句子：结果只能落到提交时的那一句。
+            if currentSentence?.id == submittedSentenceID {
+                apply(response)
+            }
             recordingPhase = .idle
         } catch let error as APIError {
             if error.isCancelled {
                 recordingPhase = .idle
                 return
             }
-            submissionError = error
+            if currentSentence?.id == submittedSentenceID {
+                submissionError = error
+            }
             recordingPhase = .idle
             if error.isUnauthorized {
                 await app.handleSessionExpired()
             }
         } catch {
-            submissionError = .transport(.unknown)
+            if currentSentence?.id == submittedSentenceID {
+                submissionError = .transport(.unknown)
+            }
             recordingPhase = .idle
         }
     }
@@ -384,6 +396,7 @@ final class PracticeViewModel {
     func stopAllAudio() {
         ticker?.cancel()
         ticker = nil
+        recorder.cancelPendingStart()
         if recorder.isRecording {
             recorder.cancel()
         }
@@ -505,7 +518,15 @@ struct ScorePresentation: Equatable {
             issues: issues,
             feedbackSummary: feedback?.summary,
             feedbackPraise: feedback?.praise,
-            feedbackPoints: capabilities.showsIPA ? (feedback?.points ?? []).compactMap { $0.title } : [],
+            feedbackPoints: capabilities.showsIPA
+                ? (feedback?.points ?? []).compactMap { point in
+                    guard let title = point.title, !title.isEmpty else { return nil }
+                    if let why = point.why, !why.isEmpty {
+                        return "\(title)：\(why)"
+                    }
+                    return title
+                }
+                : [],
             feedbackClosing: feedback?.closing
         )
     }

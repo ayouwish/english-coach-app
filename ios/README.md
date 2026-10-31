@@ -18,7 +18,7 @@
 | 网络 | `Core/Networking/*` | async/await、Bearer 注入、401→单飞刷新→重放一次、错误中文映射（成人/儿童）、multipart、TTS 字节 |
 | 音频 | `Core/Audio/AudioRecorder.swift`、`AudioPlayer.swift` | m4a/AAC 16kHz 单声道 65kbps、权限三态、60s/500ms/静音/12MB 校验、录音前停播、电平；播放完成轮询 |
 | 设计系统 | `Core/DesignSystem/*` | 颜色/间距/圆角/字体令牌；primary/ghost/text/destructive 按钮；卡片、空态、错误、权限卡 |
-| 登录 | `Features/Auth/*` | 邮箱+密码+基地址、演示账号快捷填充、测试连接、错误内联、自动登录 |
+| 登录 | `Features/Auth/*` | 邮箱+密码+基地址、演示账号邮箱快捷填充、测试连接、错误内联、自动登录 |
 | 练习 | `Features/Practice/*` | 按 CEFR 列表 → 句子详情 → 播放示范/跟我读 → 录音 → 上传评分 → 词级进度条/星级 → 下一句；loading/empty/error/权限态 |
 | 资源 | `Resources/Info.plist`、`Resources/PrivacyInfo.xcprivacy` | 麦克风/本地网络文案；ATS 默认无例外；隐私清单（音频/邮箱/UserDefaults） |
 
@@ -41,7 +41,7 @@ open EnglishCoach.xcodeproj
 
 1. Xcode 里选择 app target → Signing & Capabilities → 选自己的付费 Team；Bundle ID 默认 `top.dreamsearch.englishcoach`。
 2. 选择 iOS 26 真机/模拟器，Run。**真机是验收基准**，模拟器的麦克风/路由不可信。
-3. 没有 Assets.xcassets：能构建，但会缺 App 图标（M1 补），Xcode 可能给资源警告。
+3. 没有 Assets.xcassets：预计仍可构建（**未验证**），但会缺 App 图标（M1 补），Xcode 可能给资源警告。
 
 为什么用 XcodeGen 而不是“Xcode 新建 App 再拖源码”：本仓库无法生成/校验 `pbxproj`，手写或让用户拖文件容易产生“文件没进 target”的隐性错误；`project.yml` 是文本，review 得到，且 `xcodegen generate` 可重复生成。代价是用户首次需要安装 xcodegen（`brew` 一行）。
 
@@ -51,19 +51,20 @@ open EnglishCoach.xcodeproj
 - 地址存 `UserDefaults`；**token 与服务器绑定**：改地址后登录会先清旧 token。
 - `POST /api/auth/token` → token 写 Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）；重启后自动用 refresh 换 access，再 `GET /auth/me`。
 - 退出：确认后 `POST /api/auth/revoke` → 清 Keychain → 回登录页；离线时失败也清本地（已知限制：服务端 refresh 最长 30 天仍有效）。
-- 演示账号（种子数据，非生产承诺）：孩子 `girl@example.com / Girl12345!`（A1）；家长 `dad@example.com / Dad12345!`（B1）。登录页“填入演示账号”会同时填邮箱和密码；若 NAS 用 `BOOTSTRAP_*` 覆盖过种子，以实际部署为准。
+- 演示账号（种子数据，非生产承诺）：孩子 `girl@example.com` / 密码 `Girl12345!`（A1）；家长 `dad@example.com` / 密码 `Dad12345!`（B1）。登录页“填入演示邮箱”**只填邮箱**（共享文档要求不猜密码，也避免把密码编译进 App），密码需手动输入；若 NAS 用 `BOOTSTRAP_*` 覆盖过种子，以实际部署为准。
 
 ### 0.4 明确未验证（不要在验收前当作已完成）
 
-- **能否编译**：未执行 `xcodebuild`，Swift 6 严格并发/API 可用性均可能报错。
+- **能否编译**：未执行 `xcodebuild`，Swift 6 严格并发/API 可用性均可能报错。仅用 tree-sitter 做过**语法解析**（无 ERROR 节点），这不等于类型检查或编译通过。
 - **XcodeGen 产物**：`project.yml` 的 target/scheme/Info.plist 排除规则未实际生成验证。
 - **Keychain**：写入/读取/卸载重装/换机行为未在真机验证。
-- **单飞刷新**：并发 401 只刷新一次、一次性轮换的竞态未写单测、未实测。
+- **单飞刷新**：并发 401 只刷新一次、一次性轮换的竞态未写单测、未实测；**退出登录与“在飞刷新”并发时，刷新结果理论上可能把 token 写回 Keychain**（M0 未加会话代际保护）。
 - **录音**：16kHz/单声道/65kbps 的实际文件参数、`AVAudioFile` 读时长、服务端解码均未真机验证；静音阈值 `-45dB` 未调。
 - **音频路由**：蓝牙 HFP、拔耳机、来电/闹钟中断、锁屏后台播放**未实现/未验证**（M1）。
 - **接口运行时形状**：响应结构来自后端源码阅读，没有用真实 token 跑通；字段缺失/类型变化可能仍导致 `decoding`。
 - **证书**：NAS 若是自签/内网 CA，iOS 会直接拒绝；需在设备上安装并信任证书，本项目**不提供 ATS 例外**。
 - **UI**：未在小屏、Dynamic Type AX 字号、横屏（本期锁定竖屏）验证；自定义字号未用 `relativeTo` 缩放。
+- **打包/TestFlight**：没有 Assets.xcassets/App Icon，也没有签名 Team 配置；Archive/TestFlight 上传前必须补图标并设置 Team。
 
 ### 0.5 待办（M1 及以后，代码中未留 TODO 占位）
 
@@ -98,8 +99,8 @@ open EnglishCoach.xcodeproj
 | 项 | 说明 |
 | --- | --- |
 | 目标 | 为 `English Coach` 提供一份可直接排期、直接开工的 iOS 客户端设计文档 |
-| 范围内 | 分层架构、网络与认证、音频方案、页面结构、设计令牌、里程碑、待决问题 |
-| 范围外 | Swift 源码、后端改动、测试数据构造、分发素材（图标/截图/TestFlight 测试说明） |
+| 范围内 | 分层架构、网络与认证、音频方案、页面结构、设计令牌、里程碑、待决问题、**M0 垂直切片源码** |
+| 范围外 | 后端改动、M1+ 功能实现、测试数据构造、分发素材（图标/截图/TestFlight 测试说明） |
 | 读者 | iOS 实现者、后端维护者、产品决策者 |
 | 基准 | 本文档事实来自「已跑通的后端 + 任务给定的接口清单」；未经验证的部分统一标 `【待确认】` |
 
@@ -330,8 +331,7 @@ ios/
 ### 6.3 base URL 可配置
 
 - 默认值：**空**（必填）。登录页填写后存 `UserDefaults`（`app.baseURL`）；只填主机名会自动补 `/api`。
-- 允许 `http://192.168.x.x:3000/api` 形式用于排障，但注意两点：
-  - **token 在 http 下是明文传输**：仅限 Debug 排障，Release 必须 https；不要为了排障在 Release 打开 ATS 例外；
+- 设计上允许 `http://192.168.x.x:3000/api` 形式用于排障，但注意：**M0 的 Info.plist 没有 ATS 例外**，系统会直接拒绝 http 连接；要排障需自行在 Debug 加临时例外，且 **token 在 http 下是明文传输**，Release 不得打开；
   - 直连局域网 IP 会触发 iOS **本地网络隐私弹窗**，需要 `NSLocalNetworkUsageDescription`（Info.plist 已提供）。
 - token 与服务器绑定：切换 base URL 后**清 Keychain 里的 token 并重新登录**（M0 在登录时清；旧服务器的 token 不能用于新地址）。
 - 当前后端默认 `PROVIDER_MODE=hybrid`（音频→Azure、文本→DeepSeek、图片→DeepSeek/智谱），所以**音频会离开家庭网络**；登录页已如实提示，不能宣称“录音不出户”（见 §7 与 `docs/audio.md` §2.1）。
@@ -342,7 +342,7 @@ ios/
 BASE=https://english.dreamsearch.top/api
 curl -i  $BASE/health
 
-# 1) 换 token（【待后端新增·P0】；后端未上线前此步会 404）
+# 1) 换 token（web 已实现；本仓库未运行时验证，先按此自检）
 curl -s -X POST $BASE/auth/token \
      -H 'Content-Type: application/json' \
      -d '{"email":"...","password":"..."}' > /tmp/token.json
@@ -363,7 +363,7 @@ curl -i -X POST $BASE/auth/revoke -H 'Content-Type: application/json' \
      -d "{\"refresh_token\":\"$REFRESH\"}"
 ```
 
-**重点确认三件事**（【待后端新增】，后端实现后逐条实测）：① `token_type` 是否为 `Bearer`、`expires_in` 是否为 3600；② **refresh 是否真的一次性轮换**（同一个 refresh 第二次使用必须 401）；③ `/revoke` 之后旧 refresh 是否立即失效。任何一条不成立都需要回到 [ADR-0003](docs/adr/0003-bearer-token.md) 修正客户端实现假设。见开放问题 B17。
+**重点确认三件事**（请在 NAS 环境逐条实测）：① `token_type` 是否为 `Bearer`、`expires_in` 是否为 3600；② **refresh 是否真的一次性轮换**（同一个 refresh 第二次使用必须 401）；③ `/revoke` 之后旧 refresh 是否立即失效。任何一条不成立都需要回到 [ADR-0003](docs/adr/0003-bearer-token.md) 修正客户端实现假设。见开放问题 B17。
 
 > 自检产生的 token 不要贴进聊天、issue 或提交记录；`/tmp/token.json` 用完即删。
 

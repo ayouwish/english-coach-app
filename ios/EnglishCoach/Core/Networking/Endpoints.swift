@@ -7,7 +7,7 @@ enum HTTPMethod: String, Sendable {
 
 /// 哪些端点需要 Bearer。登录/刷新/吊销/健康检查不注入 token，
 /// 它们的 401 也不能触发单飞刷新（否则递归）。
-enum AuthPolicy: Sendable {
+enum AuthPolicy: Sendable, Equatable {
     case none
     case bearer
 }

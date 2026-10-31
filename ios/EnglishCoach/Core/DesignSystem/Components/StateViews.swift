@@ -4,8 +4,8 @@ struct EmptyStateView: View {
     let icon: String
     let title: String
     let message: String?
-    var actionTitle: String?
-    var action: (() -> Void)?
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
 
     @Environment(\.capabilities) private var caps
 
@@ -38,7 +38,7 @@ struct ErrorStateView: View {
     let title: String
     let message: String
     var retryTitle: String = "重试"
-    var onRetry: (() -> Void)?
+    var onRetry: (() -> Void)? = nil
 
     @Environment(\.capabilities) private var caps
 
@@ -67,8 +67,8 @@ struct ErrorStateView: View {
 
 struct InlineErrorView: View {
     let message: String
-    var retryTitle: String?
-    var onRetry: (() -> Void)?
+    var retryTitle: String? = nil
+    var onRetry: (() -> Void)? = nil
 
     @Environment(\.capabilities) private var caps
 
@@ -104,8 +104,8 @@ struct PermissionCard: View {
     let message: String
     let primaryTitle: String
     let primaryAction: () -> Void
-    var secondaryTitle: String?
-    var secondaryAction: (() -> Void)?
+    var secondaryTitle: String? = nil
+    var secondaryAction: (() -> Void)? = nil
 
     @Environment(\.capabilities) private var caps
 
@@ -134,7 +134,7 @@ struct PermissionCard: View {
 struct ErrorBanner: View {
     let message: String
     var retryTitle: String = "重试"
-    var onRetry: (() -> Void)?
+    var onRetry: (() -> Void)? = nil
 
     @Environment(\.capabilities) private var caps
 

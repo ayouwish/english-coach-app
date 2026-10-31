@@ -1,5 +1,6 @@
 import AVFAudio
 import AVFoundation
+import AudioToolbox
 import Foundation
 
 enum MicPermission: Sendable, Equatable {
@@ -42,6 +43,8 @@ final class AudioRecorder {
     private var startedAt: Date?
     private var meteringTask: Task<Void, Never>?
     private var limitTask: Task<Void, Never>?
+    /// 用于让“还在等路由切换的 start()”作废（页面已离开时不要真的开录）。
+    private var activationToken = 0
 
     private(set) var isRecording = false
     private(set) var level: Double = 0
@@ -85,9 +88,16 @@ final class AudioRecorder {
             throw AudioError.permissionDenied
         }
 
+        activationToken += 1
+        let token = activationToken
+
         // 先停播放，并留一小段时间给音频路由切换（蓝牙 A2DP → HFP 不是瞬时的）。
         playback.stop()
         try? await Task.sleep(for: .milliseconds(80))
+        // 等待路由切换期间页面可能已经消失/取消；此时不要再把录音打开。
+        guard !Task.isCancelled, token == activationToken else {
+            throw AudioError.interrupted
+        }
 
         let session = AVAudioSession.sharedInstance()
         do {
@@ -103,7 +113,14 @@ final class AudioRecorder {
             throw AudioError.sessionFailed
         }
 
-        let url = try Self.makeRecordingURL()
+        let url: URL
+        do {
+            url = try Self.makeRecordingURL()
+        } catch {
+            deactivateSession()
+            throw error
+        }
+
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 16_000,
@@ -152,7 +169,12 @@ final class AudioRecorder {
         stopTasks()
         let measured = Self.duration(of: url)
         let fallback = startedAt.map { Date().timeIntervalSince($0) } ?? 0
-        let seconds = measured ?? fallback
+        let seconds: TimeInterval
+        if let measured, measured > 0 {
+            seconds = measured
+        } else {
+            seconds = fallback
+        }
         elapsed = min(max(seconds, 0), Self.maxDuration)
         deactivateSession()
 
@@ -191,7 +213,13 @@ final class AudioRecorder {
         return recorded
     }
 
+    /// 让尚在等待激活的 `start()` 作废；页面离开/切后台时调用。
+    func cancelPendingStart() {
+        activationToken += 1
+    }
+
     func cancel() {
+        activationToken += 1
         recorder?.stop()
         isRecording = false
         stopTasks()

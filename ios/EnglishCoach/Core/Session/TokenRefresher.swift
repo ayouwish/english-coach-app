@@ -28,7 +28,8 @@ actor TokenRefresher: AccessTokenRefreshing {
 
         // 2) 已有刷新在飞：等它，不重复发 refresh。
         if let existing = inFlight {
-            return try await existing.value.accessToken
+            let tokens = try await existing.value
+            return tokens.accessToken
         }
 
         // 3) 由本调用发起唯一一次刷新。

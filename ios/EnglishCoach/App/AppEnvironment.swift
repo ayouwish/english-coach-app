@@ -128,6 +128,7 @@ final class AppEnvironment {
         guard let baseURL = AppConfig.normalize(baseURLText) else {
             throw APIError.invalidBaseURL
         }
+        startupError = nil
 
         // 切换服务器必须先清旧凭据（token 与服务器绑定）；同一服务器登录失败则保留旧 token，
         // 这样离线/输错密码不会把仍可用的会话顺手清掉。

@@ -13,7 +13,7 @@ struct PracticeListView: View {
                     .tint(Tokens.Colors.primary)
             }
         }
-        .task {
+        .onAppear {
             if viewModel == nil {
                 viewModel = PracticeViewModel(app: app)
             }
@@ -136,7 +136,9 @@ private struct PracticeContent: View {
                 EmptyStateView(
                     icon: "text.book.closed",
                     title: "这个难度还没有句子",
-                    message: "换个难度，或者检查服务器上的语料库。",
+                    message: caps.isChild
+                        ? "这里还没有句子，等爸爸妈妈加一点再来吧。"
+                        : "换个难度，或者检查服务器上的语料库。",
                     actionTitle: "刷新",
                     action: { Task { await viewModel.load() } }
                 )

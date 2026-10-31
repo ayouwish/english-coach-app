@@ -84,8 +84,10 @@ final class AudioPlayer {
                 self.deactivateSession()
             }
         } catch let error as AudioError {
+            deactivateSession()
             throw error
         } catch {
+            deactivateSession()
             throw AudioError.playerFailed
         }
     }

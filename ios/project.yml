@@ -29,6 +29,10 @@ targets:
         # 否则会出现 “Multiple commands produce ... Info.plist”。
         excludes:
           - "Resources/Info.plist"
+          - "Resources/PrivacyInfo.xcprivacy"
+      # 隐私清单必须进 Copy Bundle Resources；单独声明 buildPhase 避免被当成普通源码文件。
+      - path: EnglishCoach/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: top.dreamsearch.englishcoach
@@ -45,7 +49,6 @@ targets:
         ENABLE_PREVIEWS: YES
         SWIFT_EMIT_LOC_STRINGS: YES
         # 不引入第三方依赖；没有 Assets.xcassets 也能构建（仅缺 App 图标）。
-        ENABLE_MODULE_VERIFIER: NO
 
 schemes:
   EnglishCoach:
