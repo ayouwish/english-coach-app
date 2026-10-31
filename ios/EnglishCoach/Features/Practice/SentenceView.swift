@@ -386,12 +386,12 @@ struct SentenceView: View {
                         .foregroundStyle(Tokens.Colors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(Array(score.feedbackPoints.enumerated()), id: \.offset) { _, point in
+                ForEach(score.feedbackPoints.indices, id: \.self) { index in
                     HStack(alignment: .top, spacing: Tokens.Spacing.s8) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(AppFont.footnote(caps))
                             .foregroundStyle(Tokens.Colors.success)
-                        Text(point)
+                        Text(score.feedbackPoints[index])
                             .font(AppFont.footnote(caps))
                             .foregroundStyle(Tokens.Colors.textSecondary)
                     }
@@ -486,7 +486,7 @@ private struct ScoreRing: View {
     }
 
     private var color: Color {
-        guard let score else { return Tokens.Colors.textTertiary }
+        guard let score = self.score else { return Tokens.Colors.textTertiary }
         if score >= 85 { return Tokens.Colors.scoreExcellent }
         if score >= 70 { return Tokens.Colors.scoreGood }
         if score >= 55 { return Tokens.Colors.scoreFair }

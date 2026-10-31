@@ -1,5 +1,5 @@
 import { ApiErrorCode } from '../core/net/ApiError';
-import { ErrorMapper, UiError } from '../core/error/UiError';
+import { UiError } from '../core/error/UiError';
 import { AttemptResponseDto, FeedbackDto, FeedbackPointDto, PronounceResultDto, SentenceDto, ScoresDto } from '../core/net/Dtos';
 import { PracticeService } from '../core/service/PracticeService';
 import { SessionStore } from '../core/session/SessionStore';
@@ -430,7 +430,7 @@ export class PracticeVM {
   }
 
   private handleError(err: Error): void {
-    const ui = ErrorMapper.from(err, this.isChild);
+    const ui = SessionStore.toUiError(err, this.isChild);
     let actionLabel = '';
     if (ui.code === ApiErrorCode.MIC_DENIED) {
       actionLabel = '去设置';

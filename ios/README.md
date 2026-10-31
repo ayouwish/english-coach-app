@@ -1,7 +1,94 @@
-# English Coach iOS 客户端 · 设计文档与工程骨架
+# English Coach iOS 客户端
 
-> 状态：**设计阶段（M0 之前）**。本目录当前只包含设计文档与空目录骨架，**没有可编译的 App 代码**。
+> 状态：**M0 垂直切片代码已落地（未编译验证）**。Swift/SwiftUI 源码在 `EnglishCoach/`，工程用 XcodeGen 生成。
+> **本仓库没有 macOS/Xcode 环境：所有 Swift 代码均未编译、未在真机运行。** 必须由维护者在 Xcode 26 中构建验证。
 > 后端（Next.js `web` + FastAPI `voice`）已在家庭 NAS 上跑通，iOS 端所有能力都通过 `web` 的 `/api/*` 调用。
+
+---
+
+## 0. M0 代码现状（必读）
+
+### 0.1 已实现（代码层，未验证）
+
+| 模块 | 文件 | 说明 |
+| --- | --- | --- |
+| 工程 | `project.yml` | XcodeGen：iOS 26.0、Swift 6、SwiftUI 生命周期，仅 app target，无 SwiftPM 依赖 |
+| App | `App/EnglishCoachApp.swift`、`App/AppEnvironment.swift` | `@main`、根切换（启动/登录/已登录）、依赖装配、自动登录、退出 |
+| 配置/会话 | `Core/AppConfig.swift`、`Core/Session/TokenStore.swift`、`Core/Session/TokenRefresher.swift` | baseURL 存 UserDefaults；token 存 Keychain；actor 单飞刷新 |
+| 网络 | `Core/Networking/*` | async/await、Bearer 注入、401→单飞刷新→重放一次、错误中文映射（成人/儿童）、multipart、TTS 字节 |
+| 音频 | `Core/Audio/AudioRecorder.swift`、`AudioPlayer.swift` | m4a/AAC 16kHz 单声道 65kbps、权限三态、60s/500ms/静音/12MB 校验、录音前停播、电平；播放完成轮询 |
+| 设计系统 | `Core/DesignSystem/*` | 颜色/间距/圆角/字体令牌；primary/ghost/text/destructive 按钮；卡片、空态、错误、权限卡 |
+| 登录 | `Features/Auth/*` | 邮箱+密码+基地址、演示账号快捷填充、测试连接、错误内联、自动登录 |
+| 练习 | `Features/Practice/*` | 按 CEFR 列表 → 句子详情 → 播放示范/跟我读 → 录音 → 上传评分 → 词级进度条/星级 → 下一句；loading/empty/error/权限态 |
+| 资源 | `Resources/Info.plist`、`Resources/PrivacyInfo.xcprivacy` | 麦克风/本地网络文案；ATS 默认无例外；隐私清单（音频/邮箱/UserDefaults） |
+
+与后端实际实现对齐的关键点（读 `english-coach/web` 源码确认，**未运行时验证**）：
+
+- `GET /api/auth/me` 返回 `{ user, usage }`，且 Bearer 失效时是 **200 + `user:null`**，不是 401。因此冷启动在已有 refresh 时**主动刷新一次**，不依赖 401 触发。
+- `POST /api/attempts` 的响应是 `{ attempt_id, degraded, retryable, message, result, feedback, usage }`；分数/词/issue 在 `result` 下，`feedback` 是对象（`summary/praise/points/closing`）。
+- “儿童”判定是 **`ageBand == "child"`**（不只是 `role`）；客户端两者都看。
+- 登录失败返回 401 + `code=bad_request`；连续失败 5 次返回 429 `too_many_requests`；儿童超时返回 429 `daily_limit_reached`。
+- 录音上传字段与顺序：`audio` → `sentence_id` → `reference_text` → `mode=scripted` → `duration_ms`。
+
+### 0.2 生成并运行工程（在 Mac 上）
+
+```bash
+cd ios
+brew install xcodegen     # 只需一次
+xcodegen generate         # 生成 EnglishCoach.xcodeproj（不提交，已加入 .gitignore）
+open EnglishCoach.xcodeproj
+```
+
+1. Xcode 里选择 app target → Signing & Capabilities → 选自己的付费 Team；Bundle ID 默认 `top.dreamsearch.englishcoach`。
+2. 选择 iOS 26 真机/模拟器，Run。**真机是验收基准**，模拟器的麦克风/路由不可信。
+3. 没有 Assets.xcassets：能构建，但会缺 App 图标（M1 补），Xcode 可能给资源警告。
+
+为什么用 XcodeGen 而不是“Xcode 新建 App 再拖源码”：本仓库无法生成/校验 `pbxproj`，手写或让用户拖文件容易产生“文件没进 target”的隐性错误；`project.yml` 是文本，review 得到，且 `xcodegen generate` 可重复生成。代价是用户首次需要安装 xcodegen（`brew` 一行）。
+
+### 0.3 填基地址 / 登录
+
+- 首次启动 → 登录页 → “服务器地址”填 `https://english.dreamsearch.top/api`（只填主机名会自动补 `/api`）。
+- 地址存 `UserDefaults`；**token 与服务器绑定**：改地址后登录会先清旧 token。
+- `POST /api/auth/token` → token 写 Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）；重启后自动用 refresh 换 access，再 `GET /auth/me`。
+- 退出：确认后 `POST /api/auth/revoke` → 清 Keychain → 回登录页；离线时失败也清本地（已知限制：服务端 refresh 最长 30 天仍有效）。
+- 演示账号（种子数据，非生产承诺）：孩子 `girl@example.com / Girl12345!`（A1）；家长 `dad@example.com / Dad12345!`（B1）。登录页“填入演示账号”会同时填邮箱和密码；若 NAS 用 `BOOTSTRAP_*` 覆盖过种子，以实际部署为准。
+
+### 0.4 明确未验证（不要在验收前当作已完成）
+
+- **能否编译**：未执行 `xcodebuild`，Swift 6 严格并发/API 可用性均可能报错。
+- **XcodeGen 产物**：`project.yml` 的 target/scheme/Info.plist 排除规则未实际生成验证。
+- **Keychain**：写入/读取/卸载重装/换机行为未在真机验证。
+- **单飞刷新**：并发 401 只刷新一次、一次性轮换的竞态未写单测、未实测。
+- **录音**：16kHz/单声道/65kbps 的实际文件参数、`AVAudioFile` 读时长、服务端解码均未真机验证；静音阈值 `-45dB` 未调。
+- **音频路由**：蓝牙 HFP、拔耳机、来电/闹钟中断、锁屏后台播放**未实现/未验证**（M1）。
+- **接口运行时形状**：响应结构来自后端源码阅读，没有用真实 token 跑通；字段缺失/类型变化可能仍导致 `decoding`。
+- **证书**：NAS 若是自签/内网 CA，iOS 会直接拒绝；需在设备上安装并信任证书，本项目**不提供 ATS 例外**。
+- **UI**：未在小屏、Dynamic Type AX 字号、横屏（本期锁定竖屏）验证；自定义字号未用 `relativeTo` 缩放。
+
+### 0.5 待办（M1 及以后，代码中未留 TODO 占位）
+
+- 语料快照/TTS 磁盘 LRU 缓存、离线三态横幅与自动重试；`GET /api/audio/:id` 服务端录音回放。
+- 录音中断/路由变化监听、后台播放与锁屏控制、蓝牙专项。
+- GET 自动重试策略（当前失败后用显式“重试”按钮）、并发上传限制。
+- 单元测试目标（ErrorMapper、Multipart、ScorePresenter、TokenRefresher 并发 401）与 UI 测试。
+- `UIBackgroundModes=audio` 已声明但 M0 没有锁屏控制逻辑；若不需要后台播放可先移除。
+- 登录页“记住邮箱”、设置页、家长面板、连读、对话、故事、盲测、诊断。
+
+### 0.6 M0 验收清单（在 Mac/真机上逐条勾）
+
+- [ ] `xcodegen generate` 成功，Xcode 无编译错误（Swift 6）。
+- [ ] 新装 → 填地址 → 演示账号 → 登录成功；杀进程重开**无需重登**。
+- [ ] access 过期/失效后业务请求自动刷新并重放一次，用户无感；refresh 被拒才回登录页。
+- [ ] 语料列表按账号 CEFR 加载；下拉刷新；空/错误/loading 三态可见。
+- [ ] 选中 A1 句子 → 播放示范 → 录音 → 看到分数与词级结果；端到端 ≤8s（局域网）。
+- [ ] 播放中开始录音，示范音立即停止，无叠音。
+- [ ] 拒绝麦克风 → 引导卡 → 去设置开启 → 返回后可直接录音。
+- [ ] 60s 自动停止并提交；<500ms 拦截；无声音提示；12MB 预检。
+- [ ] 断网提交：可见错误 + 重试；不把网络错误误报成“登录过期”。
+- [ ] 孩子账号：无 IPA、无数字分、无红色低分，按钮高度 ≥56pt。
+- [ ] 退出登录调用 revoke 并回登录页；旧 refresh 再用返回 401。
+- [ ] 真机 `afinfo` 确认录音为 16kHz mono AAC（m4a）。
+- [ ] 自签证书/NAS 网络：Safari 能打开同一地址；App 能连。
 
 ---
 
@@ -120,6 +207,26 @@
 
 ## 5. 目录结构
 
+> **M0 实际源码根是 `ios/EnglishCoach/`**（下表中的 `App/`、`Core/`、`Features/`、`Resources/` 均在其下）。
+> `ios/` 顶层的 `App/`、`Core/`、`Features/`、`Resources/`、`Config/` 是设计阶段留下的空目录占位（只有 `.gitkeep`），
+> 不参与 XcodeGen 构建；保留是为了不破坏早期文档引用。
+
+```
+ios/
+├── project.yml                       # XcodeGen 工程描述（M0）
+├── EnglishCoach/
+│   ├── App/
+│   │   ├── EnglishCoachApp.swift
+│   │   └── AppEnvironment.swift      # 依赖装配 + 全局会话状态（M0 的 AppDependencies/SessionStore 合并）
+│   ├── Core/                         # Networking / Session / Audio / Crypto / DesignSystem
+│   ├── Features/                     # Auth / Practice（M0）；其余目录仍为空
+│   └── Resources/                    # Info.plist / PrivacyInfo.xcprivacy
+├── docs/
+└── README.md
+```
+
+下面是设计阶段规划的完整目录（M1+ 按此扩展，`AppRoot`/`RootTabView`/`Config/*.xcconfig` 尚未实现）：
+
 ```
 ios/
 ├── App/
@@ -213,20 +320,20 @@ ios/
 
 ### 6.2 首次运行
 
-1. `open ios/EnglishCoach.xcodeproj`（工程文件尚未创建，M0 第一步生成）。
+1. 生成并打开工程：`cd ios && xcodegen generate && open EnglishCoach.xcodeproj`（见 §0.2）。
 2. Signing：`Team = 付费开发者 Team`，Bundle ID 建议 `top.dreamsearch.englishcoach`（**【待确认】**；TestFlight 要求 App Store Connect 内唯一，一经创建不要随意更换）。
-3. 确认 `Config/Debug.xcconfig` 中 `API_BASE_URL = https:/$()/english.dreamsearch.top/api`（xcconfig 里 `//` 会被当注释，必须用 `https:/$()/` 转义）。
+3. base URL **不再走 xcconfig**：M0 在登录页填写，存 `UserDefaults`（`app.baseURL`）；默认空、必填。设计阶段的 `Config/Debug.xcconfig` + `API_BASE_URL` 方案未实现。
 4. 真机运行前，手机与 NAS 必须在同一网络；若路由器做了 AP 隔离会连不上。
-5. 启动后先走「设置 → 服务器体检」（`GET /health`），确认 `db` 与 `voice.reachable` 正常。
+5. M0 没有“设置 → 服务器体检”页；登录页的“测试连接”会调 `GET /health`（只判断 2xx，不解析 `db`/`voice.reachable` 明细）。
 
 ### 6.3 base URL 可配置
 
-- 默认值来自 `Info.plist`（由 xcconfig 注入），`Settings` 允许改写到 `UserDefaults`（`app.baseURL`）。
+- 默认值：**空**（必填）。登录页填写后存 `UserDefaults`（`app.baseURL`）；只填主机名会自动补 `/api`。
 - 允许 `http://192.168.x.x:3000/api` 形式用于排障，但注意两点：
   - **token 在 http 下是明文传输**：仅限 Debug 排障，Release 必须 https；不要为了排障在 Release 打开 ATS 例外；
-  - 直连局域网 IP 会触发 iOS **本地网络隐私弹窗**，需要 `NSLocalNetworkUsageDescription`。
-- token 与服务器绑定：切换 base URL 后**必须清 Keychain 里的 token 并重新登录**（旧服务器的 token 不能用于新地址）。
-- 当前后端默认 `PROVIDER_MODE=hybrid`（音频→Azure、文本→DeepSeek、图片→DeepSeek/智谱），所以**音频会离开家庭网络**；设置页/隐私说明必须如实写，不能宣称“录音不出户”（见 §7 与 `docs/audio.md` §2.1）。
+  - 直连局域网 IP 会触发 iOS **本地网络隐私弹窗**，需要 `NSLocalNetworkUsageDescription`（Info.plist 已提供）。
+- token 与服务器绑定：切换 base URL 后**清 Keychain 里的 token 并重新登录**（M0 在登录时清；旧服务器的 token 不能用于新地址）。
+- 当前后端默认 `PROVIDER_MODE=hybrid`（音频→Azure、文本→DeepSeek、图片→DeepSeek/智谱），所以**音频会离开家庭网络**；登录页已如实提示，不能宣称“录音不出户”（见 §7 与 `docs/audio.md` §2.1）。
 
 ### 6.4 联调前的接口自检（在能访问 NAS 的机器上执行，非本仓库自动执行）
 
@@ -436,6 +543,7 @@ ATS：默认不开放例外。如果 NAS 使用自签证书或内网 CA，iOS �
 ## 11. 本次交付
 
 - 本 README + 6 篇设计文档 + 3 篇 ADR（UTF-8 Markdown）。
-- `App/`、`Features/*`、`Core/*`、`Tests/*`、`Config/`、`Resources/` 目录骨架（`.gitkeep` 占位）。
-- **未包含**：Xcode 工程文件、任何 Swift 源码、资源图片。M0 第一件事是建工程并把 `AppShell` 跑起来。
-- 未验证项已集中记录，不在正文中伪装成结论。
+- **M0 垂直切片源码**：`project.yml`、`EnglishCoach/App`、`EnglishCoach/Core`、`EnglishCoach/Features/{Auth,Practice}`、`EnglishCoach/Resources`（详见 §0）。
+- `App/`、`Features/*`、`Core/*`、`Tests/*`、`Config/`、`Resources/` 顶层目录骨架（`.gitkeep` 占位，不参与构建）。
+- **未包含**：`.xcodeproj`（用 XcodeGen 生成）、App 图标/图片资源、测试目标、TestFlight 配置。
+- **未验证**：代码未编译、未真机运行；清单见 §0.4，不在正文中伪装成结论。

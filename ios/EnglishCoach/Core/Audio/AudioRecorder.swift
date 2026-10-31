@@ -142,11 +142,11 @@ final class AudioRecorder {
     /// 停止并返回可上传的录音。调用前无需判断是否到 60s：
     /// 到点由 `limitTask` 先停 recorder，这里再读文件仍然有效。
     func stop() throws -> RecordedAudio {
-        guard isRecording, let recorder, let url = outputURL else {
+        guard isRecording, let activeRecorder = recorder, let url = outputURL else {
             throw AudioError.noRecording
         }
 
-        recorder.stop()
+        activeRecorder.stop()
         isRecording = false
         stopTasks()
         let measured = Self.duration(of: url)

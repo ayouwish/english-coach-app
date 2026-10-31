@@ -1,7 +1,9 @@
 # English Coach · HarmonyOS 客户端设计
 
-> 状态：**设计稿 v0.2（2026-10-31 修订）**
-> 范围：只包含设计文档 + DevEco Studio 工程目录骨架，**不包含可编译的 App 代码**。
+> 状态：**设计稿 v0.2 + M0 代码骨架 v0.3（2026-10-31）**
+> 范围：设计文档 + **M0 垂直切片的 ArkTS/ArkUI 代码**（登录 → 语料列表 → 跟读录音评测 → 设置）。
+> ⚠️ **代码从未被编译过**（生成环境没有 DevEco Studio / hvigor / HarmonyOS SDK），也**没有在真机上跑过**。
+> 具体哪些是"写出了代码"、哪些是"没验证"、哪些"还没做"，见 [§0.1 M0 代码现状](#01-m0-代码现状2026-10-31)。
 > 后端：`english-coach/web`（Next.js :3000）+ `english-coach/voice`（FastAPI :8100）已存在并跑通。
 > **本目录不修改后端**；凡是需要后端配合的地方，统一标注为【待后端新增】或【待后端确认】。
 > v0.2 修订：认证改为 Bearer Token、最低 API 提升到 20、录音统一 16kHz/单声道/65kbps，并按真实代码修正对话链路、发音分字段与隐私边界。
@@ -32,6 +34,190 @@
 - **【待后端新增】**：当前后端没有该接口/字段，需要先改后端，客户端才能做。
 - **【客户端自行实现】**：纯客户端逻辑，不需要后端改动。
 - **【待真机验证】**：依赖 HarmonyOS 设备/系统版本行为，文档不做“已验证可用”的承诺。
+
+---
+
+## 0.1 M0 代码现状（2026-10-31）
+
+> ### ⚠️ 未编译验证，请勿当作"可用"
+>
+> 本目录的 ArkTS 代码是在**没有 DevEco Studio / hvigor / HarmonyOS SDK** 的环境里手写生成的：
+> **从未编译、从未链接、从未打包、从未在真机或模拟器上运行**。
+> 因此这里**没有任何**"编译通过 / 能跑 / 真机可用"的结论：
+>
+> - 第一次在 DevEco 里打开时出现编译错误是**预期内**的，不是"工程坏了"；
+> - 凡本文标注【待确认】的 API，都要先对照本机 SDK 的 `.d.ts` 核对/修正再编译；
+> - 任何"真机可用"的结论只能来自 §0.1.7 的验收记录，不能来自本文或代码注释。
+
+### 0.1.1 与设计文档的一处取舍：M0 收敛为单 HAP
+
+设计文档 §3.1 规划的是 `entry + features/*(HAR) + commons/*(HAR)`。M0 **没有**按多模块实现：
+
+| 项 | M0 实际 | 理由 | 回退/演进 |
+|---|---|---|---|
+| 模块形态 | **单 HAP（只有 `entry`）** | 多 HAR 需要在 `oh-package.json5` 里写本地路径依赖、每个 HAR 一套 `build-profile.json5`/`module.json5`/`Index.ets` 导出，手写错任何一处 DevEco 都打不开；而 M0 的页面只有 4 个 | M1 拆 HAR：把 `entry/src/main/ets/core/*` 迁到 `commons/{net,audio,storage,design}`，页面迁到 `features/{auth,practice,settings}`，`Index.ets` 只保留路由装配 |
+| 分层 | 用**目录**表达分层：`core/`（config/net/service/session/audio/util）、`design/`、`components/`、`viewmodel/`、`pages/` | 同上；目录分层已经能保住"UI 不碰 http、VM 不碰 AVRecorder"的约束 | 拆分时目录结构一一对应，改动主要是 import 路径 |
+| 路由参数 | 跟读页用 `NavigationService` 的进程内"当前选中句子"传递 | `navDestination` 的 `@Builder` 只拿到 `name`，读 param 需要 `NavDestinationContext`，M0 不值得引入 | 拆 HAR 时改 `pushPathByName(name, param)` + `onReady` |
+| 占位目录 | `features/*`、`commons/*` 仍是 `.gitkeep` 占位，**没有**被 `build-profile.json5` 的 `modules` 引用 | 避免"看起来是模块其实没进构建"的误解 | M1 起逐个接入 |
+
+代码量：`entry/src/main/ets/**/*.ets` 共 **32 个文件 / 约 4.85k 行**（含注释；行数为 `wc -l` 口径）。
+
+### 0.1.2 已实现（= 代码存在，**不等于**能编译/能跑）
+
+| 层 | 文件 | 内容 |
+|---|---|---|
+| 工程 | `build-profile.json5`、`oh-package.json5`、`hvigorfile.ts`、`hvigor/hvigor-config.json5`、`AppScope/app.json5`、`AppScope/resources/base/{element/string.json,media/app_icon.png}` | `compileSdkVersion/compatibleSdkVersion/targetSdkVersion = 20`；`signingConfigs: []` **故意留空**（必须由 DevEco 生成）；运行时依赖为空 |
+| 模块 | `entry/{build-profile.json5,oh-package.json5,hvigorfile.ts,obfuscation-rules.txt}`、`entry/src/main/module.json5`、`entry/src/main/resources/base/{element/color.json,element/string.json,media/startIcon.png,profile/main_pages.json}` | `INTERNET`（system_grant）+ `MICROPHONE`（user_grant，`reason`/`usedScene` 齐全）；`pages` 只注册 `pages/Index`；颜色 token 真实值（`#F5F7FF`/`#5B5BD6` 等 22 个） |
+| 入口 | `entryability/EntryAbility.ets`、`pages/Index.ets` | `onCreate` 注入 `UIAbilityContext`；启动恢复（Asset → `/auth/me`）；`Navigation + NavPathStack`；登出/会话失效时 `@Watch` 清空导航栈并回登录页；启动失败全屏错误 + 重试 |
+| Core·配置 | `core/config/AppConfig.ets`、`core/config/AppRuntime.ets` | baseUrl 存 **Preferences**（规范化：补 scheme、去尾 `/`、去误填 `/api`）、演示账号、cefrLevel→语料等级（C1 回退 B2） |
+| Core·网络 | `core/net/{ApiClient,TokenSession,ApiError,Dtos}.ets`、`core/error/UiError.ets` | `@ohos.net.http` 封装（每请求新建 + `destroy`）；Bearer 注入；**401 → 单飞刷新 → 重放一次**；refresh 400/401 清 token、网络失败**不清**；服务端 code → 中文文案（成人/儿童两套）；DTO 与 `api-contract.md` 字段对齐 |
+| Core·鉴权 | `core/service/AuthService.ets`、`core/session/SessionStore.ets` | `/auth/token`、`/auth/refresh`（内部）、`/auth/revoke`、`/auth/me`（含"200 + user:null"兼容分支）；会话恢复/登录/登出/过期；全局会话用 `AppStorage('session')` **整体替换** |
+| Core·业务 | `core/service/PracticeService.ets`、`core/service/CacheService.ets`、`core/util/FileUtil.ets` | `/sentences?level=`、`/tts`（二进制→落盘）、`/attempts`（multipart，五字段）、`/attempts/:id/retry`、`/health`；目录约定、原子写（`.part` + rename）、启动清理 |
+| Core·音频 | `core/audio/{AudioRecorder,AudioPlayer,AudioController}.ets` | AVRecorder：m4a / AAC / **`audioChannels:1`** / 16000 / 65000；权限**每次录音前**申请、拒绝给"去设置"；AVPlayer：只播本地 `fd://`（**不把需要 Authorization 的 URL 交给播放器**）；录放互斥 + 释放 fd |
+| 设计系统 | `design/DesignTokens.ets`、`components/{EcButton,ErrorBanner,EmptyState,LoadingBlock}.ets` | 颜色/间距/圆角（卡片 20 / 弹层 28 / 按钮 14）/字号/按钮高度；按钮五层级（primary/tonal/ghost/danger/text）；分数语义色与**儿童 <60 不显示数字、不用红色**的判定函数 |
+| 页面 | `pages/{LoginPage,SentenceListPage,PracticePage,SettingsPage}.ets` + `viewmodel/{LoginVM,SentenceListVM,PracticeVM,SettingsVM}.ets` | 登录（邮箱/密码/基地址/演示账号填充/健康状态）→ 语料列表（按 cefrLevel、等级切换）→ 跟读（听示范 / 跟我读自动开录 / 录音 60s / 上传 / 分数 + 鼓励 / 纠错 / 重试评测）→ 设置（基地址、健康检查、清缓存、退出）；**loading / empty / error + 重试** 三态齐全 |
+
+**录音参数（已按文档定死，无降级分支）**：m4a（`CFT_MPEG_4A`）/ AAC（`AUDIO_AAC`）/ 16000 Hz / **单声道（`audioChannels: 1`，不是 `audioChannelCount`）** / 65000 bps；整段上传不切片；≤12MB；本地再校验 0.6–60s。
+
+**播放（已按文档定死）**：`POST /api/tts` → 二进制落 `cacheDir/tts/` → `AVPlayer.url = 'fd://' + fd`。不直接播 URL（无请求头、无 Range）。TTS 失败时服务端返回的是 JSON 而不是音频，客户端**先看状态码再决定是否落盘**，容器格式按魔数（RIFF/ID3/frame sync/ftyp）判断。
+
+### 0.1.3 未验证（明确不做承诺）
+
+- [ ] 编译 / 链接 / 出包（`hvigor assembleHap`）是否通过；
+- [ ] 签名、安装、启动、页面跳转是否正常；
+- [ ] AVRecorder 在目标机型上是否真的产出 **16kHz / 单声道 / 65kbps / AAC-LC** 的 m4a，文件头是否含 `ftyp`；
+- [ ] 服务端能否解码该 m4a 并返回分数（`POST /api/attempts` 全链路）；
+- [ ] Asset Store 读写是否成功、`SYNC_TYPE` 是否被接受、**降级到内存模式**的分支是否按预期触发；
+- [ ] 单飞刷新在真实并发 401 下的行为（只发一次 `/auth/refresh`、三个请求都重放成功）；
+- [ ] multipart 上传 12MB 边界、`filePath` 沙箱静态文件的系统权限；
+- [ ] TTS 字节落盘后 AVPlayer 能否播放（wav 24kHz / mp3 都未测）；
+- [ ] `NavPathStack` + 自定义 title bar 的返回行为、`@Watch` 清栈时机；
+- [ ] 安全区 / 软键盘遮挡 / 系统字体放大 1.3× 的布局；
+- [ ] 断网、弱网、429、degraded 等错误文案在真机上的呈现；
+- [ ] 冷启动耗时、内存、fd 泄漏（连续 20 次录制）。
+
+### 0.1.4 已知缺口 / 待办（M0 范围内刻意没做）
+
+1. **文案资源化**：中文文案目前直接写在 `.ets` 里；上线前必须迁到 `resources/base/element/string.json`（儿童文案用 `child_` 前缀），并处理 `zh_CN`/`en_US`。
+2. **数字 token 资源化**：间距/字号/圆角在 `DesignTokens.ets`（数字），未进 `float.json`；深色/平板差异化时再迁。
+3. **深色模式**：**没有**创建 `resources/dark/`（避免在系统深色下意外启用未评审的配色），M4 补。
+4. **语料缓存**：M0 每次进列表都走网络；未做 `filesDir` 24h 缓存与"离线内容"标识。
+5. **pending 录音**：上传失败只提示，不提供"稍后重传"；录音文件留在 `filesDir/recordings/`（登出清理）。
+6. **TTS 缓存 key**：用时间戳文件名（不复用）；待改成 `sha256(text|rate|voice|format)` + LRU 50MB。
+7. **用量刷新**：登录时取一次 `usage`，会话恢复时也取一次；未在长时间停留后主动刷新。
+8. **切后台立即停录**：`EntryAbility.onBackground` 只打日志；页面 `aboutToDisappear` 会 `stopAll()`，但"切后台不销毁页面"的场景没有同步 UI 状态。
+9. **全局 unauthorized 事件**：用 `VM catch → SessionStore.expire() → Index @Watch 清栈` 实现（效果等价），没有独立事件总线。
+10. **debug/release 区分**：设置页当前始终可改 baseUrl；release 包应只读（`BuildProfile.DEBUG` 分支）。
+11. **二次确认**：退出登录、录音中返回、进行中的提交，都还没有确认弹窗。
+12. **单元测试**：为守"零三方依赖"没有引入 Hypium；DTO 解析/错误映射/VM 已按可注入的接口写，但没有测试文件。
+13. **M1+**：连读+轮询、对话（ASR→turn→TTS）、故事、盲测、诊断、家长面板，以及 HAR 拆分。
+
+### 0.1.5 【待确认】API 清单与回退方案
+
+> 这些地方是按"API 20 文档 + 官方示例"写的，**未与本机 SDK 比对**。编译前请逐条对照 `@ohos.*.d.ts`。
+
+| # | API | 用在哪 | 不确定点 | 回退方案 |
+|---|---|---|---|---|
+| 1 | `@kit.AssetStoreKit` 的 `asset.add/query/update/remove`、`Tag.SYNC_TYPE`、`SyncType.NEVER`、错误码 `24000001/24000002` | `core/net/TokenSession.ets` | Kit 聚合导入名；`SYNC_TYPE` 是否在 API 20 可用；错误码取值 | ① 改 `@ohos.security.asset`；② 已实现**内存降级**（`degraded=true`，不落明文，杀进程需重登，设置页有提示） |
+| 2 | `util.TextEncoder#encodeInto` / `util.TextDecoder#decodeToString`（`@kit.ArkTS`） | `TokenSession`、`ApiClient.decodeUtf8` | 方法名/构造参数在不同 API 版本有差异 | 改 `encodeIntoUint8Array` / `decodeWithStream`，或用 `@kit.ArkTS` 的 `buffer.from/toString` |
+| 3 | `media.AVRecorderProfile`：`audioChannels`/`audioSampleRate`/`audioBitrate`/`audioCodec`/`fileFormat` | `core/audio/AudioRecorder.ets` | 字段名/枚举名随版本变化，且**不能**写成 `audioChannelCount`（那是 AVScreenCapture） | 按本机 `@ohos.multimedia.media.d.ts` 改字段；**不减少参数、不降码率**（评分口径必须一致） |
+| 4 | `media.ContainerFormatType.CFT_MPEG_4A`、`media.CodecMimeType.AUDIO_AAC`、`media.AudioSourceType.AUDIO_SOURCE_TYPE_MIC` | 同上 | 枚举成员名 | 换对应枚举；若该版本允许字符串字面量可用 `'m4a'`/`'audio/aac'` |
+| 5 | `AVPlayer` 的 `url='fd://'+fd`、`audioRendererInfo`、`media.AVPlayerState`、`stateChange === 'completed'` | `core/audio/AudioPlayer.ets` | `audioRendererInfo.usage` 枚举与路由行为；状态值比较方式 | 换 `audio.StreamUsage` 取值；状态判断改 `state.toString() === 'completed'` |
+| 6 | `abilityAccessCtrl.requestPermissionOnSetting`（API 12+） | `core/audio/AudioRecorder.ets`（`MicPermission.openSettings`） | 低版本没有此方法 | 回退为文案引导手动路径：设置 → 隐私 → 权限管理 → 应用 → 家庭英语教练 → 麦克风 |
+| 7 | `preferences.getPreferences(context, options)` + `get/put/flush` | `core/config/AppConfig.ets` | 只有 sync 版本 / 泛型 `get<T>` 形态 | 改 `getPreferencesSync/getSync/putSync/flushSync`；代码已用非泛型 + 断言 |
+| 8 | `http.request` 的 `multiFormDataList`、`maxLimit`、`expectDataType`、`HttpDataType.ARRAY_BUFFER` | `core/net/ApiClient.ets`、`PracticeService` | 低风险（API 11+），但 multipart 对 `filePath` 的处理未验证 | 回退 `requestInStream` + 手写 multipart（不推荐，12MB 需流式） |
+| 9 | `Navigation.navDestination(builder)`、`NavDestination` 在 `@Builder` 内构建、`NavPathStack.pushPathByName(name, param)` 的 param 类型、`NavPathStack.size()` | `pages/Index.ets`、`core/router/NavigationService.ets` | param 是 `Object`/`unknown` 的口径；Builder 签名 | 回退 `router.pushUrl` + `main_pages.json`（页面已是独立文件，改动集中在 Index + NavigationService） |
+| 10 | `$r('app.color.*')` 在**非 build 上下文**（`DesignTokens.EcScore.color*`） | `design/DesignTokens.ets` | 编译器是否允许工具方法里调 `$r` | 改成在组件内用 if/else 返回 `$r(...)`（只改 1 个方法，调用点不变） |
+| 11 | `hvigor/hvigor-config.json5` 的 `modelVersion: "6.0.0"`、`build-profile.json5` 的 `compileSdkVersion: 20`（数字） | 工程配置 | DevEco 6.0.0 的实际口径（数字 vs `"6.0.0(20)"`） | 用 DevEco 新建工程的同名文件覆盖；版本号改字符串形式 |
+| 12 | `@Watch` + `@StorageLink` 组合（`Index.onSessionChanged`） | `pages/Index.ets` | 低风险 | 改为 `SessionStore.set()` 之后直接 `NavigationService.clear()` |
+
+另外两处**已知的行为缺口**（不是 API 问题）：
+
+- `POST /auth/refresh` 若在"服务端已轮换、客户端未保存"时进程被杀，下次启动会刷新失败并回登录页——这是 ADR-0002 明确接受的失败方式；
+- `/auth/me` 用无效 Bearer 时服务端返回 `200 + {user:null}`（不是 401），客户端已按"刷新一次再取，仍空则清 token 回登录"处理。
+
+### 0.1.6 在 DevEco Studio 打开 / 构建（步骤，未执行）
+
+```text
+1. DevEco Studio 6.0.0（随 SDK API 20）→ Open → 选择 english-coach-app/hos 这一层
+   （不要选 english-coach-app 或仓库根目录）。
+2. 补齐 DevEco 才能正确生成的文件：
+   - 本仓库**没有**手写 hvigorw / hvigorw.bat / oh-package-lock.json5；
+   - 若打开后报缺少 wrapper 或 hvigor 版本不匹配：新建一个 Empty Ability 工程，
+     把它的 hvigorw*、hvigor/、oh-package-lock.json5 复制过来覆盖，
+     并保留本仓库的 entry/ 与 AppScope/（entry/ 与 AppScope/ 内内容可直接覆盖新工程）。
+3. File → Project Structure → Signing Configs → 勾选
+   "Automatically generate signature"（需登录华为账号）。
+   本仓库 build-profile.json5 里 signingConfigs 是空数组 —— 签名**必须**由 DevEco 生成，
+   手写证书/Profile 会导致无法构建或无法安装。
+4. Sync Project with hvigor → Build → Build Hap(s)/APP(s) → Build Hap(s)。
+5. 真机：开启开发者模式 + USB 调试 → Run 'entry'（或 hdc install -r 产物 hap）。
+6. 首次运行：
+   - 登录页「服务器地址」默认 https://english.dreamsearch.top（只在家庭网络/VPN 内可达）；
+     改地址后点「重试」会用新地址做 /api/health；
+   - 演示账号：爸爸 dad@example.com / Dad12345!，女儿 girl@example.com / Girl12345!
+     （后端种子账号，部署时可能被 BOOTSTRAP_DAD_EMAIL 等环境变量改掉【待确认】）；
+   - 登入 → 选等级 → 点一句 → 「听示范」/「跟我读」→「开始说」→「说完啦」；
+   - 麦克风权限在**第一次点「开始说」**时才申请（不在启动时申请）。
+```
+
+**如果只是先确认工程配置是否正常**：可以临时把 `pages/Index.ets` 的 `build()` 换成一行 `Text('hello')` 再 Build；能出包说明工程骨架没问题，再把页面换回来。这一步同样**没有在本环境执行过**。
+
+### 0.1.7 真机验收清单（M0，全部未执行）
+
+> 只有逐条打勾并留下机型/系统版本/commit 的记录，才能对外说"M0 可用"。
+
+**工程与构建**
+
+- [ ] DevEco 能 Sync 通过、`Build Hap(s)` 出包（当前**未执行**）；
+- [ ] 装上真机、冷启动无崩溃；
+- [ ] 无第三方运行时依赖（`oh-package.json5` 的 dependencies 为空）。
+
+**认证**
+
+- [ ] 正确账号登录成功；错误密码显示「邮箱或密码不正确」（服务端 401 + `bad_request`，客户端优先展示服务端 message）；
+- [ ] access/refresh 在 Asset Store（`ec_access_token`/`ec_refresh_token`），在 Preferences/日志里搜不到 token；
+- [ ] 杀进程重开仍登录；access 过期时自动 refresh（可把 access 改成短 TTL 或等待 1h）；
+- [ ] 并发 3 个请求同时 401 → 只发 1 次 `/api/auth/refresh`（客户端日志 + 服务端 `audit_log`/`auth_tokens` 双向核对）；
+- [ ] refresh 返回 401（被吊销/被别的设备轮换）→ 清 token → 登录页；
+- [ ] refresh 断网 → token 保留、页面提示可重试；
+- [ ] 退出登录调用 `/api/auth/revoke`（204，失败也清本地）；
+- [ ] 任意页面遇到 401 后能自动回到登录页（导航栈被清空）。
+
+**语料与三态**
+
+- [ ] A1–B2 可切换；儿童账号看不到 `focus_phonemes`（服务端已空，客户端也不渲染）；
+- [ ] 空等级显示空态 + 「换个等级」；
+- [ ] 断网显示错误条 + 重试（**不是**白屏/只打日志）；
+- [ ] 首页显示今日用时（`usage`）。
+
+**录音 / 播放 / 评测**
+
+- [ ] 首次点录音弹麦克风权限；拒绝后引导「去设置」，授权返回后可录；
+- [ ] 录音文件：m4a / AAC-LC / 16kHz / 单声道 / 65kbps，文件头 `ftyp`，服务端能评测出分；
+- [ ] 60s 自动停止并提交；<600ms 被拦（提示重录）；12MB 上限（正常不触发）；
+- [ ] 「听示范」能播 wav；「跟我读」播完 250ms 后自动开录，开头不吞字；
+- [ ] 录音时点播放被拒（提示先说完）；播放时点录音先停播；
+- [ ] 结果页成人：总分/准确/流利/完整/语调 + 纠错（最多 2 条）；
+- [ ] 儿童：无 IPA、<60 不显示数字、不用红色、只有鼓励 + 星星；
+- [ ] 没听到声音（`recognized_text` 过短）显示「再试一次」而不是 0 分；
+- [ ] `degraded=true` 显示「录音已保存，可重试评测」，点「重试评测」能恢复；
+- [ ] 429 `daily_limit_reached` 显示剩余时长并停止提交；
+- [ ] 连续 20 次录音/播放：无崩溃、无 fd 泄漏、无「麦克风被占用」。
+
+**生命周期**
+
+- [ ] 录音中返回/切后台：录音停止、计时清空、下次进入不残留；
+- [ ] 页面销毁后播放停止，再次进入能重新播。
+
+**安全/隐私**
+
+- [ ] 日志里没有 token/邮箱/录音路径；
+- [ ] 登出清空 token、`cacheDir/tts`、`cacheDir/audio`、`filesDir/recordings`；
+- [ ] 只申请 INTERNET + MICROPHONE，无 CAMERA/位置/通讯录。
+
+> 验收记录请按 [docs/roadmap.md](docs/roadmap.md) §5 的模板贴在 issue 或 `docs/` 里，
+> 不要直接改本文的勾选状态——本文的清单是"待执行"，不是"已通过"。
 
 ---
 
@@ -446,10 +632,19 @@ HarmonyOS NEXT 的 ArkTS 是 TypeScript 的**严格子集**，不是“带类型
 本目录当前交付：
 
 - 8 份核心设计文档（本 README + `docs/` 下 7 份）+ 2 份 ADR（0001 已被取代、0002 现行）；
-- 目录骨架：`entry/`、`features/*`、`commons/*`，以及 `.gitkeep` 占位；
-- **没有** `module.json5`、`app.json5`、`oh-package.json5` 等可编译配置，避免留下“看起来能跑其实跑不起来”的半成品。
+- **M0 代码骨架**（单 HAP，未编译验证，见 §0.1）：
+  - 可编译配置：`build-profile.json5`、`oh-package.json5`、`hvigorfile.ts`、`hvigor/`、`AppScope/`、
+    `entry/{build-profile.json5,oh-package.json5,hvigorfile.ts}`、`entry/src/main/module.json5`；
+  - Core：`core/{config,net,service,session,audio,util,error,router}`（Bearer + 单飞刷新、Asset Store、
+    Preferences、AVRecorder 16k/mono/65k/AVPlayer fd://、错误映射、目录与原子写）；
+  - Design：`design/DesignTokens.ets` + `components/*`（按钮五层级、错误条、空态、加载态）；
+  - 页面：`pages/{Index,LoginPage,SentenceListPage,PracticePage,SettingsPage}` + `viewmodel/*`；
+- **占位**（未纳入构建）：`features/*`、`commons/*` 的 `.gitkeep`，留给 M1 拆 HAR。
 
-M0 开始时按 [docs/roadmap.md](docs/roadmap.md) 创建工程文件，并以本 README 的结构为准。
+**没有**手写的：`hvigorw`/`hvigorw.bat`、`oh-package-lock.json5`、`signingConfigs` 的真实内容——
+这些由 DevEco Studio 生成，手写极易版本错配（见 §0.1.6）。
+
+M0 之后按 [docs/roadmap.md](docs/roadmap.md) 推进 M1，并以 §0.1.1 的 HAR 拆分方案收敛回设计文档的多模块结构。
 
 ---
 

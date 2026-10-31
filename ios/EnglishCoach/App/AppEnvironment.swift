@@ -206,7 +206,7 @@ final class AppEnvironment {
     }
 
     private func requireTransport() throws -> APITransport {
-        guard let transport else {
+        guard let transport = self.transport else {
             throw APIError.unauthorized
         }
         return transport

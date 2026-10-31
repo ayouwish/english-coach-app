@@ -1,6 +1,7 @@
 import { ApiError, ApiErrorCode } from '../net/ApiError';
+import { ErrorMapper, UiError } from '../error/UiError';
 import { UsageDto, UserDto } from '../net/Dtos';
-import { TokenStore } from '../net/TokenSession';
+import { TokenSession } from '../net/TokenSession';
 import { AuthService } from '../service/AuthService';
 import { CacheService } from '../service/CacheService';
 
@@ -50,8 +51,8 @@ export class SessionStore {
    * 返回 false = 需要登录；抛错 = 网络/服务器问题（由启动页展示重试）。
    */
   static async restore(): Promise<boolean> {
-    await TokenStore.load();
-    if (!TokenStore.hasRefresh()) {
+    await TokenSession.load();
+    if (!TokenSession.hasRefresh()) {
       SessionStore.set(new SessionState());
       return false;
     }
@@ -59,7 +60,7 @@ export class SessionStore {
       const me = await AuthService.me();
       const user = me.user;
       if (user === undefined || user === null) {
-        await TokenStore.clear();
+        await TokenSession.clear();
         SessionStore.set(new SessionState());
         return false;
       }
@@ -69,7 +70,7 @@ export class SessionStore {
     } catch (err) {
       const e = err as Error;
       if (e instanceof ApiError && e.code === ApiErrorCode.UNAUTHORIZED) {
-        await TokenStore.clear();
+        await TokenSession.clear();
         SessionStore.set(new SessionState());
         return false;
       }
@@ -95,9 +96,35 @@ export class SessionStore {
     } catch (err) {
       // 网络失败也要能退出本地账号（ADR-0002）
     }
-    await TokenStore.clear();
+    await TokenSession.clear();
     CacheService.clearAll();
     SessionStore.set(new SessionState());
+  }
+
+  /**
+   * 会话失效（401/刷新被拒）：清 token + 全局会话。
+   * 清完后 Index 的 @Watch 会清空导航栈并显示登录页（见 pages/Index.ets）。
+   */
+  static async expire(): Promise<void> {
+    try {
+      await TokenSession.clear();
+    } catch (err) {
+      // 清凭证失败也要把 UI 退回登录态
+    }
+    SessionStore.set(new SessionState());
+  }
+
+  /**
+   * 统一错误映射：命中 unauthorized 时顺带 expire()。
+   * 页面只需要展示返回的 UiError，不需要自己判断 401。
+   */
+  static toUiError(err: Error, isChild: boolean): UiError {
+    const ui = ErrorMapper.from(err, isChild);
+    if (ui.code === ApiErrorCode.UNAUTHORIZED) {
+      // 不阻塞 UI：清凭证 + 会话，Index 的 @Watch 负责清导航栈
+      void SessionStore.expire();
+    }
+    return ui;
   }
 
   /** 每次提交评测后同步用量（422/429 依赖它展示剩余时长）。 */

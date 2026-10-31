@@ -18,13 +18,13 @@ struct EmptyStateView: View {
                 .font(AppFont.heading(caps))
                 .foregroundStyle(Tokens.Colors.textPrimary)
                 .multilineTextAlignment(.center)
-            if let message {
+            if let message = self.message {
                 Text(message)
                     .font(AppFont.body(caps))
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            if let actionTitle, let action {
+            if let actionTitle = self.actionTitle, let action = self.action {
                 AppButton(title: actionTitle, kind: .primary, action: action)
                     .frame(maxWidth: 320)
             }
@@ -55,7 +55,7 @@ struct ErrorStateView: View {
                 .font(AppFont.body(caps))
                 .foregroundStyle(Tokens.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-            if let onRetry {
+            if let onRetry = self.onRetry {
                 AppButton(title: retryTitle, icon: "arrow.clockwise", kind: .primary, action: onRetry)
                     .frame(maxWidth: 320)
             }
@@ -84,7 +84,7 @@ struct InlineErrorView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if let retryTitle, let onRetry {
+            if let retryTitle = self.retryTitle, let onRetry = self.onRetry {
                 Button(retryTitle, action: onRetry)
                     .font(AppFont.bodyEmphasis(caps))
                     .foregroundStyle(Tokens.Colors.primary)
@@ -123,7 +123,7 @@ struct PermissionCard: View {
                 .foregroundStyle(Tokens.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             AppButton(title: primaryTitle, icon: "gearshape.fill", kind: .primary, action: primaryAction)
-            if let secondaryTitle, let secondaryAction {
+            if let secondaryTitle = self.secondaryTitle, let secondaryAction = self.secondaryAction {
                 AppButton(title: secondaryTitle, kind: .text, action: secondaryAction)
             }
         }
@@ -147,7 +147,7 @@ struct ErrorBanner: View {
                 .font(AppFont.footnote(caps))
                 .foregroundStyle(Tokens.Colors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let onRetry {
+            if let onRetry = self.onRetry {
                 Button(retryTitle, action: onRetry)
                     .font(AppFont.footnote(caps).weight(.semibold))
                     .foregroundStyle(Tokens.Colors.primary)

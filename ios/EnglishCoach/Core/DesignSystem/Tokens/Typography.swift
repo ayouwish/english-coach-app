@@ -46,7 +46,9 @@ enum AppFont {
         .system(size: CGFloat((caps.isChild ? 20 : 17) * caps.bodyFontScale), weight: .semibold)
     }
 
-    static let ipa = Font.system(size: 16, design: .monospaced)
+    static var ipa: Font {
+        .system(size: 16, design: .monospaced)
+    }
 
     static func score(_ caps: RoleCapabilities) -> Font {
         .system(size: caps.isChild ? 36 : 44, weight: .bold, design: .rounded)

@@ -44,7 +44,7 @@ struct AppButton: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(foreground)
-                } else if let icon {
+                } else if let icon = self.icon {
                     Image(systemName: icon)
                         .font(AppFont.button(caps))
                 }

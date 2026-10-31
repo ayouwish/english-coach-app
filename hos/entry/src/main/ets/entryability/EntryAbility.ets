@@ -17,7 +17,8 @@ const TAG: string = 'Ability';
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     AppRuntime.init(this.context);
-    hilog.info(DOMAIN, TAG, 'onCreate: %{public}s', want.bundleName);
+    const bundle = want.bundleName ? want.bundleName : '';
+    hilog.info(DOMAIN, TAG, 'onCreate bundle=%{public}s reason=%{public}d', bundle, launchParam.launchReason);
   }
 
   onDestroy(): void {

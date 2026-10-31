@@ -3,7 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppConfig } from '../config/AppConfig';
-import { TokenStore } from './TokenSession';
+import { TokenSession } from './TokenSession';
 import { ApiError, ApiErrorCode } from './ApiError';
 import { ErrorEnvelopeDto, RefreshBodyDto, TokenResponseDto } from './Dtos';
 import { FileUtil } from '../util/FileUtil';
@@ -114,7 +114,7 @@ export class ApiClient {
 
   /**
    * 发起请求（含 401 单飞刷新与一次重放）。
-   * 注意：重放仍 401 → 清 token 并抛 unauthorized，由调用方（SessionStore）统一跳登录。
+   * 注意：重放仍 401 → 清 token 并抛 unauthorized；由 VM 经 SessionStore.toUiError 统一回登录页。
    */
   static async request(req: ApiRequest): Promise<ApiRaw> {
     const first = await ApiClient.execute(req);
@@ -124,7 +124,7 @@ export class ApiClient {
     await ApiClient.refreshAccessToken();
     const second = await ApiClient.execute(req);
     if (second.status === 401) {
-      await TokenStore.clear();
+      await TokenSession.clear();
       throw new ApiError(ApiErrorCode.UNAUTHORIZED, 401, '登录已过期，请重新登录');
     }
     return second;
@@ -192,9 +192,9 @@ export class ApiClient {
   // ------------------------------------------------------------------ 内部实现
 
   private static async doRefresh(): Promise<void> {
-    const refreshToken = TokenStore.refreshToken();
+    const refreshToken = TokenSession.refreshToken();
     if (refreshToken.length === 0) {
-      await TokenStore.clear();
+      await TokenSession.clear();
       throw new ApiError(ApiErrorCode.UNAUTHORIZED, 401, '登录已失效，请重新登录');
     }
     const body: RefreshBodyDto = { refresh_token: refreshToken };
@@ -208,7 +208,7 @@ export class ApiClient {
     const raw = await ApiClient.execute(req);
 
     if (raw.status === 400 || raw.status === 401) {
-      await TokenStore.clear();
+      await TokenSession.clear();
       throw new ApiError(ApiErrorCode.UNAUTHORIZED, raw.status, '登录已过期，请重新登录');
     }
     if (raw.status !== 200) {
@@ -231,7 +231,7 @@ export class ApiClient {
     }
     const expiresIn = typeof dto.expires_in === 'number' ? dto.expires_in : 3600;
     const refreshExpiresIn = typeof dto.refresh_expires_in === 'number' ? dto.refresh_expires_in : 0;
-    await TokenStore.save(accessToken, newRefreshToken, expiresIn, refreshExpiresIn);
+    await TokenSession.save(accessToken, newRefreshToken, expiresIn, refreshExpiresIn);
   }
 
   private static async execute(req: ApiRequest): Promise<ApiRaw> {
@@ -246,7 +246,7 @@ export class ApiClient {
       header['Content-Type'] = 'multipart/form-data';
     }
     if (req.auth) {
-      const token = TokenStore.accessToken();
+      const token = TokenSession.accessToken();
       if (token.length > 0) {
         header['Authorization'] = 'Bearer ' + token;
       }
@@ -275,7 +275,8 @@ export class ApiClient {
       const result = response.result;
       if (req.wantBytes) {
         if (result instanceof ArrayBuffer) {
-          raw.bytes = new Uint8Array(result);
+          // slice(): 拷贝一份，避免 destroy() 之后仍持有同一个 ArrayBuffer 视图
+          raw.bytes = new Uint8Array(result).slice();
         }
       } else if (typeof result === 'string') {
         raw.text = result;

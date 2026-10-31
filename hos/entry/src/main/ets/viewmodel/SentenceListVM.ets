@@ -1,5 +1,6 @@
 import { AppConfig } from '../core/config/AppConfig';
-import { ErrorMapper, UiError } from '../core/error/UiError';
+import { UiError } from '../core/error/UiError';
+import { SessionStore } from '../core/session/SessionStore';
 import { SentenceDto } from '../core/net/Dtos';
 import { PracticeService } from '../core/service/PracticeService';
 
@@ -49,7 +50,7 @@ export class SentenceListVM {
       this.sentences = list;
       this.loadedOnce = true;
     } catch (err) {
-      this.error = ErrorMapper.from(err as Error, this.isChild);
+      this.error = SessionStore.toUiError(err as Error, this.isChild);
       this.hasError = true;
     } finally {
       this.loading = false;

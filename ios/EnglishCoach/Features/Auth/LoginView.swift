@@ -7,8 +7,8 @@ struct LoginView: View {
 
     var body: some View {
         Group {
-            if let viewModel {
-                LoginForm(viewModel: viewModel)
+            if let model = viewModel {
+                LoginForm(viewModel: model)
             } else {
                 ProgressView()
                     .tint(Tokens.Colors.primary)

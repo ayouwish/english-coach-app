@@ -48,7 +48,7 @@ export class LoginVM {
       const health = await PracticeService.health();
       this.serverStatus = LoginVM.describeHealth(health);
     } catch (err) {
-      const ui = ErrorMapper.from(err as Error, false);
+      const ui = SessionStore.toUiError(err as Error, false);
       this.serverStatus = ui.message;
     } finally {
       this.checkingServer = false;
@@ -86,7 +86,7 @@ export class LoginVM {
       this.baseUrl = normalized;
       await SessionStore.login(this.email.trim(), this.password);
     } catch (err) {
-      this.setError(ErrorMapper.from(err as Error, false));
+      this.setError(SessionStore.toUiError(err as Error, false));
     } finally {
       this.loading = false;
     }

@@ -2,7 +2,7 @@ import { http } from '@kit.NetworkKit';
 import { ApiClient, ApiRequest } from '../net/ApiClient';
 import { ApiError, ApiErrorCode } from '../net/ApiError';
 import { LoginBodyDto, MeResponseDto, RevokeBodyDto, TokenResponseDto, UsageDto, UserDto } from '../net/Dtos';
-import { TokenStore } from '../net/TokenSession';
+import { TokenSession } from '../net/TokenSession';
 
 /** 登录结果：user 来自 `/auth/token`（并尽量用 `/auth/me` 校正），usage 可能为 null。 */
 export class LoginResult {
@@ -44,7 +44,7 @@ export class AuthService {
     }
     const expiresIn = typeof dto.expires_in === 'number' ? dto.expires_in : 3600;
     const refreshExpiresIn = typeof dto.refresh_expires_in === 'number' ? dto.refresh_expires_in : 0;
-    await TokenStore.save(accessToken, refreshToken, expiresIn, refreshExpiresIn);
+    await TokenSession.save(accessToken, refreshToken, expiresIn, refreshExpiresIn);
 
     const result = new LoginResult();
     if (dto.user !== undefined && dto.user !== null) {
@@ -81,15 +81,15 @@ export class AuthService {
     if (firstUser !== undefined && firstUser !== null) {
       return first;
     }
-    if (!TokenStore.hasRefresh()) {
-      await TokenStore.clear();
+    if (!TokenSession.hasRefresh()) {
+      await TokenSession.clear();
       throw new ApiError(ApiErrorCode.UNAUTHORIZED, 200, '登录已失效，请重新登录');
     }
     await ApiClient.refreshAccessToken();
     const second = await AuthService.fetchMe();
     const secondUser = second.user;
     if (secondUser === undefined || secondUser === null) {
-      await TokenStore.clear();
+      await TokenSession.clear();
       throw new ApiError(ApiErrorCode.UNAUTHORIZED, 200, '登录已失效，请重新登录');
     }
     return second;
@@ -97,7 +97,7 @@ export class AuthService {
 
   /** POST /auth/revoke（204）；失败由调用方决定是否忽略。 */
   static async revoke(): Promise<void> {
-    const refreshToken = TokenStore.refreshToken();
+    const refreshToken = TokenSession.refreshToken();
     if (refreshToken.length === 0) {
       return;
     }

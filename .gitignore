@@ -2,6 +2,7 @@
 ios/build/
 ios/DerivedData/
 ios/Pods/
+ios/*.xcodeproj/
 ios/*.xcworkspace/xcuserdata/
 ios/**/xcuserdata/
 *.ipa

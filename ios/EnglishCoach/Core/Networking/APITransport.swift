@@ -71,14 +71,19 @@ final class HTTPClient: Sendable {
     }
 
     private static func makeRequest(endpoint: Endpoint, baseURL: URL, bearerToken: String?) throws -> URLRequest {
-        var components = URLComponents(
-            url: baseURL.appendingPathComponent(endpoint.path),
-            resolvingAgainstBaseURL: false
-        )
-        if !endpoint.query.isEmpty {
-            components?.queryItems = endpoint.query
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidBaseURL
         }
-        guard let url = components?.url else {
+        var path = components.path
+        if !path.hasSuffix("/") {
+            path += "/"
+        }
+        path += endpoint.path
+        components.path = path
+        if !endpoint.query.isEmpty {
+            components.queryItems = endpoint.query
+        }
+        guard let url = components.url else {
             throw APIError.invalidBaseURL
         }
 

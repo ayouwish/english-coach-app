@@ -6,8 +6,8 @@ struct PracticeListView: View {
 
     var body: some View {
         Group {
-            if let viewModel {
-                PracticeContent(viewModel: viewModel)
+            if let model = viewModel {
+                PracticeContent(viewModel: model)
             } else {
                 ProgressView()
                     .tint(Tokens.Colors.primary)
@@ -151,9 +151,9 @@ private struct PracticeContent: View {
                 }
 
                 LazyVStack(spacing: Tokens.Spacing.s12) {
-                    ForEach(Array(viewModel.sentences.enumerated()), id: \.element.id) { index, sentence in
+                    ForEach(viewModel.sentences.indices, id: \.self) { index in
                         NavigationLink(value: index) {
-                            SentenceRow(sentence: sentence)
+                            SentenceRow(sentence: viewModel.sentences[index])
                         }
                         .buttonStyle(.plain)
                     }

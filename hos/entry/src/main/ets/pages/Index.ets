@@ -28,7 +28,7 @@ import { SettingsPage } from './SettingsPage';
 @Entry
 @Component
 struct Index {
-  @StorageLink('session') session: SessionState = new SessionState();
+  @StorageLink('session') @Watch('onSessionChanged') session: SessionState = new SessionState();
   @State booting: boolean = true;
   @State bootErrorTitle: string = '';
   @State bootError: string = '';
@@ -41,6 +41,13 @@ struct Index {
 
   aboutToDisappear(): void {
     NavigationService.unbind();
+  }
+
+  /** 登出 / 会话过期：清空 push 出来的页面，根内容自动切回登录页。 */
+  onSessionChanged(): void {
+    if (!this.session.loggedIn) {
+      NavigationService.clear();
+    }
   }
 
   private async bootstrap(): Promise<void> {

@@ -78,6 +78,8 @@ export class AudioPlayer {
     player.audioRendererInfo = rendererInfo;
     try {
       await player.prepare();
+      // 先置为播放中再 play()：极短音频可能在 play() 返回前就 completed
+      this.playing = true;
       await player.play();
     } catch (err) {
       const e = err as BusinessError;
@@ -85,7 +87,6 @@ export class AudioPlayer {
       await this.release();
       throw ApiError.local(ApiErrorCode.PLAYBACK_FAILED, '声音播放失败');
     }
-    this.playing = true;
   }
 
   async stop(): Promise<void> {

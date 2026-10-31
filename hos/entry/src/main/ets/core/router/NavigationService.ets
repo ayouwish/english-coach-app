@@ -9,6 +9,15 @@ import { SentenceDto } from '../net/Dtos';
  * 在单 HAP + 无 HAR 拆分的 M0 里不值得引入这层复杂度。
  * 待办：M1 拆 HAR 时改为 `pushPathByName(name, param)` + `onReady` 读取。
  */
+/** 路由参数的占位类型：pushPathByName 的 param 需要 Object，不用字符串/null 以规避严格类型检查。 */
+export class NavParam {
+  name: string = '';
+
+  constructor(name: string) {
+    this.name = name;
+  }
+}
+
 export class NavigationService {
   private static stack: NavPathStack | null = null;
   private static selectedSentence: SentenceDto | null = null;
@@ -27,7 +36,7 @@ export class NavigationService {
     if (stack === null) {
       return;
     }
-    stack.pushPathByName(name, '');
+    stack.pushPathByName(name, new NavParam(name));
   }
 
   static openPractice(sentence: SentenceDto, level: string): void {

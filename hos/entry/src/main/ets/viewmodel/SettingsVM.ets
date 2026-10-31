@@ -5,7 +5,7 @@ import { HealthDto } from '../core/net/Dtos';
 import { CacheService } from '../core/service/CacheService';
 import { PracticeService } from '../core/service/PracticeService';
 import { SessionStore } from '../core/session/SessionStore';
-import { TokenStore } from '../core/net/TokenSession';
+import { TokenSession } from '../core/net/TokenSession';
 
 /** 设置页状态：服务器地址、健康检查、清缓存、退出登录。 */
 @Observed
@@ -38,7 +38,7 @@ export class SettingsVM {
       const health = await PracticeService.health();
       this.serverStatus = SettingsVM.describeHealth(health);
     } catch (err) {
-      const ui = ErrorMapper.from(err as Error, false);
+      const ui = SessionStore.toUiError(err as Error, false);
       this.serverStatus = ui.message;
     } finally {
       this.checkingServer = false;
@@ -67,7 +67,7 @@ export class SettingsVM {
       this.hasNotice = true;
       await this.checkServer();
     } catch (err) {
-      this.setError(ErrorMapper.from(err as Error, false).message);
+      this.setError(SessionStore.toUiError(err as Error, false).message);
     } finally {
       this.saving = false;
     }
@@ -94,7 +94,7 @@ export class SettingsVM {
   }
 
   tokenStorageNote(): string {
-    return TokenStore.isDegraded()
+    return TokenSession.isDegraded()
       ? '凭证保存在内存（本次运行有效）：系统安全存储当前不可用'
       : '凭证保存在系统安全存储（Asset Store）';
   }

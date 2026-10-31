@@ -29,7 +29,7 @@ struct UserProfile: Sendable, Equatable, Decodable {
     }
 
     var avatarEmoji: String {
-        if let avatar, !avatar.isEmpty {
+        if let avatar = self.avatar, !avatar.isEmpty {
             return avatar
         }
         return "🙂"

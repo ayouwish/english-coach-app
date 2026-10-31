@@ -25,7 +25,7 @@ const ERR_ASSET_NOT_FOUND: number = 24000001;
  * - 【待确认】若 `@kit.AssetStoreKit` 导入名与本机 SDK 不符，可换成 `@ohos.security.asset`，
  *   其余调用签名相同。
  */
-export class TokenStore {
+export class TokenSession {
   private static readonly ALIAS_ACCESS: string = 'ec_access_token';
   private static readonly ALIAS_REFRESH: string = 'ec_refresh_token';
   private static readonly KEY_ACCESS_EXP: string = 'accessExpiresAt';
@@ -40,54 +40,54 @@ export class TokenStore {
 
   /** 冷启动读取一次；之后全部走内存。 */
   static async load(): Promise<void> {
-    if (TokenStore.loaded) {
+    if (TokenSession.loaded) {
       return;
     }
-    TokenStore.access = await TokenStore.readSecret(TokenStore.ALIAS_ACCESS);
-    TokenStore.refresh = await TokenStore.readSecret(TokenStore.ALIAS_REFRESH);
-    TokenStore.accessExpiresAt = await AppConfig.getNumber(TokenStore.KEY_ACCESS_EXP, 0);
-    TokenStore.refreshExpiresAt = await AppConfig.getNumber(TokenStore.KEY_REFRESH_EXP, 0);
-    TokenStore.loaded = true;
+    TokenSession.access = await TokenSession.readSecret(TokenSession.ALIAS_ACCESS);
+    TokenSession.refresh = await TokenSession.readSecret(TokenSession.ALIAS_REFRESH);
+    TokenSession.accessExpiresAt = await AppConfig.getNumber(TokenSession.KEY_ACCESS_EXP, 0);
+    TokenSession.refreshExpiresAt = await AppConfig.getNumber(TokenSession.KEY_REFRESH_EXP, 0);
+    TokenSession.loaded = true;
   }
 
   static accessToken(): string {
-    return TokenStore.access;
+    return TokenSession.access;
   }
 
   static refreshToken(): string {
-    return TokenStore.refresh;
+    return TokenSession.refresh;
   }
 
   static hasAccess(): boolean {
-    return TokenStore.access.length > 0;
+    return TokenSession.access.length > 0;
   }
 
   static hasRefresh(): boolean {
-    return TokenStore.refresh.length > 0;
+    return TokenSession.refresh.length > 0;
   }
 
   /** Asset Store 是否降级为内存模式（设置页/诊断可展示）。 */
   static isDegraded(): boolean {
-    return TokenStore.degraded;
+    return TokenSession.degraded;
   }
 
   static accessExpiresAt(): number {
-    return TokenStore.accessExpiresAt;
+    return TokenSession.accessExpiresAt;
   }
 
   static refreshExpiresAt(): number {
-    return TokenStore.refreshExpiresAt;
+    return TokenSession.refreshExpiresAt;
   }
 
   /** 过期或在 skew 窗口内。M0 以服务端 401 为准，此方法用于后续主动刷新优化。 */
   static needsRefresh(now: number = Date.now(), skewMs: number = 60000): boolean {
-    if (!TokenStore.hasAccess()) {
+    if (!TokenSession.hasAccess()) {
       return true;
     }
-    if (TokenStore.accessExpiresAt <= 0) {
+    if (TokenSession.accessExpiresAt <= 0) {
       return false;
     }
-    return TokenStore.accessExpiresAt - skewMs <= now;
+    return TokenSession.accessExpiresAt - skewMs <= now;
   }
 
   /**
@@ -97,26 +97,26 @@ export class TokenStore {
   static async save(accessToken: string, refreshToken: string, expiresInSec: number,
     refreshExpiresInSec: number): Promise<void> {
     const now = Date.now();
-    await TokenStore.writeSecret(TokenStore.ALIAS_REFRESH, refreshToken);
-    await TokenStore.writeSecret(TokenStore.ALIAS_ACCESS, accessToken);
-    TokenStore.access = accessToken;
-    TokenStore.refresh = refreshToken;
-    TokenStore.accessExpiresAt = expiresInSec > 0 ? now + expiresInSec * 1000 : 0;
-    TokenStore.refreshExpiresAt = refreshExpiresInSec > 0 ? now + refreshExpiresInSec * 1000 : 0;
-    await AppConfig.putNumber(TokenStore.KEY_ACCESS_EXP, TokenStore.accessExpiresAt);
-    await AppConfig.putNumber(TokenStore.KEY_REFRESH_EXP, TokenStore.refreshExpiresAt);
-    TokenStore.loaded = true;
+    await TokenSession.writeSecret(TokenSession.ALIAS_REFRESH, refreshToken);
+    await TokenSession.writeSecret(TokenSession.ALIAS_ACCESS, accessToken);
+    TokenSession.access = accessToken;
+    TokenSession.refresh = refreshToken;
+    TokenSession.accessExpiresAt = expiresInSec > 0 ? now + expiresInSec * 1000 : 0;
+    TokenSession.refreshExpiresAt = refreshExpiresInSec > 0 ? now + refreshExpiresInSec * 1000 : 0;
+    await AppConfig.putNumber(TokenSession.KEY_ACCESS_EXP, TokenSession.accessExpiresAt);
+    await AppConfig.putNumber(TokenSession.KEY_REFRESH_EXP, TokenSession.refreshExpiresAt);
+    TokenSession.loaded = true;
   }
 
   static async clear(): Promise<void> {
-    TokenStore.access = '';
-    TokenStore.refresh = '';
-    TokenStore.accessExpiresAt = 0;
-    TokenStore.refreshExpiresAt = 0;
-    await TokenStore.removeSecret(TokenStore.ALIAS_ACCESS);
-    await TokenStore.removeSecret(TokenStore.ALIAS_REFRESH);
-    await AppConfig.putNumber(TokenStore.KEY_ACCESS_EXP, 0);
-    await AppConfig.putNumber(TokenStore.KEY_REFRESH_EXP, 0);
+    TokenSession.access = '';
+    TokenSession.refresh = '';
+    TokenSession.accessExpiresAt = 0;
+    TokenSession.refreshExpiresAt = 0;
+    await TokenSession.removeSecret(TokenSession.ALIAS_ACCESS);
+    await TokenSession.removeSecret(TokenSession.ALIAS_REFRESH);
+    await AppConfig.putNumber(TokenSession.KEY_ACCESS_EXP, 0);
+    await AppConfig.putNumber(TokenSession.KEY_REFRESH_EXP, 0);
   }
 
   // ---------------------------------------------------------------- Asset 封装
@@ -133,8 +133,8 @@ export class TokenStore {
 
   private static buildAttrs(alias: string, secret: string): asset.AssetMap {
     const attrs: asset.AssetMap = new Map();
-    attrs.set(asset.Tag.ALIAS, TokenStore.encode(alias));
-    attrs.set(asset.Tag.SECRET, TokenStore.encode(secret));
+    attrs.set(asset.Tag.ALIAS, TokenSession.encode(alias));
+    attrs.set(asset.Tag.SECRET, TokenSession.encode(secret));
     // 首次解锁后即可读（App 前台使用；重启后无需再次解锁）
     attrs.set(asset.Tag.ACCESSIBILITY, asset.Accessibility.DEVICE_FIRST_UNLOCKED);
     // 【待确认】SYNC_TYPE 自 API 12 提供；显式声明不参与云同步，避免 token 进备份。
@@ -145,15 +145,15 @@ export class TokenStore {
   /** 先 update（已存在），失败再 add（首次）；两次都失败则降级为内存模式。 */
   private static async writeSecret(alias: string, secret: string): Promise<void> {
     if (secret.length === 0) {
-      await TokenStore.removeSecret(alias);
+      await TokenSession.removeSecret(alias);
       return;
     }
-    if (TokenStore.degraded) {
+    if (TokenSession.degraded) {
       return;
     }
     const updateMap: asset.AssetMap = new Map();
-    updateMap.set(asset.Tag.ALIAS, TokenStore.encode(alias));
-    updateMap.set(asset.Tag.SECRET, TokenStore.encode(secret));
+    updateMap.set(asset.Tag.ALIAS, TokenSession.encode(alias));
+    updateMap.set(asset.Tag.SECRET, TokenSession.encode(secret));
     try {
       await asset.update(updateMap);
       return;
@@ -162,20 +162,20 @@ export class TokenStore {
       hilog.debug(DOMAIN, TAG, 'asset.update miss (code=%{public}d), trying add', ue.code);
     }
     try {
-      await asset.add(TokenStore.buildAttrs(alias, secret));
+      await asset.add(TokenSession.buildAttrs(alias, secret));
     } catch (addErr) {
       const ae = addErr as BusinessError;
-      TokenStore.degraded = true;
+      TokenSession.degraded = true;
       hilog.error(DOMAIN, TAG, 'asset.add failed (code=%{public}d), fallback to memory only', ae.code);
     }
   }
 
   private static async readSecret(alias: string): Promise<string> {
-    if (TokenStore.degraded) {
+    if (TokenSession.degraded) {
       return '';
     }
     const query: asset.AssetMap = new Map();
-    query.set(asset.Tag.ALIAS, TokenStore.encode(alias));
+    query.set(asset.Tag.ALIAS, TokenSession.encode(alias));
     query.set(asset.Tag.RETURN_TYPE, asset.ReturnType.ALL);
     try {
       const result: asset.AssetMap[] = await asset.query(query);
@@ -184,7 +184,7 @@ export class TokenStore {
       }
       const secret = result[0].get(asset.Tag.SECRET);
       if (secret instanceof Uint8Array) {
-        return TokenStore.decode(secret);
+        return TokenSession.decode(secret);
       }
       return '';
     } catch (err) {
@@ -192,18 +192,18 @@ export class TokenStore {
       if (e.code === ERR_ASSET_NOT_FOUND) {
         return '';
       }
-      TokenStore.degraded = true;
+      TokenSession.degraded = true;
       hilog.error(DOMAIN, TAG, 'asset.query failed (code=%{public}d), fallback to memory only', e.code);
       return '';
     }
   }
 
   private static async removeSecret(alias: string): Promise<void> {
-    if (TokenStore.degraded) {
+    if (TokenSession.degraded) {
       return;
     }
     const attrs: asset.AssetMap = new Map();
-    attrs.set(asset.Tag.ALIAS, TokenStore.encode(alias));
+    attrs.set(asset.Tag.ALIAS, TokenSession.encode(alias));
     try {
       await asset.remove(attrs);
     } catch (err) {

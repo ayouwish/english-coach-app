@@ -287,8 +287,8 @@ final class PracticeViewModel {
     }
 
     func playMyRecording() {
-        guard let lastRecording else { return }
-        try? player.play(url: lastRecording.url)
+        guard let recording = lastRecording else { return }
+        try? player.play(url: recording.url)
     }
 
     private func submit(audio: RecordedAudio) async {
