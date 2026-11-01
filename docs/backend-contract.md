@@ -6,10 +6,14 @@
 
 ---
 
-## 1. Bearer Token 认证【待后端新增 · **P0，阻塞 M0**】
+## 1. Bearer Token 认证【✅ 已实现（`english-coach` f0702db 之前上线，契约 v1.10 §18）】
 
 **动机（用户决定）**：**直接上 Bearer Token**，移动端不用 Cookie（ADR-0002 取代 ADR-0001）。
 理由：原生栈 Cookie 管理不可靠（鸿蒙 API 20 亦无自动管理）、多设备/吊销/推送都更需要 Token，且避免"先 Cookie 再迁移"的返工。
+
+**现状**：三接口已上线并有守卫 `check:auth`（31 项断言）：不透明 token（库里只存 sha256）、
+refresh **一次性轮换**（并发只有一个成功）、revoke 幂等且**连带吊销配对 access**、同邮箱连续失败 5 次 60s 内 429。
+客户端必须实现**单飞刷新**。
 
 ```
 POST /api/auth/token
@@ -84,7 +88,7 @@ POST /api/attempts/async 支持 header: Idempotency-Key: <client-uuid>
 
 | 项 | 何时做 | 阻塞客户端吗 |
 |---|---|---|
-| **Bearer Token** | **现在（P0）** | **阻塞移动端 M0** |
+| **Bearer Token** | ✅ **已实现** | 不阻塞；客户端按 §1 对接 |
 | `/api/version` | M0 之后尽快 | 不阻塞，但建议早做 |
 | 音频格式字段 | 可与 M0 同期 | 不阻塞（仅改善错误提示）|
 | 对话轮次发音 | 已实现（web）| 不阻塞 |
