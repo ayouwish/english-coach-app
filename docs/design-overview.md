@@ -204,6 +204,47 @@ refresh 也失败 → 清 token → 跳登录
 - 后端 voice：`POST /v1/image/avatar`、`/v1/image/illustrate` 支持 `character_desc`/`character_style`、`capabilities.image_avatar`
 - Web：`GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image`；`/api/story/[id]/illustrate` 自动带角色卡
 
+### 5.7 打印（单篇 / 多选故事集）
+
+```
+单篇：/story/[id]/print[?zh=1&lines=1]
+  标题（中英）+ 级别 + 日期；英文句子编号、≥14pt、宽松行距；
+  可选中文翻译（默认关）、可选书写留白线（默认关）；页脚手写 Name/Date
+故事集：/story/print?ids=a,b,c[&zh=1&lines=1]
+  封面（标题清单 + 共 N 篇 + 日期 + 姓名/日期栏）
+  → 每篇 `break-before: page` 另起一页 → 页脚「第 X / N 篇」
+入口：故事列表「☑️ 选择」多选（≤30 篇；工具条显示已选 N 篇 / 全选 / 取消）→「🖨️ 打印故事集」
+样式：白底黑字、隐藏导航与按钮、`window.print()`（浏览器「另存为 PDF」）
+越权：不属于自己的 story id → 忽略并提示，不泄漏内容；>30 → 截断为 30 并提示
+```
+
+### 5.8 跟读练习：游标与单句进步曲线
+
+```
+游标（按筛选分别记）：
+  scope = level:A2 / focus:th / all
+  GET /api/practice/cursor?scope=   → {position,total,sentence_id,updated_at} 或 null
+  PUT /api/practice/cursor          → 保存位置
+  进入 /practice：position>0 → 横幅「上次练到第 N 句」+ [▶ 继续上次] / [从头开始]
+  每练完一句**自动保存**（提交即存，不等异步评分）
+
+单句历史 + 曲线：
+  GET /api/sentences/:id/attempts?limit=20   （仅本人）
+  结果区「📈 这一句的历史（N 次）」：SVG 折线（≥2 次才画）+ 首末对比「41 → 78（+37）」
+  每次：日期 + 分数（仅家长可见）+ ▶ 回放（最多 10 条）；列表卡片可点「📈 历史」
+  儿童：不显示数字分、只显示鼓励；零 IPA
+```
+
+### 5.9 对话：随机性与自定义场景
+
+```
+场景随机变体：开 session 时随机抽 variation（persona/place/detail/goal/opening_line）
+  → 开场白用变体、turn 把 variation 传给 voice（禁止重复提问、已问 3 个换角度、温度 0.9）
+  → 历史回看用**当时存的那组**（老会话 NULL 走内置开场白兜底）
+自定义场景：POST/PATCH/DELETE /api/chat/scenarios（仅 owner；儿童强制 child；注入词 400）
+  → 与内置场景一起出现在列表（is_custom:true，自定义优先）
+```
+
 ### 5.6 盲测 / 诊断 / 家长面板
 
 - 盲测：`POST /api/attempts/async` 带 `blind_test_id`，结束 `POST /api/blind-tests/:id/finish`（只统计已评分）
