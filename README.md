@@ -258,8 +258,8 @@ AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `
 | `POST /api/attempts`（multipart audio） | 同步评测（跟读） |
 | `POST /api/attempts/async` · `GET /api/attempts/status?ids=` | 异步评测（连读） |
 | `POST /api/attempts/[id]/retry` · `GET /api/audio/[id]` | 重试评分 / 录音回放 |
-| `GET/PUT /api/practice/cursor?scope=` | **练习游标**（继续上次；按 level/focus 分别记）🔄 |
-| `GET /api/sentences/[id]/attempts?limit=20` | **单句历史**（进步曲线/回放，仅本人）🔄 |
+| `GET/PUT /api/practice/cursor?scope=` | **练习游标**（继续上次；按 level/focus 分别记）✅ |
+| `GET /api/sentences/[id]/attempts?limit=20` | **单句历史**（进步曲线/回放，仅本人）✅ |
 
 ### 6.3 对话
 | 端点 | 用途 |
@@ -305,6 +305,8 @@ AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `
 | `GET/POST /api/tts` | 示范音（`voice`/`rate`/`format`；不带 voice 回落账号偏好） |
 | `POST /api/ocr`（含 HEIC） | 拍照识别书页 |
 | `GET /api/parent/summary`、`GET/POST /api/suggestions` | 家长面板 / 提建议 |
+| `GET /api/words/[word]` · `GET /api/words?words=a,b,c` | **单词音标**（web 代理 voice `/v1/words/ipa`；LRU 500；未收录 404 `ipa:null`）|
+| `GET /v1/words/ipa?word=`（voice，契约 v1.18 §24）| cmudict 126k 词 → IPA；惰性加载 |
 | `GET /api/health` | `features` + voice `capabilities` |
 
 ---

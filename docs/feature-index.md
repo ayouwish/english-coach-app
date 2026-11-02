@@ -31,8 +31,9 @@
 | 重试评分 | `POST /api/attempts/:id/retry` | ✅ | 同上 |
 | 录音回放 | `GET /api/audio/:id` | ✅ | 同上 |
 | 示范音 | `POST /api/tts`、`GET /api/tts/voices` | ✅ | README §6.6 |
-| **练习游标（继续上次）** | `GET/PUT /api/practice/cursor`、页面 `/practice` | 🔄 task-84 | `design-overview.md` §5.1 |
-| **单句历史 + 进步曲线** | `GET /api/sentences/:id/attempts`、页面 `/practice` 结果区 | 🔄 task-84 | `design-overview.md` §5.1 |
+| **练习游标（继续上次）** | `GET/PUT /api/practice/cursor`、页面 `/practice` | ✅ | `design-overview.md` §5.1 |
+| **单句历史 + 进步曲线** | `GET /api/sentences/:id/attempts`、页面 `/practice` 结果区 | ✅ | `design-overview.md` §5.1 |
+| **点单词看音标（全页面）** | `GET /api/words/:word`、`GET /api/words?words=`（web 代理 voice `/v1/words/ipa`）| ✅ | README §6.7、`design-overview.md` §5.8、`screens-matrix.md` §9 |
 
 ## 3. 连读模式
 
@@ -86,6 +87,7 @@
 | 形象图片 | `GET /api/avatar/image` | ✅ | 同上 |
 | 性别与形象推荐 | `PATCH /api/settings {gender}` | ✅ | `screens-matrix.md` §7 |
 | 音色（9 种，含试听） | `GET /api/tts/voices`、`POST /api/tts` | ✅ | README §6.6 |
+| **单词音标开关**（成人默认开/儿童默认关）| `PATCH /api/settings {show_word_ipa}` | ✅ | `screens-matrix.md` §7 |
 | 照片生成形象（隐私策略关闭） | `POST /api/avatar`（照片）→ 403 `policy_disabled` | ✅ | README §1.4 |
 
 ## 7. 诊断 / 盲测 / 复习

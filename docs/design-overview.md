@@ -235,6 +235,16 @@ refresh 也失败 → 清 token → 跳登录
   儿童：不显示数字分、只显示鼓励；零 IPA
 ```
 
+### 5.8b 点单词显示音标（全页面）
+
+```
+任意英文文本（跟读句子/连读大字句/对话消息/故事全文/诊断错词）→ 按 /[\w'-]+/ 切词
+点击单词 → 下方浮层（PC 自动避让，窄屏底部 sheet）：think /θɪŋk/ 🔊 听发音 ✕
+  数据：GET /api/words/:word（web LRU 500）→ voice /v1/words/ipa（cmudict 126k 词，离线）
+  未收录 → 404 ipa:null → 「暂无音标」+ 🔊 仍可用（slow TTS 单词）
+  儿童：默认零 IPA（API 返回 ipa:null + ipa_disabled），设置「单词显示音标」由家长开启
+```
+
 ### 5.9 对话：随机性与自定义场景
 
 ```
