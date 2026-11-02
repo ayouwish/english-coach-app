@@ -10,6 +10,25 @@ iOS 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-coach`](../
 
 ---
 
+## 0.0 文档同步规则（每个新功能必须遵守）
+
+> 目的：**后端功能永远不领先于前端文档**。每次上线新功能，同一次变更里必须更新对应文档，否则客户端会掉队。
+
+动手加功能时按这个清单过一遍（详见 [`docs/feature-index.md`](docs/feature-index.md) §9）：
+
+- [ ] 接口：`english-coach/docs/api-contract.md`；web 层端点 → 本 README §6 + `docs/feature-index.md`
+- [ ] 页面/交互：`docs/screens-matrix.md`（含儿童差异）
+- [ ] 业务流：`docs/design-overview.md` §5（若新增流程）
+- [ ] 迁移：`english-coach/web/migrations/`（幂等）+ 本 README §3.2 迁移清单
+- [ ] 配置：`english-coach/deploy/.env.example` + 本 README §3.3 变量表
+- [ ] 验收：`english-coach/web/scripts/check-*.mjs` 加断言；必要时 `docs/acceptance-checklist.md`
+- [ ] 移动端影响：`ios/docs/*`、`hos/docs/*` 对应页面/接口章节
+- [ ] 登记：`docs/feature-index.md` 对应分组（状态 ✅/🔄/📋）
+
+**功能总索引** → [`docs/feature-index.md`](docs/feature-index.md)（功能 → 接口 → 页面 → 文档 → 状态）
+
+---
+
 ## 0. 怎么用这份 README
 
 | 你要做什么 | 看哪几节 |
@@ -40,6 +59,7 @@ iOS 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-coach`](../
 | **盲测周报** | 异步盲测、只统计已评分数 | 待评分条目单独显示，不进统计 |
 | **错音本 / 复习** | SRS 卡片 | `/api/review` |
 | **家长面板** | 汇总、家庭成员管理（可建多个账号、各自 CEFR 水平）、提建议、导出 | `/api/parent/summary`、`/api/family/members`、`/api/suggestions` |
+| **打印** | 单篇故事打印 / **多选故事集打印**（封面+分页，可含中文与书写线）| 页面 `/story/[id]/print`、`/story/print?ids=…` |
 
 ### 1.2 账号与设备
 
@@ -238,6 +258,8 @@ AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `
 | `POST /api/attempts`（multipart audio） | 同步评测（跟读） |
 | `POST /api/attempts/async` · `GET /api/attempts/status?ids=` | 异步评测（连读） |
 | `POST /api/attempts/[id]/retry` · `GET /api/audio/[id]` | 重试评分 / 录音回放 |
+| `GET/PUT /api/practice/cursor?scope=` | **练习游标**（继续上次；按 level/focus 分别记）🔄 |
+| `GET /api/sentences/[id]/attempts?limit=20` | **单句历史**（进步曲线/回放，仅本人）🔄 |
 
 ### 6.3 对话
 | 端点 | 用途 |
@@ -263,6 +285,8 @@ AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `
 | `POST /api/story/[id]/illustrate?force=1` | 生成插画（需 `capabilities.image`） |
 | `GET /api/story/[id]/audio/status` · `/audio` | **整段朗读回放**（异步预生成） |
 | `POST /api/story/retell` | 复述覆盖度（不评发音分） |
+| `GET /story/[id]/print[?zh=1&lines=1]` | **单篇打印页**（大字编号句 + 可选中文/书写线，`window.print()`）|
+| `GET /story/print?ids=a,b,c[&zh=1&lines=1]` | **多选故事集打印**（封面 + 每篇分页 + 页脚「第 X/N 篇」）|
 
 ### 6.5 诊断 / 盲测 / 复习
 | 端点 | 用途 |
