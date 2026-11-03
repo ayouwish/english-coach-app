@@ -285,19 +285,24 @@ export struct PitchChart {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Path({ commands: this.commands(this.reference) })
-        .width(this.chartWidth)
-        .height(this.chartHeight)
-        .stroke($r('app.color.ec_muted'))
-        .strokeWidth(1.5)
-        .strokeDashArray([4, 4])
-        .fillOpacity(0)
-      Path({ commands: this.commands(this.user) })
-        .width(this.chartWidth)
-        .height(this.chartHeight)
-        .stroke($r('app.color.ec_primary'))
-        .strokeWidth(2)
-        .fillOpacity(0)
+      // 空命令的 Path 在部分机型会渲染异常：没数据就不挂 Path
+      if (this.commands(this.reference).length > 0) {
+        Path({ commands: this.commands(this.reference) })
+          .width(this.chartWidth)
+          .height(this.chartHeight)
+          .stroke($r('app.color.ec_muted'))
+          .strokeWidth(1.5)
+          .strokeDashArray([4, 4])
+          .fillOpacity(0)
+      }
+      if (this.commands(this.user).length > 0) {
+        Path({ commands: this.commands(this.user) })
+          .width(this.chartWidth)
+          .height(this.chartHeight)
+          .stroke($r('app.color.ec_primary'))
+          .strokeWidth(2)
+          .fillOpacity(0)
+      }
       Text(this.maxHz() > 0 ? (Math.round(this.maxHz()).toString() + 'Hz') : '')
         .fontSize(EcFont.micro)
         .fontColor($r('app.color.ec_muted'))
@@ -354,12 +359,14 @@ export struct SparkLine {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Path({ commands: this.commands() })
-        .width(this.chartWidth)
-        .height(this.lineHeight)
-        .stroke($r('app.color.ec_primary'))
-        .strokeWidth(2)
-        .fillOpacity(0)
+      if (this.commands().length > 0) {
+        Path({ commands: this.commands() })
+          .width(this.chartWidth)
+          .height(this.lineHeight)
+          .stroke($r('app.color.ec_primary'))
+          .strokeWidth(2)
+          .fillOpacity(0)
+      }
     }
     .width('100%')
     .height(this.lineHeight)

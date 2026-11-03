@@ -7,6 +7,7 @@ import { F0Bars, ScoreRing, SubScoreBar } from '../components/ScoreViews';
 import { PitchChart, RadarChart, SparkLine } from '../components/Charts';
 import { WordText } from '../components/WordText';
 import { EcFont, EcRadius, EcShadow, EcScore, EcSpace } from '../design/DesignTokens';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { SentenceDto, WordScoreDto } from '../core/net/Dtos';
 import { PracticeService } from '../core/service/PracticeService';
 import { NavigationService } from '../core/router/NavigationService';
@@ -687,6 +688,8 @@ export struct PracticePage {
             kind: EcButtonKind.GHOST,
             btnWidth: '32%',
             onTap: () => {
+              hilog.info(0xEC00, 'PracticeDetail', 'open detail hasResult=%{public}s words=%{public}d idx=%{public}d',
+                this.vm.hasResult ? 'true' : 'false', this.vm.wordDetails.length, this.vm.index);
               this.detailShown = true;
             }
           })
@@ -1306,7 +1309,6 @@ export struct PracticePage {
           }
         })
         .margin({ left: EcSpace.x4, right: EcSpace.x4, bottom: EcSpace.x4 })
-        .bindContentCover($$this.detailShown, this.resultDetail())
       }
 
       Row({ space: EcSpace.x2 }) {
@@ -1342,5 +1344,7 @@ export struct PracticePage {
         void this.load(this.initialLevel());
       }
     })
+    // 全屏详细结果挂在页面根节点（而不是 Swiper）上：避免弹层与 Swiper 手势/重建互相影响
+    .bindContentCover($$this.detailShown, this.resultDetail())
   }
 }
