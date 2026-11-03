@@ -273,6 +273,26 @@ class StoryService(private val api: ApiClient) {
         return bytes
     }
 
+    /**
+     * 按服务端返回的 `image_url`（形如 `/api/materials/:id/image`）取图片字节。
+     * 插画接口 `illustrate()` 的响应里带这个路径，页面直接把它交给本方法即可。
+     */
+    suspend fun imageBytes(imageUrl: String): ByteArray {
+        var path = imageUrl
+        val index = imageUrl.indexOf("/api/")
+        if (index >= 0) path = imageUrl.substring(index + 4)
+        if (path.isEmpty() || !path.startsWith("/")) {
+            throw ApiError.local(ApiErrorCode.NOT_FOUND, "图片地址为空")
+        }
+        val raw = api.getBytes(path, null, DETAIL_TIMEOUT_MS)
+        api.requireOk(raw)
+        val bytes = raw.bytes
+        if (bytes == null || bytes.size < MIN_IMAGE_BYTES) {
+            throw ApiError(ApiErrorCode.BAD_RESPONSE, raw.status, "图片内容为空")
+        }
+        return bytes
+    }
+
     // ------------------------------------------------------------------ 内部
 
     private fun encodePath(segment: String): String =

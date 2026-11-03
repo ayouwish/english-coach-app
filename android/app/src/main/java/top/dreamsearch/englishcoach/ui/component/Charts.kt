@@ -33,7 +33,7 @@ import kotlin.math.ceil
  * 约定：
  * - 语调曲线用 `List<Float?>`，`null` = 该点无 F0 → 断线不画（不伪造 0）；
  * - 不画网格，只画 0 / 50 / 100 三条淡参考线（docs/design-system.md §5.1）；
- * - 分数颜色由调用方传（通常 `EcColor.primary` / `EcScore.color`）。
+ * - 线条颜色由调用方传（通常 `EcColor.primary` / `EcScore.color`）。
  */
 
 /**
@@ -64,15 +64,17 @@ fun EcLineChart(
         val chartHeight = size.height
         drawGridLines(width = width, height = chartHeight)
 
-        series.forEachIndexed { seriesIndex, points ->
-            if (points.isEmpty()) return@forEachIndexed
+        for (seriesIndex in series.indices) {
+            val points = series[seriesIndex]
+            if (points.isEmpty()) continue
             val color = colors.getOrNull(seriesIndex) ?: EcColor.primary
             val path = Path()
             var started = false
-            points.forEachIndexed { index, value ->
+            for (index in points.indices) {
+                val value = points[index]
                 if (value == null) {
                     started = false
-                    return@forEachIndexed
+                    continue
                 }
                 val x = if (maxLength <= 1) width / 2f else width * index / (maxLength - 1)
                 val ratio = ((value.coerceIn(minY, maxY) - minY) / range).coerceIn(0f, 1f)
@@ -121,8 +123,8 @@ fun EcBarChart(
             val gap = 4.dp.toPx()
             val barWidth = ((size.width - gap * (values.size - 1)) / values.size)
                 .coerceAtLeast(1.dp.toPx())
-            values.forEachIndexed { index, value ->
-                val ratio = (value / safeMax).coerceIn(0f, 1f)
+            for (index in values.indices) {
+                val ratio = (values[index] / safeMax).coerceIn(0f, 1f)
                 val barHeight = size.height * ratio
                 val left = index * (barWidth + gap)
                 drawRoundRect(
@@ -160,10 +162,11 @@ fun EcTrendChart(
             if (count == 0) return@Canvas
             val path = Path()
             var started = false
-            points.forEachIndexed { index, value ->
+            for (index in points.indices) {
+                val value = points[index]
                 if (value == null) {
                     started = false
-                    return@forEachIndexed
+                    continue
                 }
                 val x = xOf(index = index, count = count, width = size.width)
                 val ratio = (value.coerceIn(0f, 100f) / 100f)
@@ -184,8 +187,8 @@ fun EcTrendChart(
                     join = StrokeJoin.Round,
                 ),
             )
-            points.forEachIndexed { index, value ->
-                if (value == null) return@forEachIndexed
+            for (index in points.indices) {
+                val value = points[index] ?: continue
                 val x = xOf(index = index, count = count, width = size.width)
                 val ratio = (value.coerceIn(0f, 100f) / 100f)
                 val y = size.height - size.height * ratio
@@ -209,7 +212,8 @@ private fun DrawScope.drawGridLines(
 ) {
     val color = EcColor.border.copy(alpha = 0.6f)
     val stroke = 1.dp.toPx()
-    listOf(0f, 0.5f, 1f).forEach { ratio ->
+    val ratios = listOf(0f, 0.5f, 1f)
+    for (ratio in ratios) {
         val y = height - height * ratio
         drawLine(
             color = color,
@@ -227,15 +231,19 @@ private fun xOf(index: Int, count: Int, width: Float): Float =
 @Composable
 private fun ChartLabels(labels: List<String>, maxLabelCount: Int) {
     if (labels.isEmpty()) return
-    val step = if (maxLabelCount <= 0) 1 else ceil(labels.size.toFloat() / maxLabelCount).toInt().coerceAtLeast(1)
+    val step = if (maxLabelCount <= 0) {
+        1
+    } else {
+        ceil(labels.size.toFloat() / maxLabelCount).toInt().coerceAtLeast(1)
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        labels.forEachIndexed { index, label ->
+        for (index in labels.indices) {
             if (index % step == 0) {
                 Text(
-                    text = label,
+                    text = labels[index],
                     modifier = Modifier.weight(1f),
                     fontSize = EcFont.micro,
                     color = EcColor.muted,

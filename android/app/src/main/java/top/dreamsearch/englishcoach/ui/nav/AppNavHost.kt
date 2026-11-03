@@ -38,6 +38,11 @@ import top.dreamsearch.englishcoach.ui.page.story.StoryReviewScreen
 @Composable
 fun AppNavHost() {
     val nav = rememberNavController()
+    // 让 Tab 根页也能导航（见 Navigator 注释）
+    androidx.compose.runtime.DisposableEffect(nav) {
+        Navigator.bind(nav)
+        onDispose { Navigator.unbind() }
+    }
     val back: () -> Unit = { nav.popBackStack() }
     val goHome: () -> Unit = { nav.popBackStack(Routes.HOME, inclusive = false) }
 

@@ -1,5 +1,6 @@
 package top.dreamsearch.englishcoach.ui.nav
 
+import androidx.navigation.NavController
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -97,5 +98,38 @@ object TabNav {
         val value = pending.value
         pending.value = null
         return value
+    }
+}
+
+/**
+ * 全局导航句柄：让 **Tab 根页**（没有 navController 参数）也能 push/pop。
+ *
+ * 由 [AppNavHost] 在组合时 bind；Tab 内点击卡片/入口时：
+ * ```
+ * NavParams.storyMaterialId = id
+ * Navigator.navigate(Routes.STORY_DETAIL)
+ * ```
+ * 二级页仍优先用传入的 `onBack` 等回调（可测试、语义清晰）。
+ */
+object Navigator {
+    @Volatile
+    private var controller: NavController? = null
+
+    fun bind(nav: NavController) {
+        controller = nav
+    }
+
+    fun unbind() {
+        controller = null
+    }
+
+    fun navigate(route: String) {
+        controller?.navigate(route) { launchSingleTop = true }
+    }
+
+    fun pop(): Boolean = controller?.popBackStack() ?: false
+
+    fun popTo(route: String) {
+        controller?.popBackStack(route, inclusive = false)
     }
 }

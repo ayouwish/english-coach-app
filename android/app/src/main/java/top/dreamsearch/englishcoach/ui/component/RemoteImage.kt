@@ -93,7 +93,8 @@ fun RemoteImage(
 /** 读内存缓存 → 读磁盘缓存 → 走网络；失败返回 null（不抛）。 */
 private suspend fun loadImage(path: String, withAuth: Boolean): ImageBitmap? = withContext(Dispatchers.IO) {
     val key = (if (withAuth) "api:" else "url:") + path
-    ImageMemoryCache.get(key)?.let { return@withContext it }
+    val memory = ImageMemoryCache.get(key)
+    if (memory != null) return@withContext memory
 
     val cacheFile = runCatching {
         AppGraph.container.cache.imageFile(FileUtil.safeName(key), extensionOf(path))

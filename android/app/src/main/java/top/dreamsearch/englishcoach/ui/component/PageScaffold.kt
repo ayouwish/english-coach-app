@@ -40,8 +40,9 @@ import top.dreamsearch.englishcoach.ui.design.EcFont
  * - 自带「‹ 返回 + 标题 + 右侧动作」页头，处理状态栏 inset；
  * - 底部 `bottomBar`（可为空）自动加导航栏 inset；
  * - 内容最大宽度 960dp 居中（平板可拉伸，docs/design-system.md §8）；
- * - **内容区不会自动加内边距**：`content` 收到的 [PaddingValues] 由页面自己
- *   `Modifier.padding(paddingValues)` 使用（这样列表页可以在内边距里放 LazyColumn）。
+ * - **系统栏/页头内边距已由骨架自动应用**：`content` 收到的 [PaddingValues] 为
+ *   `PaddingValues.Zero`，页面照常写 `Modifier.padding(paddingValues)` 也不会重复加；
+ *   列表页直接放 `LazyColumn(Modifier.fillMaxSize())` 即可。
  * - `scrollable = true` 时内容区自动纵向滚动；内容里有 LazyColumn 的页面请保持默认 `false`。
  */
 @Composable
@@ -67,12 +68,13 @@ fun PageScaffold(
                 .align(Alignment.TopCenter)
                 .widthIn(max = 960.dp)
                 .fillMaxSize()
+                .padding(innerPadding)
             if (scrollable) {
                 Column(
                     modifier = layout.verticalScroll(rememberScrollState()),
-                ) { content(innerPadding) }
+                ) { content(PaddingValues.Zero) }
             } else {
-                Column(modifier = layout) { content(innerPadding) }
+                Column(modifier = layout) { content(PaddingValues.Zero) }
             }
         }
     }

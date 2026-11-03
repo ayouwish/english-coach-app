@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import top.dreamsearch.englishcoach.core.di.AppGraph
 import top.dreamsearch.englishcoach.ui.design.EcColor
@@ -42,7 +43,8 @@ fun WordText(
 ) {
     val enableIpa = showIpa && !isChild
     val bodySize = if (isChild) EcFont.childBody else EcFont.body
-    val lineHeight = bodySize * 1.5f
+    // 行高按 docs/design-system.md §2.2：body 16/24、child_body 19/28
+    val lineHeight = if (isChild) 28.sp else 24.sp
 
     if (!enableIpa) {
         Text(

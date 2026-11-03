@@ -41,13 +41,20 @@ class ChatService(private val api: ApiClient) {
 
     // ------------------------------------------------------------------ 场景
 
-    /** `GET /api/chat/scenarios[?include_child=1]` */
-    suspend fun scenarios(includeChild: Boolean = false): List<ChatScenarioDto> {
+    /**
+     * `GET /api/chat/scenarios[?include_child=1]` 的完整包装（含 `age` / `audience` /
+     * `custom_count` / `hidden_count` 等元信息，场景页分组与「已隐藏 N 个」提示要用）。
+     */
+    suspend fun scenariosPage(includeChild: Boolean = false): ChatScenarioListDto {
         val query = if (includeChild) mapOf("include_child" to "1") else null
         val raw = api.getJson("/chat/scenarios", query, LIST_TIMEOUT_MS)
         api.requireOk(raw)
-        return decodeBody<ChatScenarioListDto>(raw.text, "场景列表").scenarios
+        return decodeBody<ChatScenarioListDto>(raw.text, "场景列表")
     }
+
+    /** `GET /api/chat/scenarios[?include_child=1]` —— 只取场景数组（契约 §3.2 的签名）。 */
+    suspend fun scenarios(includeChild: Boolean = false): List<ChatScenarioDto> =
+        scenariosPage(includeChild).scenarios
 
     /**
      * 创建自定义场景（§2.3）。`audience` 传空串表示交给服务端按账号定（儿童强制 child）。

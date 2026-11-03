@@ -3,7 +3,7 @@
 > **用途**：客户端开发时按功能查"要调哪些接口、对应哪个页面、文档在哪"。
 > **维护规则**：后端每上线一个新功能/端点，**必须在同一次变更里更新本文件 + 相关文档**（见 `README.md` §0 的同步规则）。
 > **按批次回溯/验收** 见 [`release-notes.md`](release-notes.md)。
-> 最后更新：2026-11-03
+> 最后更新：2026-11-04
 
 图例：✅ 已实现（后端/Web 可用） · 🔄 进行中 · 📋 设计就绪未实现 · 📱 移动端 M0 已写代码（未编译）
 
@@ -125,3 +125,68 @@
 6. **验收**：`english-coach/web/scripts/check-*.mjs` 加断言；必要时更新 `docs/acceptance-checklist.md`
 7. **两端提示**：若影响移动端，更新 `ios/docs/*`、`hos/docs/*` 中对应页面/接口章节
 8. **本文件**：把新功能登记到对应分组（状态 ✅/🔄/📋）
+
+---
+
+## 10. Android 端（Kotlin/Compose）实现状态
+
+> **Android 版本以 [`android-feature-list.md`](android-feature-list.md) 为详细清单**（页面级功能点、接口总表、文档↔实现偏差、M1/M2 范围与页面级验收）。
+> 本章只是"功能 → Android 页面 → 状态"的速查；页面范围与签名以 [`../android/CONTRACT.md`](../android/CONTRACT.md) §5 为准。
+> 状态口径：**✅ 已实现**（代码在工作区且行为与鸿蒙一致）· **🚧 进行中**（已排期/已开工，尚未完成）· **⏭️ 延后**（本版不做）。
+> 快照时间：2026-11-04（Android 侧基础设施/组件/导航已落地，页面 UI 正在实现中）。
+
+### 10.1 基础设施与全局能力
+
+| 功能 | 对应 Android 页面/模块 | 状态 | 章节 |
+|---|---|---|---|
+| Bearer Token 登录 / 单飞刷新 / 吊销 | `core/net/ApiClient.kt`、`core/session/TokenStore.kt` | ✅ 已实现 | §1.1 |
+| 记住密码 + 冷启动自动登录 | `core/session/CredentialStore.kt` | ✅ 已实现 | §2.1 |
+| 会话/角色/儿童模式（`LocalIsChild`） | `core/session/SessionStore.kt`、`ui/design/EcTheme.kt` | ✅ 已实现 | §1.2 |
+| 错误码映射（成人/儿童两套文案） | `core/error/UiError.kt` | ✅ 已实现 | §1.6 |
+| 录音（m4a/16k/mono/65kbps）与播放互斥 | `core/audio/`（`MicPermission`、`Voices` 已落地；`AudioController` 待补） | 🚧 进行中 | §1.4、§1.5 |
+| 内置 9 音色常量 | `core/audio/Voices.kt` | ✅ 已实现 | §2.13 |
+| 点单词看音标 | `ui/component/WordText.kt`、`core/service/DictionaryService.kt` | ✅ 已实现 | §1.8 |
+| 能力开关缓存（image/ocr/avatar_presets） | 由 `AppGraph` + `/health` 服务层承接（页面接入中） | 🚧 进行中 | §1.7 |
+| 今日用量与限额（含前置禁用） | `SessionStore` + 各页面 | 🚧 进行中 | §1.3 |
+| 离线语料缓存 / TTS LRU / 提交队列 | — | ⏭️ 延后（鸿蒙亦未实现） | §1.9、§5.2 |
+| 打印 / 导出文件下载 | 移动端改为"复制全文 / 复制 Markdown" | ⏭️ 延后 | §2.5、§2.11 |
+
+### 10.2 页面
+
+| 功能（页面） | 对应 Android 页面 | 状态 | 章节 |
+|---|---|---|---|
+| 登录（含服务器地址/健康检查/演示账号） | `ui/page/auth/LoginScreen.kt` | 🚧 进行中 | §2.1 |
+| 跟读（卡片流/示范音/评测/结果区） | `ui/page/practice/PracticeScreen.kt` | 🚧 进行中 | §2.2 |
+| 跟读详细结果（全屏） | 契约未列 → 建议页内 sheet 或补 `PRACTICE_RESULT` 路由 | 🚧 待定（见 §2.2 备注） | §2.2 |
+| 连读 setup/running | `ui/page/flow/FlowScreen.kt` | 🚧 进行中 | §2.3 |
+| 连读汇总（再读一遍/鼓励语/本批复述入口） | `ui/page/flow/FlowSummaryScreen.kt` | 🚧 进行中 | §2.3 |
+| 对话场景列表（含自定义入口/受众开关） | `ui/page/chat/ChatScenariosScreen.kt` | 🚧 进行中 | §2.4 |
+| 对话会话（纯语音三步/整段回放） | `ui/page/chat/ChatSessionScreen.kt` | 🚧 进行中 | §2.4 |
+| 对话历史 / 详情 / 自定义场景 | `ChatHistoryScreen.kt`、`ChatDetailScreen.kt`、`ChatCustomScreen.kt` | 🚧 进行中 | §2.4 |
+| 故事列表 / 讲故事 / 详情 / 复述 | `StoryHomeScreen.kt`、`StoryRecordScreen.kt`、`StoryDetailScreen.kt`、`StoryReviewScreen.kt` | 🚧 进行中 | §2.5 |
+| 故事原声回放 + 复述记录持久化 | 同上（线上无接口，仅内存态） | ⏭️ 延后 | §2.5、§4 D-08/D-09 |
+| 盲测（开始/进行/结束/周报） | `ui/page/stats/BlindTestScreen.kt` | 🚧 进行中 | §2.6 |
+| 发音诊断（recent/all + 强化练习跳转） | `ui/page/stats/DiagnosisScreen.kt` | 🚧 进行中 | §2.7 |
+| 错音本（4 档评分） | `ui/page/stats/ReviewScreen.kt` | 🚧 进行中 | §2.8 |
+| 家长面板（403 兜底/盲测环比/剩余时长） | `ui/page/account/ParentScreen.kt` | 🚧 进行中 | §2.9 |
+| 家庭成员（CRUD + 重置密码） | `ui/page/account/FamilyScreen.kt` | 🚧 进行中 | §2.10、§2.16 |
+| 建议箱（5/3 分类 + 导出复制） | `ui/page/account/SuggestionsScreen.kt` | 🚧 进行中 | §2.11 |
+| 虚拟形象（预置库/风格/性别筛选） | `ui/page/account/AvatarScreen.kt` | 🚧 进行中 | §2.12 |
+| 音色（9 内置 + 试听 + 保存） | `ui/page/account/VoicesScreen.kt` | 🚧 进行中 | §2.13 |
+| 设置（偏好/地址/清缓存/退出） | `ui/page/account/SettingsScreen.kt` | 🚧 进行中 | §2.14 |
+| 服务状态（features/capabilities/force） | `ui/page/account/HealthScreen.kt` | 🚧 进行中 | §2.15 |
+| 独立"修改密码"页 | —（并入家庭成员页） | ⏭️ 延后 | §2.16 |
+| 句子列表页 | 契约 §5 有 `Routes.SENTENCES`；鸿蒙已弃用（改为卡片滑动） | ⏭️ 延后（建议不做） | §2.0、§2.2 |
+| 应用壳（启动三态 / 5 Tab / 跨 Tab 跳转） | `ui/AppRoot.kt`、`ui/HomeScreen.kt`、`ui/nav/AppNavHost.kt`、`ui/nav/Routes.kt` | 🚧 进行中 | §2.0 |
+
+### 10.3 数据层（DTO / Service）
+
+| 功能 | 对应 Android 模块 | 状态 | 章节 |
+|---|---|---|---|
+| 8 个 Service（Auth/Practice/Flow/Chat/Story/Account/Stats/Dictionary） | `core/service/*.kt` | ✅ 已实现 | §3 |
+| 6 组 DTO（Dtos/Flow/Chat/Story/Stats/Account） | `core/net/dto/*.kt` | ✅ 已实现 | §3 |
+| 线上不存在的接口规避（cursor / 单句 attempts / tts voices / story recordings） | 已按鸿蒙方案移植（本地游标 / `/attempts?limit` / 常量 / 直接 `/asr`） | ✅ 已实现（服务层） | §3.6、§4 D-01/02/08/10 |
+| 盲测同步提交 + 无分数 | `PracticeService.evaluate(..., blindTestId)` | ✅ 已实现（服务层） | §4 D-06 |
+
+> 变更规则同 §9：Android 侧新增/改变行为时，先改 `android-feature-list.md`，再回填本表状态。
+

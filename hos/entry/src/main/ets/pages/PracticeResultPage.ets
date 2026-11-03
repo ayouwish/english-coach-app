@@ -52,8 +52,19 @@ export struct PracticeResultPage {
     }, 20000);
   }
 
-  private weakestAxisText(): string {
-    let bestLabel = '';
+  /** 低于 60 分的词数（用于提示文案；列表只展示一遍） */
+  private needPracticeCount(): number {
+    let count = 0;
+    for (let i = 0; i < this.vm.wordDetails.length; i++) {
+      const score = this.vm.wordDetails[i].score;
+      if (score !== undefined && score !== null && score < 60) {
+        count = count + 1;
+      }
+    }
+    return count;
+  }
+
+  private weakestAxisText(): string {    let bestLabel = '';
     let bestValue = 101;
     const labels: string[] = ['准确', '流利', '完整', '节奏'];
     const values: number[] = [this.vm.scoreAccuracy, this.vm.scoreFluency,
@@ -85,7 +96,7 @@ export struct PracticeResultPage {
     Row({ space: 6 }) {
       Text(word)
         .fontSize(EcFont.caption)
-        .fontColor($r('app.color.ec_ink'))
+        .fontColor(score >= 0 && score < 60 ? $r('app.color.ec_bad_text') : $r('app.color.ec_ink'))
         .width(120)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -355,16 +366,9 @@ export struct PracticeResultPage {
       // ---- 6. 逐词得分 + 音素明细
       if (this.vm.wordDetails.length > 0 && !this.session.isChild) {
         this.sectionTitle('逐词得分')
-        if (this.vm.worstWordTexts.length > 0) {
-          Text('需要练的词（低于 60 分，按分数从低到高）')
-            .fontSize(EcFont.caption)
-            .fontColor($r('app.color.ec_warn_text'))
-            .width('100%')
-          ForEach(this.vm.worstWordTexts, (word: string, index: number) => {
-            this.wordBar(word, this.vm.worstWordScores[index])
-          }, (word: string, index: number) => 'w' + index.toString())
-        }
-        Text('逐词得分（句子顺序，越长越好）')
+        // 只列一遍（句子顺序）；低于 60 分的词标红即可，不再单独重复一遍「需要练的词」
+        Text('按句子顺序；红色 = 低于 60 分，需要重点练' +
+          (this.needPracticeCount() > 0 ? '（这一句有 ' + this.needPracticeCount().toString() + ' 个）' : ''))
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
           .width('100%')
