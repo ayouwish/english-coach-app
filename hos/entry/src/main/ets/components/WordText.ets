@@ -1,4 +1,3 @@
-import { EcFont } from '../design/DesignTokens';
 import { DictionaryService, WordIpaResult } from '../core/service/DictionaryService';
 import { AccountPrefs } from '../core/content/AccountPrefs';
 
@@ -9,12 +8,12 @@ class WordTok {
 }
 
 /**
- * 可点单词正文（task-87 / task-88）：点一下浮层**只显示音标**（无发音按钮）。
+ * 可点单词正文（task-87 / task-88）：点一下**只显示音标**（无发音按钮）。
  *
  * - 保留标点与空格；单词用 `Flex` 逐个渲染（长词不拆行）
- * - 浮层内容：单词 + `/ipa/`（多变体小字）+ 关闭提示
- * - 无音标 → 「暂无音标」（不报错）
- * - 设置关闭（showWordIpa=false）→ 「音标已关闭」提示去设置打开
+ * - 浮层用系统 AlertDialog 实现（跨机型最稳）：标题=单词，正文=`/ipa/`；
+ *   多变体追加「其它读音」；无音标 → 「暂无音标」；设置关闭 → 「音标已关闭」提示
+ * - 不提供发音按钮、不调 TTS
  */
 @Component
 export struct WordText {
@@ -24,13 +23,6 @@ export struct WordText {
   @Prop lineHeightVp: number = 26;
   @Prop inkColor: ResourceColor = $r('app.color.ec_ink');
   @State tokens: WordTok[] = [];
-  @State openWord: string = '';
-  @State ipa: string = '';
-  @State variants: string[] = [];
-  @State loading: boolean = false;
-  @State missing: boolean = false;
-  @State disabled: boolean = false;
-  @State popupShown: boolean = false;
 
   aboutToAppear(): void {
     this.rebuild();
@@ -85,80 +77,38 @@ export struct WordText {
     return out;
   }
 
+  private showIpaDialog(word: string, message: string): void {
+    this.getUIContext().showAlertDialog({
+      title: word,
+      message: message,
+      primaryButton: {
+        value: '知道了',
+        action: () => {
+        }
+      }
+    });
+  }
+
   private async tapWord(word: string): Promise<void> {
-    if (this.openWord === word && this.popupShown) {
-      this.popupShown = false;
-      this.openWord = '';
-      return;
-    }
-    this.openWord = word;
-    this.ipa = '';
-    this.variants = [];
-    this.missing = false;
-    this.disabled = false;
-    this.loading = true;
-    this.popupShown = true;
+    await AccountPrefs.ensure();
     if (!AccountPrefs.showWordIpa) {
-      await AccountPrefs.ensure();
-    }
-    if (!AccountPrefs.showWordIpa) {
-      this.loading = false;
-      this.disabled = true;
+      this.showIpaDialog(word, '音标已关闭；可在「设置 → 单词显示音标」里打开');
       return;
     }
     const result: WordIpaResult = await DictionaryService.wordIpa(word);
-    if (this.openWord !== word) {
+    if (result.disabled) {
+      this.showIpaDialog(word, '音标已关闭；可在「设置 → 单词显示音标」里打开');
       return;
     }
-    this.loading = false;
-    this.disabled = result.disabled;
-    this.missing = result.missing;
-    this.ipa = result.ipa;
-    this.variants = result.variants;
-  }
-
-  @Builder
-  ipaPopup() {
-    Column({ space: 4 }) {
-      Text(this.openWord)
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.ec_ink'))
-        .width('100%')
-      if (this.loading) {
-        Text('音标…')
-          .fontSize(12)
-          .fontColor($r('app.color.ec_muted'))
-          .width('100%')
-      } else if (this.disabled) {
-        Text('音标已关闭；可在「设置 → 单词显示音标」里打开')
-          .fontSize(12)
-          .fontColor($r('app.color.ec_muted'))
-          .width('100%')
-      } else if (this.ipa.length > 0) {
-        Text('/' + this.ipa + '/')
-          .fontSize(15)
-          .fontColor($r('app.color.ec_ink'))
-          .fontFamily('monospace')
-          .width('100%')
-        if (this.variants.length > 1) {
-          Text('其它读音：' + this.variants.slice(1).map((v: string) => '/' + v + '/').join(' '))
-            .fontSize(11)
-            .fontColor($r('app.color.ec_muted'))
-            .width('100%')
-        }
-      } else {
-        Text('暂无音标')
-          .fontSize(12)
-          .fontColor($r('app.color.ec_muted'))
-          .width('100%')
-      }
+    if (result.missing || result.ipa.length === 0) {
+      this.showIpaDialog(word, '暂无音标');
+      return;
     }
-    .padding(14)
-    .width(200)
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.ec_surface'))
-    .borderRadius(14)
+    let message = '/' + result.ipa + '/';
+    if (result.variants.length > 1) {
+      message += '　其它读音：' + result.variants.slice(1).map((v: string) => '/' + v + '/').join(' ');
+    }
+    this.showIpaDialog(word, message);
   }
 
   build() {
@@ -182,17 +132,5 @@ export struct WordText {
       }, (token: WordTok, index: number) => token.text + '_' + index.toString())
     }
     .width('100%')
-    .bindPopup($$this.popupShown, {
-      builder: this.ipaPopup(),
-      placement: Placement.Bottom,
-      enableArrow: true,
-      autoCancel: true,
-      onStateChange: (event: PopupStateChangeParam) => {
-        if (!event.isVisible) {
-          this.popupShown = false;
-          this.openWord = '';
-        }
-      }
-    })
   }
 }
