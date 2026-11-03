@@ -2,6 +2,7 @@
 
 > **用途**：客户端开发时按功能查"要调哪些接口、对应哪个页面、文档在哪"。
 > **维护规则**：后端每上线一个新功能/端点，**必须在同一次变更里更新本文件 + 相关文档**（见 `README.md` §0 的同步规则）。
+> **按批次回溯/验收** 见 [`release-notes.md`](release-notes.md)。
 > 最后更新：2026-11-03
 
 图例：✅ 已实现（后端/Web 可用） · 🔄 进行中 · 📋 设计就绪未实现 · 📱 移动端 M0 已写代码（未编译）
@@ -31,8 +32,9 @@
 | 重试评分 | `POST /api/attempts/:id/retry` | ✅ | 同上 |
 | 录音回放 | `GET /api/audio/:id` | ✅ | 同上 |
 | 示范音 | `POST /api/tts`、`GET /api/tts/voices` | ✅ | README §6.6 |
-| **练习游标（继续上次）** | `GET/PUT /api/practice/cursor`、页面 `/practice` | 🔄 task-84 | `design-overview.md` §5.1 |
-| **单句历史 + 进步曲线** | `GET /api/sentences/:id/attempts`、页面 `/practice` 结果区 | 🔄 task-84 | `design-overview.md` §5.1 |
+| **练习游标（继续上次）** | `GET/PUT /api/practice/cursor`、页面 `/practice` | ✅ | `design-overview.md` §5.1 |
+| **单句历史 + 进步曲线** | `GET /api/sentences/:id/attempts`、页面 `/practice` 结果区 | ✅ | `design-overview.md` §5.1 |
+| **点单词看音标（全页面，仅音标无发音）** | `GET /api/words/:word`、`GET /api/words?words=`（web 代理 voice `/v1/words/ipa`）| ✅ | README §6.7、`design-overview.md` §5.8b、`screens-matrix.md` §9 |
 
 ## 3. 连读模式
 
@@ -65,7 +67,8 @@
 |---|---|---|---|
 | 中文语音转文字 | `POST /api/asr?language=zh-CN[&provider=]`（默认智谱 GLM-ASR） | ✅ | README §6.4、§3.3 |
 | **原始录音留存（先落盘再转录）** | `POST /api/story/recordings`、`POST /:id/transcribe`、`GET /`、`GET /:id/audio` | ✅ | README §6.4、`design-overview.md` §5.4 |
-| 中文 → 分级英文改写 | `POST /api/story/rewrite`（`level` A1–C1、`max_sentences` 3–12） | ✅ | README §6.4、§3.3 |
+| 中文 → 分级英文改写 | `POST /api/story/rewrite`（`level` A1–C1、`max_sentences` 3–12、`tense` auto/past/present） | ✅ | README §6.4、§3.3 |
+| **叙事时态（默认过去时）** | `POST /api/story/rewrite` 的 `tense` + `warnings:["tense_mismatch"]` | ✅ | 同上 |
 | 人性化句子数默认 | 页面 `/story` + `/api/settings.story_sentences` | ✅ | 同上 |
 | 保存故事（回填 recording_id） | `POST /api/materials`（`kind=story`） | ✅ | README §6.4 |
 | 故事集列表/筛选 | `GET /api/materials?kind=story` | ✅ | 同上 |
@@ -74,7 +77,8 @@
 | 复述评估（覆盖度，不评发音分） | `POST /api/story/retell` | ✅ | README §6.4 |
 | 插画（默认关，可在设置开自动） | `POST /api/story/:id/illustrate`、`/api/settings.auto_illustrate` | ✅ | README §6.4、§1.3 |
 | 提示词可见 + 反馈 | 页面 `/story/[id]`（`prompt_used` + 提建议） | ✅ | `design-overview.md` §5.5 |
-| **打印（单篇）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | ✅ | README §6.4、`design-overview.md` §5.7 |
+| **打印（单篇·整页）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | ✅ | README §6.4、`design-overview.md` §5.7 |
+| **打印（单篇·A5 卡片）** | 页面 `/story/[id]/print?layout=card[&zh=1&lines=1]` | ✅ | 同上 |
 | **打印（多选故事集）** | 页面 `/story/print?ids=…[&zh=1&lines=1]` | ✅ | 同上 |
 
 ## 6. 虚拟形象 / 音色
@@ -86,6 +90,7 @@
 | 形象图片 | `GET /api/avatar/image` | ✅ | 同上 |
 | 性别与形象推荐 | `PATCH /api/settings {gender}` | ✅ | `screens-matrix.md` §7 |
 | 音色（9 种，含试听） | `GET /api/tts/voices`、`POST /api/tts` | ✅ | README §6.6 |
+| **单词音标开关**（成人默认开/儿童默认关）| `PATCH /api/settings {show_word_ipa}` | ✅ | `screens-matrix.md` §7 |
 | 照片生成形象（隐私策略关闭） | `POST /api/avatar`（照片）→ 403 `policy_disabled` | ✅ | README §1.4 |
 
 ## 7. 诊断 / 盲测 / 复习
