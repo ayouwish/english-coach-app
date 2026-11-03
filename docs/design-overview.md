@@ -173,13 +173,19 @@ refresh 也失败 → 清 token → 跳登录
 ### 5.4 故事模式（核心差异化）
 
 ```
-中文输入（文字 or 🎤 说中文 → /api/asr?language=zh-CN）
-  → POST /api/story/rewrite（按账号 CEFR 改写，A1–C1）
-  → 对照预览（可编辑）→ 保存（kind=story）
-  → 连读（异步评分）→ 鼓励语
+中文输入（文字 or 🎤 说中文 → /api/asr?language=zh-CN；中文默认走智谱 GLM-ASR，长音频自动切段）
+  → 原始录音先落盘：POST /api/story/recordings（失败仍 201，可重试转录，绝不丢原声）
+  → POST /api/story/rewrite（按账号 CEFR 改写，A1–C1；句子数 3–12，默认儿童 5 / 家长 8）
+      · 时态：tense=auto（默认）→ 中文叙事信号（了/过/昨天/那天/被…）→ 一般过去时；
+        习惯/现状 → 现在时；不符会重写一次，仍不符 → warnings:["tense_mismatch"]
+  → 对照预览（可编辑）→ 保存（kind=story，回填 recording_id）
+  → 连读（异步评分）→ 鼓励语 → 汇总页可「再读一遍」
   → 复述：录音 → ASR → POST /api/story/retell（覆盖度，不评发音分）
-  → 插画：POST /api/story/:id/illustrate（智谱，每天一张）
-  → 故事集：按日期分组、连续天数、录音回放、只看我的
+  → 插画（默认关，设置可开自动；手动 POST /api/story/:id/illustrate 约 ¥0.1）
+  → 整段朗读回放：GET /api/story/:id/audio/status → /audio（异步预生成）
+  → 原声回顾：详情「🗣️ 我当时讲的原话」= 中文原文 + 原始录音 + 转录状态
+  → 打印：整页练习纸 / A5 卡片（详见 §5.7）
+  → 故事集：按日期分组、连续天数、原声标记、只看我的
 ```
 
 ### 5.5 虚拟形象（M4+，Web 已实现）
@@ -204,17 +210,21 @@ refresh 也失败 → 清 token → 跳登录
 - 后端 voice：`POST /v1/image/avatar`、`/v1/image/illustrate` 支持 `character_desc`/`character_style`、`capabilities.image_avatar`
 - Web：`GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image`；`/api/story/[id]/illustrate` 自动带角色卡
 
-### 5.7 打印（单篇 / 多选故事集）
+### 5.7 打印（单篇整页 / 单篇卡片 / 多选故事集）
 
 ```
-单篇：/story/[id]/print[?zh=1&lines=1]
-  标题（中英）+ 级别 + 日期；英文句子编号、≥14pt、宽松行距；
+单篇·整页：/story/[id]/print[?zh=1&lines=1]
+  标题（中英）+ 级别 + 日期；英文句子编号 ≥14pt、宽松行距；
   可选中文翻译（默认关）、可选书写留白线（默认关）；页脚手写 Name/Date
+单篇·卡片：/story/[id]/print?layout=card[&zh=1&lines=1]
+  A5 卡片（148×210mm）居中 + 虚线裁切框 + 标题/级别/日期 + 编号句子 12pt + 姓名/日期栏；
+  工具栏可切换「整页练习纸 / A5 卡片」
 故事集：/story/print?ids=a,b,c[&zh=1&lines=1]
-  封面（标题清单 + 共 N 篇 + 日期 + 姓名/日期栏）
-  → 每篇 `break-before: page` 另起一页 → 页脚「第 X / N 篇」
-入口：故事列表「☑️ 选择」多选（≤30 篇；工具条显示已选 N 篇 / 全选 / 取消）→「🖨️ 打印故事集」
-样式：白底黑字、隐藏导航与按钮、`window.print()`（浏览器「另存为 PDF」）
+  封面（标题清单 + 共 N 篇 + 日期 + 姓名/日期栏）→ **封面独占第一页**（break-after: page）
+  → 之后**故事内容连续拼接**（不再每篇强制分页；长故事自然跨页）
+  标题 break-after: avoid；句子/书写线 break-inside: avoid（不劈开）
+入口：故事列表「☑️ 选择」多选（≤30 篇）→「🖨️ 打印故事集」；详情页有整页/卡片两个入口
+样式：白底黑字、隐藏导航与按钮、window.print()（浏览器「另存为 PDF」）
 越权：不属于自己的 story id → 忽略并提示，不泄漏内容；>30 → 截断为 30 并提示
 ```
 

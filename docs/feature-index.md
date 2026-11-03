@@ -67,7 +67,8 @@
 |---|---|---|---|
 | 中文语音转文字 | `POST /api/asr?language=zh-CN[&provider=]`（默认智谱 GLM-ASR） | ✅ | README §6.4、§3.3 |
 | **原始录音留存（先落盘再转录）** | `POST /api/story/recordings`、`POST /:id/transcribe`、`GET /`、`GET /:id/audio` | ✅ | README §6.4、`design-overview.md` §5.4 |
-| 中文 → 分级英文改写 | `POST /api/story/rewrite`（`level` A1–C1、`max_sentences` 3–12） | ✅ | README §6.4、§3.3 |
+| 中文 → 分级英文改写 | `POST /api/story/rewrite`（`level` A1–C1、`max_sentences` 3–12、`tense` auto/past/present） | ✅ | README §6.4、§3.3 |
+| **叙事时态（默认过去时）** | `POST /api/story/rewrite` 的 `tense` + `warnings:["tense_mismatch"]` | ✅ | 同上 |
 | 人性化句子数默认 | 页面 `/story` + `/api/settings.story_sentences` | ✅ | 同上 |
 | 保存故事（回填 recording_id） | `POST /api/materials`（`kind=story`） | ✅ | README §6.4 |
 | 故事集列表/筛选 | `GET /api/materials?kind=story` | ✅ | 同上 |
@@ -76,7 +77,8 @@
 | 复述评估（覆盖度，不评发音分） | `POST /api/story/retell` | ✅ | README §6.4 |
 | 插画（默认关，可在设置开自动） | `POST /api/story/:id/illustrate`、`/api/settings.auto_illustrate` | ✅ | README §6.4、§1.3 |
 | 提示词可见 + 反馈 | 页面 `/story/[id]`（`prompt_used` + 提建议） | ✅ | `design-overview.md` §5.5 |
-| **打印（单篇）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | ✅ | README §6.4、`design-overview.md` §5.7 |
+| **打印（单篇·整页）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | ✅ | README §6.4、`design-overview.md` §5.7 |
+| **打印（单篇·A5 卡片）** | 页面 `/story/[id]/print?layout=card[&zh=1&lines=1]` | ✅ | 同上 |
 | **打印（多选故事集）** | 页面 `/story/print?ids=…[&zh=1&lines=1]` | ✅ | 同上 |
 
 ## 6. 虚拟形象 / 音色
