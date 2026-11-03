@@ -24,8 +24,11 @@ iOS 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-coach`](../
 - [ ] 验收：`english-coach/web/scripts/check-*.mjs` 加断言；必要时 `docs/acceptance-checklist.md`
 - [ ] 移动端影响：`ios/docs/*`、`hos/docs/*` 对应页面/接口章节
 - [ ] 登记：`docs/feature-index.md` 对应分组（状态 ✅/🔄/📋）
+- [ ] **发布记录**：`docs/release-notes.md` 追加一节（功能 + commit + 验证方法），否则用户只能翻 commit list
 
 **功能总索引** → [`docs/feature-index.md`](docs/feature-index.md)（功能 → 接口 → 页面 → 文档 → 状态）
+
+**发布记录（按批次回溯 + 验收步骤）** → [`docs/release-notes.md`](docs/release-notes.md)
 
 ---
 
@@ -376,5 +379,7 @@ AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `
 
 **鸿蒙**：`hos/README.md`、`hos/docs/{architecture,audio,screens,design-system,permissions-and-privacy,roadmap,open-questions}.md`、`hos/docs/adr/*`
 
-**后端事实来源**：[`english-coach/docs/api-contract.md`](../english-coach/docs/api-contract.md)（v1.17）、
+**发布记录**：`docs/release-notes.md`（按日期批次：功能 + commit + 怎么验证）
+
+**后端事实来源**：[`english-coach/docs/api-contract.md`](../english-coach/docs/api-contract.md)（v1.18）、
 [`english-coach/voice/README.md`](../english-coach/voice/README.md)、[`english-coach/docs/deployment.md`](../english-coach/docs/deployment.md)
