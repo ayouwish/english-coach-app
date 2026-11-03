@@ -215,6 +215,18 @@ url='fd://'+fd → stateChange(initialized) → 设置 audioRendererInfo → pre
 - 构建：BUILD SUCCESSFUL（17 s 686 ms），已 `hdc install -r`；
 - 真机验证：需解锁后手动上滑/下滑确认（当前平板锁屏，脚本无法自动验证手势）。
 
+### 故事「重新生成整段朗读」加固（2026-11-04）
+
+服务端对**没有任何朗读录音**的故事也返回 `status:"failed"` + error（`attempt_count:0`），
+App 之前会照常渲染「🔄 重新生成整段朗读」；点它会对空故事触发强制拼接，体验差且用户反馈闪退。
+
+修复：
+
+- `checkAudio`：`failed && attempt_count===0` → 按 `no_audio` 处理，不再显示「重新生成」按钮，
+  文案改为「先读一遍这个故事，才能听整段朗读哦」；
+- `retryAudio`：入口校验 storyId、清空错误、全程 try/catch + hilog，避免任何异常逃逸；
+- 真机验证（儿童账号 兜兜）：打开未读过故事的详情 → 朗读卡只显示「先读一遍这个故事…」，无「重新生成」按钮 ✅
+
 ### 真机验证（2026-11-04 凌晨，v0.19/v0.20 功能）
 
 1. **故事朗读**：故事详情点「开始朗读」→ 连读 Tab 显示 `📖 My Morning Story`、`第 1 / 12 句`，可逐句录音 ✅

@@ -1,4 +1,5 @@
 import { UiError } from '../core/error/UiError';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   StoryCardItem,
   StoryGroup,
@@ -990,10 +991,19 @@ export class StoryDetailVM {
         this.audioStatusText = '正在生成整段回放…（可以先看文字）';
         this.scheduleAudioPoll();
       } else if (status === 'failed') {
-        this.audioState = 'failed';
-        const error = dto.error;
-        this.audioStatusText = (error === undefined || error.length === 0)
-          ? '整段朗读生成失败了，可以点「重新生成」' : error;
+        const attempts = dto.attempt_count === undefined ? 0 : dto.attempt_count;
+        if (attempts === 0) {
+          // 服务端对「没有任何朗读录音」的故事也回 failed+error；
+          // 这时根本没有可拼接的源，不要给「重新生成」（点了也只会得到 failed，还可能卡住）
+          this.audioState = 'no_audio';
+          this.audioStatusText = this.isChild
+            ? '先读一遍这个故事，才能听整段朗读哦' : '这个故事还没有可回放的朗读录音，先读一遍再来听吧';
+        } else {
+          this.audioState = 'failed';
+          const error = dto.error;
+          this.audioStatusText = (error === undefined || error.length === 0)
+            ? '整段朗读生成失败了，可以点「重新生成」' : error;
+        }
       } else {
         this.audioState = 'no_audio';
         const error = dto.error;
@@ -1058,7 +1068,11 @@ export class StoryDetailVM {
 
   /** failed 时按规格先 `GET /story/:id/audio?force=1` 触发重建，再轮询 status。 */
   async retryAudio(): Promise<void> {
+    if (this.storyId.length === 0) {
+      return;
+    }
     this.pollCount = 0;
+    this.audioError = '';
     this.audioState = 'building';
     this.audioStatusText = '正在重新生成整段朗读…';
     try {
@@ -1073,8 +1087,15 @@ export class StoryDetailVM {
       }
     } catch (err) {
       // force 重建失败（404 no_audio / 500 audio_failed）→ 落到 status 展示可读提示
+      const e = err as Error;
+      hilog.warn(0xEC00, 'StoryVM', 'retryAudio force build failed: %{public}s', e.message);
     }
-    await this.checkAudio(true);
+    try {
+      await this.checkAudio(true);
+    } catch (err) {
+      this.audioState = 'failed';
+      this.audioStatusText = '整段朗读暂时生成不了，可以稍后再试';
+    }
   }
 
   /** 播放「我当时讲的原话」——只有本次会话刚录的音才有文件。 */
