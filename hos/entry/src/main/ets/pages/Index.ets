@@ -30,6 +30,7 @@ import { SuggestionsPage } from './SuggestionsPage';
 import { AvatarPage } from './AvatarPage';
 import { VoicesPage } from './VoicesPage';
 import { HealthPage } from './HealthPage';
+import { PracticeResultPage } from './PracticeResultPage';
 
 /**
  * 应用根：Navigation + 会话门禁。
@@ -100,6 +101,10 @@ struct Index {
       NavDestination() {
         SettingsPage()
       }.title('设置').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.PRACTICE_RESULT) {
+      NavDestination() {
+        PracticeResultPage()
+      }.title('跟读结果').backgroundColor($r('app.color.ec_bg'))
     } else if (name === Routes.FLOW_SUMMARY) {
       NavDestination() {
         FlowSummaryPage()

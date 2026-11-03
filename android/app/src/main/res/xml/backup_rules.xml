@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- token 存 EncryptedSharedPreferences，绝不进备份；只备份非敏感偏好 -->
+<full-backup-content>
+    <include domain="sharedpref" path="ec_prefs.xml" />
+    <exclude domain="sharedpref" path="ec_tokens.xml" />
+    <exclude domain="sharedpref" path="ec_tokens_fallback.xml" />
+</full-backup-content>

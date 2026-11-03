@@ -326,8 +326,11 @@ export struct PitchChart {
     .backgroundColor($r('app.color.ec_surface_alt'))
     .borderRadius(10)
     .onAreaChange((oldValue: Area, newValue: Area) => {
-      const w = newValue.width as number;
-      if (w > 0 && Math.abs(w - this.chartWidth) > 1) {
+      // Area.width 可能是 string（如 '1408.00px'）或 number；直接 as number 会变 NaN，
+      // 导致 chartWidth 永远停在默认 320，曲线只画一小段（真机已验证过这个坑）
+      const rawWidth: Length = newValue.width;
+      const w: number = typeof rawWidth === 'number' ? rawWidth : Number.parseFloat(rawWidth as string);
+      if (Number.isFinite(w) && w > 0 && Math.abs(w - this.chartWidth) > 1) {
         this.chartWidth = w;
       }
     })
@@ -371,8 +374,11 @@ export struct SparkLine {
     .width('100%')
     .height(this.lineHeight)
     .onAreaChange((oldValue: Area, newValue: Area) => {
-      const w = newValue.width as number;
-      if (w > 0 && Math.abs(w - this.chartWidth) > 1) {
+      // Area.width 可能是 string（如 '1408.00px'）或 number；直接 as number 会变 NaN，
+      // 导致 chartWidth 永远停在默认 320，曲线只画一小段（真机已验证过这个坑）
+      const rawWidth: Length = newValue.width;
+      const w: number = typeof rawWidth === 'number' ? rawWidth : Number.parseFloat(rawWidth as string);
+      if (Number.isFinite(w) && w > 0 && Math.abs(w - this.chartWidth) > 1) {
         this.chartWidth = w;
       }
     })

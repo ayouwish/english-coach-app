@@ -3,6 +3,8 @@ export class Routes {
   static readonly LOGIN: string = 'login';
   static readonly SENTENCES: string = 'sentences';
   static readonly PRACTICE: string = 'practice';
+  /** 跟读结果详情 / 单句历史（全屏二级页） */
+  static readonly PRACTICE_RESULT: string = 'practice_result';
   static readonly SETTINGS: string = 'settings';
 
   // 连读

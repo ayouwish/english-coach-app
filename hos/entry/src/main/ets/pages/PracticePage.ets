@@ -13,6 +13,7 @@ import { PracticeService } from '../core/service/PracticeService';
 import { NavigationService } from '../core/router/NavigationService';
 import { Routes } from '../core/router/Routes';
 import { AppConfig } from '../core/config/AppConfig';
+import { PracticeResultStore } from '../core/session/PracticeResultStore';
 import { SessionState } from '../core/session/SessionStore';
 import { BlindRuntime } from '../core/session/BlindRuntime';
 import { PracticeFocus } from '../core/session/PracticeFocus';
@@ -36,6 +37,8 @@ export struct PracticePage {
   @State total: number = 0;
   /** 详细结果底部弹层（卡片本身不滚动，保证上下滑动切句手势） */
   @State detailShown: boolean = false;
+  /** 全屏详情的内容：result = 本次详细结果；history = 这一句的历史朗读 */
+  @State detailMode: string = 'result';
   /** 练习游标：上次读到第几句（0-based；-1 = 无） */
   @State resumeIndex: number = -1;
   private levels: string[] = ['A1', 'A2', 'B1', 'B2'];
@@ -159,6 +162,10 @@ export struct PracticePage {
     }
   }
 
+  private async openHistory(): Promise<void> {
+    PracticeResultStore.open(this.vm, 'history');
+  }
+
   private usageText(): string {
     const minutes = Math.round(this.session.minutesToday * 10) / 10;
     if (minutes <= 0) {
@@ -268,6 +275,16 @@ export struct PracticePage {
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
 
+        if (!this.vm.blindActive) {
+          Text('📈 历史')
+            .fontSize(EcFont.caption)
+            .fontColor($r('app.color.ec_primary'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .accessibilityText('查看这一句的历史朗读')
+            .onClick(() => {
+              void this.openHistory();
+            })
+        }
         Text(this.total > 0 ? ((this.vm.index + 1).toString() + ' / ' + this.total.toString()) : '')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
@@ -690,7 +707,7 @@ export struct PracticePage {
             onTap: () => {
               hilog.info(0xEC00, 'PracticeDetail', 'open detail hasResult=%{public}s words=%{public}d idx=%{public}d',
                 this.vm.hasResult ? 'true' : 'false', this.vm.wordDetails.length, this.vm.index);
-              this.detailShown = true;
+              PracticeResultStore.open(this.vm, 'result');
             }
           })
           EcButton({
@@ -1198,11 +1215,81 @@ export struct PracticePage {
     .alignItems(VerticalAlign.Center)
   }
 
+  /** 这一句的历史朗读（不依赖本次是否评分）：折线 + 首末对比 + 逐条回放。 */
+  @Builder
+  historyBody() {
+    Column({ space: EcSpace.x3 }) {
+      if (this.vm.historyLoading) {
+        LoadingBlock({ text: '正在读这一句的历史…' })
+      } else if (this.vm.historyScores.length === 0) {
+        Text(this.session.isChild ? '这一句还没有读过，先读一遍吧 🙂' : '这一句还没有历史记录，先读一遍再来看进步曲线')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_muted'))
+          .width('100%')
+          .padding({ top: EcSpace.x4 })
+      } else {
+        Text('共 ' + this.vm.historyScores.length.toString() + ' 次 · 这一句的进步曲线（旧→新）')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_muted'))
+          .width('100%')
+        SparkLine({ scores: this.vm.historyScores })
+        if (this.vm.historyFirst >= 0 && this.vm.historyLast >= 0) {
+          Row({ space: EcSpace.x2 }) {
+            Text('首末对比：' + Math.round(this.vm.historyFirst).toString() + ' → ' +
+              Math.round(this.vm.historyLast).toString())
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_ink'))
+            Text((this.vm.historyLast - this.vm.historyFirst >= 0 ? '+' : '') +
+              (Math.round((this.vm.historyLast - this.vm.historyFirst) * 10) / 10).toString())
+              .fontSize(EcFont.caption)
+              .fontColor(this.vm.historyLast >= this.vm.historyFirst ? $r('app.color.ec_good_text') :
+                $r('app.color.ec_bad_text'))
+          }
+          .width('100%')
+        }
+        Text('逐次记录（新→旧，可回放）')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_muted'))
+          .width('100%')
+        ForEach(this.vm.historyLabels, (label: string, index: number) => {
+          Row({ space: EcSpace.x2 }) {
+            Text(this.vm.historyLabels[this.vm.historyLabels.length - 1 - index])
+              .fontSize(EcFont.micro)
+              .fontColor($r('app.color.ec_muted'))
+              .width(96)
+            Text(Math.round(this.vm.historyScores[this.vm.historyScores.length - 1 - index]).toString())
+              .fontSize(EcFont.caption)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(EcScore.colorByMode(this.vm.historyScores[this.vm.historyScores.length - 1 - index],
+                this.session.isChild))
+              .width(40)
+            Blank()
+            if (this.vm.historyAttemptIds.length > index) {
+              Text(this.vm.playingHistoryId ===
+                this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index] ? '播放中…' : '▶ 回放')
+                .fontSize(EcFont.caption)
+                .fontColor($r('app.color.ec_primary'))
+                .padding({ left: EcSpace.x2, right: EcSpace.x2, top: 3, bottom: 3 })
+                .onClick(() => {
+                  void this.vm.playHistoryAudio(
+                    this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index]);
+                })
+            }
+          }
+          .width('100%')
+          .padding({ top: 4, bottom: 4 })
+        }, (label: string, index: number) => 'hh' + index.toString())
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
   @Builder
   resultDetail() {
     Column({ space: EcSpace.x2 }) {
       Row({ space: EcSpace.x2 }) {
-        Text('详细结果')
+        Text(this.detailMode === 'history' ? '📈 历史朗读' : '详细结果')
           .fontSize(EcFont.h3)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.ec_ink'))
@@ -1220,7 +1307,11 @@ export struct PracticePage {
       .alignItems(VerticalAlign.Center)
 
       Scroll() {
-        this.detailCard()
+        if (this.detailMode === 'history') {
+          this.historyBody()
+        } else {
+          this.detailCard()
+        }
       }
       .layoutWeight(1)
       .width('100%')
@@ -1343,8 +1434,10 @@ export struct PracticePage {
         this.vm.clearBlind();
         void this.load(this.initialLevel());
       }
+      // 从结果详情页点「再读一遍」回来：自动开始录音
+      if (PracticeResultStore.consumeRecordRequest()) {
+        void this.vm.startRecording();
+      }
     })
-    // 全屏详细结果挂在页面根节点（而不是 Swiper）上：避免弹层与 Swiper 手势/重建互相影响
-    .bindContentCover($$this.detailShown, this.resultDetail())
   }
 }

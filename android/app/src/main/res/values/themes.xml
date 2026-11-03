@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式不在 M1 范围（docs/design-system.md §9）：固定浅色，避免系统深色下组件不可读 -->
+    <style name="Theme.EnglishCoach" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ec_bg</item>
+        <item name="android:statusBarColor">@color/ec_bg</item>
+        <item name="android:navigationBarColor">@color/ec_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">@color/ec_primary</item>
+    </style>
+</resources>

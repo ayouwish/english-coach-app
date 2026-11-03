@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  家庭 NAS 通常只有局域网地址（http://192.168.x.x:3000），且自签 HTTPS 常见。
+  - cleartextTrafficPermitted=true：允许局域网 HTTP（AppConfig 会提示明文风险）
+  - trust-anchors 加 user：允许用户安装的家庭自签根证书（Android 7+ 默认不信任用户证书）
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
