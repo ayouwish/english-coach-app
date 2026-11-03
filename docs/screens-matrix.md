@@ -61,8 +61,9 @@
 | 故事集 | `GET /api/materials?kind=story` | 按日期分组、连续天数、只看我的 | 不显示分数 |
 | 故事详情 | `GET /api/materials/:id` | 英文全文 + **「🗣️ 我当时讲的原话」**（中文原文 + 原始录音播放 + 转录状态）+ 朗读录音回放 + 复述记录 | 分数仅家长 |
 | **整段朗读回放** | `GET /api/story/:id/audio/status`、`/audio[?force=1]` | 异步预生成；ready→200、building→202；单条录音直接返回 | 「听一听我读的故事」|
-| **打印（单篇）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | 大字编号句子、可选中文/书写线、白底黑字、`window.print()` | 「🖨️ 打印出来读」|
-| **打印（多选故事集）** | 页面 `/story/print?ids=a,b,c[&zh=1&lines=1]` | 列表「☑️ 选择」多选（≤30 篇）→ 封面 + 每篇分页 + 页脚「第 X/N 篇」；越权 id 忽略 | 大勾选框 |
+| **打印（单篇·整页）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | A4 整页练习纸：大字编号句子、可选中文/书写线、白底黑字、`window.print()` | 「🖨️ 打印出来读」|
+| **打印（单篇·卡片）** | 页面 `/story/[id]/print?layout=card[&zh=1&lines=1]` | **A5 卡片**（148×210mm）居中 + 虚线裁切框 + 标题/级别/日期 + 编号句子 12pt + 姓名/日期栏；工具栏可切换整页/卡片 | 「🖨️ 打印卡片出来读」|
+| **打印（多选故事集）** | 页面 `/story/print?ids=a,b,c[&zh=1&lines=1]` | 列表「☑️ 选择」多选（≤30 篇）→ **封面独占第一页（`break-after: page`）**，之后**故事内容连续拼接**（可一页多篇、长故事自然跨页）；句子/书写线 `break-inside: avoid`；越权 id 忽略 | 大勾选框 |
 | 复述 | `POST /api/story/retell` | 覆盖度，不评发音分 | 只看鼓励 |
 | 插画 | `POST /api/story/:id/illustrate` | 每天一张；**自动带用户的 `character_desc` + `avatar_style`**；失败可见；插画下方显示 `prompt_used` + 「这个提示词有问题」反馈（预填提建议）| 「给我画一张画」|
 | 虚拟形象（M4+）| `GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image` | 拍照/上传 + 5 风格（水彩/卡通/像素/剪纸/黏土）+ 角色卡可编辑 + 提示词可见；`capabilities.image_avatar=false` 时隐藏入口 | 「给我画一个我」|
