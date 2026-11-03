@@ -31,7 +31,7 @@
 
 | 页面 | 接口 | 要点 |
 |---|---|---|
-| 选来源 | `GET /api/sentences`、`GET /api/materials?kind=page`、`POST /api/ocr`（拍照）| 语料 / 我的书页 / 自己输入 / 拍照 |
+| 选来源 | `GET /api/sentences`、`GET /api/materials?kind=page`、`POST /api/ocr`（拍照）| 语料 / 我的书页 / 自己输入 / 拍照；**无参数进入默认「语料」**；`?material=<id>` 才自动载入材料 |
 | 逐句提交 | `POST /api/attempts/async` | 立即返回，不阻塞 |
 | 轮询进度 | `GET /api/attempts/status?ids=` | 1–2s，显示 待评分→评分中→分数 |
 | 汇总 | 本地聚合 | 平均分、最差 2–3 句、鼓励语 |
