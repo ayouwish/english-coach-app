@@ -34,7 +34,7 @@
 | 示范音 | `POST /api/tts`、`GET /api/tts/voices` | ✅ | README §6.6 |
 | **练习游标（继续上次）** | `GET/PUT /api/practice/cursor`、页面 `/practice` | ✅ | `design-overview.md` §5.1 |
 | **单句历史 + 进步曲线** | `GET /api/sentences/:id/attempts`、页面 `/practice` 结果区 | ✅ | `design-overview.md` §5.1 |
-| **点单词看音标（全页面）** | `GET /api/words/:word`、`GET /api/words?words=`（web 代理 voice `/v1/words/ipa`）| ✅ | README §6.7、`design-overview.md` §5.8、`screens-matrix.md` §9 |
+| **点单词看音标（全页面，仅音标无发音）** | `GET /api/words/:word`、`GET /api/words?words=`（web 代理 voice `/v1/words/ipa`）| ✅ | README §6.7、`design-overview.md` §5.8b、`screens-matrix.md` §9 |
 
 ## 3. 连读模式
 

@@ -239,10 +239,10 @@ refresh 也失败 → 清 token → 跳登录
 
 ```
 任意英文文本（跟读句子/连读大字句/对话消息/故事全文/诊断错词）→ 按 /[\w'-]+/ 切词
-点击单词 → 下方浮层（PC 自动避让，窄屏底部 sheet）：think /θɪŋk/ 🔊 听发音 ✕
+点击单词 → 下方浮层（PC 自动避让，窄屏底部 sheet）：**think /θɪŋk/ ✕（只显示音标，无发音按钮）**
   数据：GET /api/words/:word（web LRU 500）→ voice /v1/words/ipa（cmudict 126k 词，离线）
-  未收录 → 404 ipa:null → 「暂无音标」+ 🔊 仍可用（slow TTS 单词）
-  儿童：默认零 IPA（API 返回 ipa:null + ipa_disabled），设置「单词显示音标」由家长开启
+  未收录 → 404 ipa:null → 「暂无音标」
+  儿童：同样可看音标；设置「单词显示音标」默认开（可关）；**SSR 始终零 IPA**（点击后才经 API 下发）
 ```
 
 ### 5.9 对话：随机性与自定义场景
