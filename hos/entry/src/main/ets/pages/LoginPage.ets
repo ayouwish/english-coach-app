@@ -121,8 +121,45 @@ export struct LoginPage {
             .onChange((value: string) => {
               this.vm.password = value;
             })
+          Row({ space: EcSpace.x2 }) {
+            Column({ space: 1 }) {
+              Text('记住密码')
+                .fontSize(EcFont.caption)
+                .fontColor($r('app.color.ec_ink'))
+                .width('100%')
+              Text('下次打开自动登录（密码存在系统安全存储）')
+                .fontSize(EcFont.micro)
+                .fontColor($r('app.color.ec_muted'))
+                .width('100%')
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+            Toggle({ type: ToggleType.Switch, isOn: this.vm.rememberPassword })
+              .selectedColor($r('app.color.ec_primary'))
+              .onChange((isOn: boolean) => {
+                this.vm.setRememberPassword(isOn);
+              })
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+          if (this.vm.rememberHint.length > 0) {
+            Text(this.vm.rememberHint)
+              .fontSize(EcFont.micro)
+              .fontColor($r('app.color.ec_warn_text'))
+              .width('100%')
+          }
         }
         .width('100%')
+
+        if (this.vm.autoLogging) {
+          Row({ space: EcSpace.x2 }) {
+            LoadingProgress().width(16).height(16).color($r('app.color.ec_primary'))
+            Text('正在用记住的账号自动登录…')
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_primary'))
+          }
+          .width('100%')
+        }
 
         if (this.vm.hasError) {
           ErrorBanner({
@@ -132,6 +169,14 @@ export struct LoginPage {
             onAction: () => {
             }
           })
+        }
+
+        if (this.vm.storageDegraded) {
+          Text('本机安全存储不可用：登录状态与密码无法持久保存，下次打开需要重新登录。' +
+            (this.vm.storageDegradedDetail.length > 0 ? '（' + this.vm.storageDegradedDetail + '）' : ''))
+            .fontSize(EcFont.micro)
+            .fontColor($r('app.color.ec_warn_text'))
+            .width('100%')
         }
 
         EcButton({
@@ -145,7 +190,7 @@ export struct LoginPage {
         })
 
         Column({ space: EcSpace.x2 }) {
-          Text('演示账号（后端种子数据，可用环境变量修改）')
+          Text('演示账号（点一下只填邮箱；密码请向家长确认）')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))
             .width('100%')

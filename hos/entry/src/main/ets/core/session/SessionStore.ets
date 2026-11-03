@@ -4,6 +4,7 @@ import { UsageDto, UserDto } from '../net/Dtos';
 import { TokenSession } from '../net/TokenSession';
 import { AuthService } from '../service/AuthService';
 import { CacheService } from '../service/CacheService';
+import { CredentialStore } from './CredentialStore';
 
 /**
  * 全局会话状态（登录用户 / 角色 / 今日用量）。
@@ -91,6 +92,8 @@ export class SessionStore {
 
   /** 退出：先 revoke（失败也继续），再清 token + 缓存 + 全局状态。 */
   static async logout(): Promise<void> {
+    // 主动退出后不在本次进程内自动登录（记住的密码仍保留，下次启动可自动登录）
+    CredentialStore.markLoggedOut();
     try {
       await AuthService.revoke();
     } catch (err) {

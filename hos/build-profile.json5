@@ -1,15 +1,33 @@
 {
   "app": {
-    "signingConfigs": [],
+    // 签名配置由 DevEco Studio 自动生成（File → Project Structure → Signing Configs），
+    // 不要手写证书/Profile/密码；release 签名同理。
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\wangsimeng\\.ohos\\config\\default_hos_82NwO_UOw4JwIKKFeLY_ZTgCnSa729yVOMb7O3L02Ns=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BF40F2AA85AE525C7E7787B68BFB1D0B4A23C73A47620AA50B659437B621544EBB7C1746039BD2F",
+          "profile": "C:\\Users\\wangsimeng\\.ohos\\config\\default_hos_82NwO_UOw4JwIKKFeLY_ZTgCnSa729yVOMb7O3L02Ns=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\wangsimeng\\.ohos\\config\\default_hos_82NwO_UOw4JwIKKFeLY_ZTgCnSa729yVOMb7O3L02Ns=.p12",
+          "storePassword": "0000001BC315C3C3EBD14291CE5EB5D372ACAA5171BDAF9EB676A64F5BC2F9B1018EBC23C69D3A50491E73"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
+        "signingConfig": "default",
         "runtimeOS": "HarmonyOS",
-        // 【待确认】API 20 基线：三个版本号都写 20。
-        // 若 DevEco 报 “版本号格式不支持”，改为字符串形式 "6.0.0(20)"（HarmonyOS 6.0.0）。
-        "compileSdkVersion": 20,
-        "compatibleSdkVersion": 20,
-        "targetSdkVersion": 20
+        // HarmonyOS 工程：版本号必须是字符串 "x.y.z(api)"，不能写裸数字（schema 校验会报 must be string）。
+        // 不写 compileSdkVersion 时默认用 DevEco Studio 自带 SDK 编译。
+        // 2026-11-03 实际声明 "6.1.1(24)"：与本机 SDK、自动签名 profile 绑定的设备（MatePad Pro/API 24）一致。
+        // 设计要求的最低 API 20 见 README §0.1；要让 API 20 设备也能装时改回 "6.0.0(20)" 重新构建。
+        "compatibleSdkVersion": "6.1.1(24)",
+        "targetSdkVersion": "6.1.1(24)"
       }
     ],
     "buildModeSet": [

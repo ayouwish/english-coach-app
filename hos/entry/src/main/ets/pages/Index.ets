@@ -4,26 +4,42 @@ import { ErrorMapper, UiError } from '../core/error/UiError';
 import { NavigationService } from '../core/router/NavigationService';
 import { Routes } from '../core/router/Routes';
 import { CacheService } from '../core/service/CacheService';
+import { PracticeService } from '../core/service/PracticeService';
 import { SessionState, SessionStore } from '../core/session/SessionStore';
 import { EcButton, EcButtonKind } from '../components/EcButton';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingBlock } from '../components/LoadingBlock';
 import { EcFont, EcSpace } from '../design/DesignTokens';
 import { LoginPage } from './LoginPage';
-import { PracticePage } from './PracticePage';
-import { SentenceListPage } from './SentenceListPage';
+import { HomeTabs } from './HomeTabs';
 import { SettingsPage } from './SettingsPage';
+import { FlowSummaryPage } from './FlowSummaryPage';
+import { ChatSessionPage } from './ChatSessionPage';
+import { ChatHistoryPage } from './ChatHistoryPage';
+import { ChatDetailPage } from './ChatDetailPage';
+import { ChatCustomPage } from './ChatCustomPage';
+import { StoryRecordPage } from './StoryRecordPage';
+import { StoryDetailPage } from './StoryDetailPage';
+import { StoryReviewPage } from './StoryReviewPage';
+import { DiagnosisPage } from './DiagnosisPage';
+import { ReviewPage } from './ReviewPage';
+import { BlindTestPage } from './BlindTestPage';
+import { ParentPage } from './ParentPage';
+import { FamilyPage } from './FamilyPage';
+import { SuggestionsPage } from './SuggestionsPage';
+import { AvatarPage } from './AvatarPage';
+import { VoicesPage } from './VoicesPage';
+import { HealthPage } from './HealthPage';
 
 /**
  * 应用根：Navigation + 会话门禁。
  *
- * 结构（docs/architecture.md §4.3）：
- *   启动 → 读 Asset token → GET /auth/me
- *     ├─ 成功 → 根内容 = 语料列表（已登录首页）
- *     ├─ 需要登录 → 根内容 = 登录页
- *     └─ 网络失败 → 全屏错误 + 重试（不误清 token）
+ * 启动 → 读 Asset token → GET /auth/me
+ *   ├─ 成功 → 根内容 = HomeTabs（跟读/连读/对话/故事/我的）
+ *   ├─ 需要登录 → 根内容 = 登录页
+ *   └─ 网络失败 → 全屏错误 + 重试（不误清 token）
  *
- * 只有「跟读」「设置」是 push 出来的 NavDestination，其余是根内容。
+ * 所有二级页面都是 NavDestination（覆盖 Tab 栏，带返回）。
  */
 @Entry
 @Component
@@ -61,6 +77,14 @@ struct Index {
       }
       CacheService.cleanupOnBoot();
       await SessionStore.restore();
+      // 语音服务降级提示（voice.reachable=false 时首页顶部琥珀条）
+      try {
+        const health = await PracticeService.health();
+        const voice = health.voice;
+        AppStorage.setOrCreate<boolean>('voice_degraded', voice !== undefined && voice.reachable === false);
+      } catch (err) {
+        // 健康检查失败不影响进入 App
+      }
     } catch (err) {
       const ui: UiError = ErrorMapper.from(err as Error, false);
       this.bootErrorTitle = ui.title;
@@ -72,18 +96,78 @@ struct Index {
 
   @Builder
   pageMap(name: string) {
-    if (name === Routes.PRACTICE) {
-      NavDestination() {
-        PracticePage()
-      }
-      .title('跟读练习')
-      .backgroundColor($r('app.color.ec_bg'))
-    } else if (name === Routes.SETTINGS) {
+    if (name === Routes.SETTINGS) {
       NavDestination() {
         SettingsPage()
-      }
-      .title('设置')
-      .backgroundColor($r('app.color.ec_bg'))
+      }.title('设置').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.FLOW_SUMMARY) {
+      NavDestination() {
+        FlowSummaryPage()
+      }.title('连读汇总').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.CHAT_SESSION) {
+      NavDestination() {
+        ChatSessionPage()
+      }.title('对话中').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.CHAT_HISTORY) {
+      NavDestination() {
+        ChatHistoryPage()
+      }.title('对话历史').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.CHAT_DETAIL) {
+      NavDestination() {
+        ChatDetailPage()
+      }.title('对话详情').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.CHAT_CUSTOM) {
+      NavDestination() {
+        ChatCustomPage()
+      }.title('自定义场景').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.STORY_RECORD) {
+      NavDestination() {
+        StoryRecordPage()
+      }.title('讲故事').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.STORY_DETAIL) {
+      NavDestination() {
+        StoryDetailPage()
+      }.title('故事').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.STORY_REVIEW) {
+      NavDestination() {
+        StoryReviewPage()
+      }.title('复述故事').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.DIAGNOSIS) {
+      NavDestination() {
+        DiagnosisPage()
+      }.title('发音诊断').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.REVIEW) {
+      NavDestination() {
+        ReviewPage()
+      }.title('错音本').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.BLIND_TEST) {
+      NavDestination() {
+        BlindTestPage()
+      }.title('盲测').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.PARENT) {
+      NavDestination() {
+        ParentPage()
+      }.title('家长面板').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.FAMILY) {
+      NavDestination() {
+        FamilyPage()
+      }.title('家庭成员').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.SUGGESTIONS) {
+      NavDestination() {
+        SuggestionsPage()
+      }.title('建议箱').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.AVATAR) {
+      NavDestination() {
+        AvatarPage()
+      }.title('我的形象').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.VOICES) {
+      NavDestination() {
+        VoicesPage()
+      }.title('音色').backgroundColor($r('app.color.ec_bg'))
+    } else if (name === Routes.HEALTH) {
+      NavDestination() {
+        HealthPage()
+      }.title('服务状态').backgroundColor($r('app.color.ec_bg'))
     } else {
       NavDestination() {
         EmptyState({
@@ -94,9 +178,7 @@ struct Index {
             NavigationService.pop();
           }
         })
-      }
-      .title('')
-      .backgroundColor($r('app.color.ec_bg'))
+      }.title('').backgroundColor($r('app.color.ec_bg'))
     }
   }
 
@@ -152,14 +234,13 @@ struct Index {
 
   build() {
     Navigation(this.navStack) {
-      // Navigation 的首页内容只放一个容器，内部按启动态切换，避免条件渲染作为 Navigation 直接子节点
       Column() {
         if (this.booting) {
           this.launchView()
         } else if (this.bootError.length > 0) {
           this.bootErrorView()
         } else if (this.session.loggedIn) {
-          SentenceListPage()
+          HomeTabs()
         } else {
           LoginPage()
         }

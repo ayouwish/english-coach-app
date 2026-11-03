@@ -2,10 +2,14 @@
 
 iOS 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-coach`](../english-coach) 分离**——本仓库只放客户端工程与设计文档。
 
-> **当前状态（2026-11-02）**
+> **当前状态（2026-11-03）**
 > - 后端：**功能完整、已部署**（家庭 NAS，局域网 HTTPS），接口契约 `v1.17`
-> - 本仓库：**M0 垂直切片代码已落地**（iOS 25 个 Swift / 鸿蒙 32 个 ETS），但**从未编译、未在真机运行**
->   （生成环境没有 Xcode / DevEco / SDK）→ 第一次在各自 IDE 打开时出现编译错误属预期，需按报错逐个修
+> - iOS：M0 代码骨架已落地（需 macOS/Xcode 编译验证）
+> - 鸿蒙：**功能实现完成并真机跑通** —— 跟读卡片流与结果页（子项分/逐词/语调曲线/进步历史）、
+>   连读、对话、故事、诊断、复习、盲测、家长面板、家庭成员、建议箱、虚拟形象、音色、设置；
+>   2026-11-03 DevEco 6.1.1 干净构建通过（BUILD SUCCESSFUL）并安装到 MatePad Pro，
+>   详见 [`hos/docs/build-verification.md`](hos/docs/build-verification.md) V3。
+>   登录后全量接口联调待测试账号（线上种子密码被 `BOOTSTRAP_*` 覆盖）
 > - 设计文档：iOS/鸿蒙各 9–11 篇，见 `docs/`、`ios/docs/`、`hos/docs/`
 
 ---

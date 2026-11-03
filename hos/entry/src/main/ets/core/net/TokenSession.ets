@@ -33,10 +33,12 @@ export class TokenSession {
 
   private static access: string = '';
   private static refresh: string = '';
-  private static accessExpiresAt: number = 0;
-  private static refreshExpiresAt: number = 0;
+  // 字段名不能与下面的静态取值方法同名（ArkTS 报 Duplicate identifier），故用 ExpAt 后缀。
+  private static accessExpAt: number = 0;
+  private static refreshExpAt: number = 0;
   private static loaded: boolean = false;
   private static degraded: boolean = false;
+  private static degradedCode: number = 0;
 
   /** 冷启动读取一次；之后全部走内存。 */
   static async load(): Promise<void> {
@@ -45,8 +47,8 @@ export class TokenSession {
     }
     TokenSession.access = await TokenSession.readSecret(TokenSession.ALIAS_ACCESS);
     TokenSession.refresh = await TokenSession.readSecret(TokenSession.ALIAS_REFRESH);
-    TokenSession.accessExpiresAt = await AppConfig.getNumber(TokenSession.KEY_ACCESS_EXP, 0);
-    TokenSession.refreshExpiresAt = await AppConfig.getNumber(TokenSession.KEY_REFRESH_EXP, 0);
+    TokenSession.accessExpAt = await AppConfig.getNumber(TokenSession.KEY_ACCESS_EXP, 0);
+    TokenSession.refreshExpAt = await AppConfig.getNumber(TokenSession.KEY_REFRESH_EXP, 0);
     TokenSession.loaded = true;
   }
 
@@ -71,12 +73,17 @@ export class TokenSession {
     return TokenSession.degraded;
   }
 
+  /** 降级原因（最近一次写失败的 Asset 错误码；0 = 未知）。 */
+  static degradedReason(): string {
+    return TokenSession.degradedCode > 0 ? ('asset error ' + TokenSession.degradedCode.toString()) : '';
+  }
+
   static accessExpiresAt(): number {
-    return TokenSession.accessExpiresAt;
+    return TokenSession.accessExpAt;
   }
 
   static refreshExpiresAt(): number {
-    return TokenSession.refreshExpiresAt;
+    return TokenSession.refreshExpAt;
   }
 
   /** 过期或在 skew 窗口内。M0 以服务端 401 为准，此方法用于后续主动刷新优化。 */
@@ -84,10 +91,10 @@ export class TokenSession {
     if (!TokenSession.hasAccess()) {
       return true;
     }
-    if (TokenSession.accessExpiresAt <= 0) {
+    if (TokenSession.accessExpAt <= 0) {
       return false;
     }
-    return TokenSession.accessExpiresAt - skewMs <= now;
+    return TokenSession.accessExpAt - skewMs <= now;
   }
 
   /**
@@ -101,18 +108,18 @@ export class TokenSession {
     await TokenSession.writeSecret(TokenSession.ALIAS_ACCESS, accessToken);
     TokenSession.access = accessToken;
     TokenSession.refresh = refreshToken;
-    TokenSession.accessExpiresAt = expiresInSec > 0 ? now + expiresInSec * 1000 : 0;
-    TokenSession.refreshExpiresAt = refreshExpiresInSec > 0 ? now + refreshExpiresInSec * 1000 : 0;
-    await AppConfig.putNumber(TokenSession.KEY_ACCESS_EXP, TokenSession.accessExpiresAt);
-    await AppConfig.putNumber(TokenSession.KEY_REFRESH_EXP, TokenSession.refreshExpiresAt);
+    TokenSession.accessExpAt = expiresInSec > 0 ? now + expiresInSec * 1000 : 0;
+    TokenSession.refreshExpAt = refreshExpiresInSec > 0 ? now + refreshExpiresInSec * 1000 : 0;
+    await AppConfig.putNumber(TokenSession.KEY_ACCESS_EXP, TokenSession.accessExpAt);
+    await AppConfig.putNumber(TokenSession.KEY_REFRESH_EXP, TokenSession.refreshExpAt);
     TokenSession.loaded = true;
   }
 
   static async clear(): Promise<void> {
     TokenSession.access = '';
     TokenSession.refresh = '';
-    TokenSession.accessExpiresAt = 0;
-    TokenSession.refreshExpiresAt = 0;
+    TokenSession.accessExpAt = 0;
+    TokenSession.refreshExpAt = 0;
     await TokenSession.removeSecret(TokenSession.ALIAS_ACCESS);
     await TokenSession.removeSecret(TokenSession.ALIAS_REFRESH);
     await AppConfig.putNumber(TokenSession.KEY_ACCESS_EXP, 0);
@@ -142,20 +149,31 @@ export class TokenSession {
     return attrs;
   }
 
-  /** 先 update（已存在），失败再 add（首次）；两次都失败则降级为内存模式。 */
+  /** 最小属性集（某些机型/系统版本对 ACCESSIBILITY/SYNC_TYPE 组合报错时的兜底）。 */
+  private static buildMinimalAttrs(alias: string, secret: string): asset.AssetMap {
+    const attrs: asset.AssetMap = new Map();
+    attrs.set(asset.Tag.ALIAS, TokenSession.encode(alias));
+    attrs.set(asset.Tag.SECRET, TokenSession.encode(secret));
+    return attrs;
+  }
+
+  /** 先 update（已存在），失败再 add（首次）；只有**写**失败才降级为内存模式。 */
   private static async writeSecret(alias: string, secret: string): Promise<void> {
     if (secret.length === 0) {
       await TokenSession.removeSecret(alias);
       return;
     }
-    if (TokenSession.degraded) {
-      return;
-    }
     const updateMap: asset.AssetMap = new Map();
     updateMap.set(asset.Tag.ALIAS, TokenSession.encode(alias));
     updateMap.set(asset.Tag.SECRET, TokenSession.encode(secret));
+    // asset.update 的真实签名是 (query, attributesToUpdate) 两个参数：
+    // 第一个参数定位资产（ALIAS），第二个参数给出要更新的字段。
+    const queryMap: asset.AssetMap = new Map();
+    queryMap.set(asset.Tag.ALIAS, TokenSession.encode(alias));
     try {
-      await asset.update(updateMap);
+      await asset.update(queryMap, updateMap);
+      TokenSession.degraded = false;
+      TokenSession.degradedCode = 0;
       return;
     } catch (updateErr) {
       const ue = updateErr as BusinessError;
@@ -163,17 +181,27 @@ export class TokenSession {
     }
     try {
       await asset.add(TokenSession.buildAttrs(alias, secret));
+      TokenSession.degraded = false;
+      TokenSession.degradedCode = 0;
     } catch (addErr) {
       const ae = addErr as BusinessError;
-      TokenSession.degraded = true;
-      hilog.error(DOMAIN, TAG, 'asset.add failed (code=%{public}d), fallback to memory only', ae.code);
+      hilog.warn(DOMAIN, TAG, 'asset.add with full attrs failed (code=%{public}d), retry minimal', ae.code);
+      try {
+        // 兜底：去掉 ACCESSIBILITY/SYNC_TYPE 再试一次（部分机型组合属性会报错）
+        await asset.add(TokenSession.buildMinimalAttrs(alias, secret));
+        TokenSession.degraded = false;
+        TokenSession.degradedCode = 0;
+        return;
+      } catch (minErr) {
+        const me = minErr as BusinessError;
+        TokenSession.degraded = true;
+        TokenSession.degradedCode = me.code;
+        hilog.error(DOMAIN, TAG, 'asset.add failed (code=%{public}d), fallback to memory only', me.code);
+      }
     }
   }
 
   private static async readSecret(alias: string): Promise<string> {
-    if (TokenSession.degraded) {
-      return '';
-    }
     const query: asset.AssetMap = new Map();
     query.set(asset.Tag.ALIAS, TokenSession.encode(alias));
     query.set(asset.Tag.RETURN_TYPE, asset.ReturnType.ALL);
@@ -192,16 +220,13 @@ export class TokenSession {
       if (e.code === ERR_ASSET_NOT_FOUND) {
         return '';
       }
-      TokenSession.degraded = true;
-      hilog.error(DOMAIN, TAG, 'asset.query failed (code=%{public}d), fallback to memory only', e.code);
+      // 读失败不等于不能写：不在这里降级，留给 writeSecret 判定（否则首次启动读不到就永远不写）
+      hilog.warn(DOMAIN, TAG, 'asset.query failed (code=%{public}d), keep writable', e.code);
       return '';
     }
   }
 
   private static async removeSecret(alias: string): Promise<void> {
-    if (TokenSession.degraded) {
-      return;
-    }
     const attrs: asset.AssetMap = new Map();
     attrs.set(asset.Tag.ALIAS, TokenSession.encode(alias));
     try {
