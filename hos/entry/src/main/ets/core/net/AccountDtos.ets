@@ -48,6 +48,8 @@ export interface PrefsDto {
   ttsVoice?: string | null;
   /** slow | normal */
   ttsRate?: string;
+  /** 点单词显示音标（null = 默认开） */
+  showWordIpa?: boolean | null;
 }
 
 export interface SettingsResponseDto {
@@ -70,6 +72,8 @@ export interface SettingsPatchBodyDto {
   correction_level?: string;
   tts_rate?: string;
   tts_voice?: string | null;
+  /** 点单词显示音标（null = 默认开） */
+  show_word_ipa?: boolean | null;
 }
 
 // ---------------------------------------------------------------------------

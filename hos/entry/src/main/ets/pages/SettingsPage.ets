@@ -283,6 +283,26 @@ export struct SettingsPage {
           .width('100%')
       }
 
+      Row({ space: EcSpace.x2 }) {
+        Column({ space: EcSpace.x1 }) {
+          Text(this.vm.isChild ? '🔤 点单词看音标' : '🔤 单词显示音标')
+            .fontSize(EcFont.caption)
+            .fontColor($r('app.color.ec_ink'))
+          Text('点正文里的任意英文单词，浮层只显示 /音标/（默认开）')
+            .fontSize(EcFont.micro)
+            .fontColor($r('app.color.ec_muted'))
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        Toggle({ type: ToggleType.Switch, isOn: this.vm.showWordIpa })
+          .selectedColor($r('app.color.ec_primary'))
+          .onChange((isOn: boolean) => {
+            this.vm.showWordIpa = isOn;
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
       EcButton({
         label: this.vm.saving ? '保存中…' : '保存设置',
         kind: EcButtonKind.PRIMARY,

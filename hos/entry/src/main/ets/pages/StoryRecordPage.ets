@@ -44,6 +44,15 @@ export struct StoryRecordPage {
     }
   }
 
+  /** 直接开讲：先保存拿到 material_id，再进复述页「讲给我听」（不经过详情页）。 */
+  private async saveAndRetell(): Promise<void> {
+    const id = await this.vm.save();
+    if (id.length > 0) {
+      NavState.setStory(id, null);
+      NavigationService.push(Routes.STORY_REVIEW);
+    }
+  }
+
   private recordButtonLabel(): string {
     if (this.vm.recording) {
       return '⏹ 说完啦 ' + Math.floor(this.vm.elapsedMs / 1000).toString() + 's';
@@ -366,6 +375,19 @@ export struct StoryRecordPage {
         disabled: this.vm.busy || this.vm.sentences.length === 0,
         onTap: () => {
           this.readAloud();
+        }
+      })
+
+      // 生成后直接「讲给我听」：后台自动保存，再进复述页（不用先跳详情页）
+      EcButton({
+        label: this.vm.saving ? '保存中…' : (this.session.isChild ? '🎤 讲给我听听' : '🎤 直接讲给我听（复述这个故事）'),
+        kind: EcButtonKind.GHOST,
+        big: this.session.isChild,
+        btnWidth: '100%',
+        loading: this.vm.saving,
+        disabled: this.vm.busy || this.vm.sentences.length === 0,
+        onTap: () => {
+          void this.saveAndRetell();
         }
       })
     }

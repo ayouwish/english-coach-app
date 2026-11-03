@@ -5,6 +5,7 @@ import { LoadingBlock } from '../components/LoadingBlock';
 import { Chip } from '../components/EcBlocks';
 import { F0Bars, ScoreRing, SubScoreBar } from '../components/ScoreViews';
 import { PitchChart, RadarChart, SparkLine } from '../components/Charts';
+import { WordText } from '../components/WordText';
 import { EcFont, EcRadius, EcShadow, EcScore, EcSpace } from '../design/DesignTokens';
 import { SentenceDto, WordScoreDto } from '../core/net/Dtos';
 import { PracticeService } from '../core/service/PracticeService';
@@ -34,6 +35,8 @@ export struct PracticePage {
   @State total: number = 0;
   /** 详细结果底部弹层（卡片本身不滚动，保证上下滑动切句手势） */
   @State detailShown: boolean = false;
+  /** 练习游标：上次读到第几句（0-based；-1 = 无） */
+  @State resumeIndex: number = -1;
   private levels: string[] = ['A1', 'A2', 'B1', 'B2'];
   private swiper: SwiperController = new SwiperController();
   private started: boolean = false;
@@ -129,20 +132,23 @@ export struct PracticePage {
       const list = await PracticeService.sentences(level);
       this.total = list.length;
       this.vm.setup(list, 0, level, this.session.isChild);
+      this.resumeIndex = -1;
       if (list.length > 0) {
         // 练习游标（服务端 /practice/cursor 未部署，这里用本地偏好记「上次读到哪句」）
         const saved = await AppConfig.getString('practice_cursor_' + level, '');
-        let index = 0;
         if (saved.length > 0) {
           for (let i = 0; i < list.length; i++) {
             if (list[i].id === saved) {
-              index = i;
+              // 与 Web 一致：先显示「上次练到第 N 句」横幅，由用户选继续/从头
+              if (i > 0) {
+                this.resumeIndex = i;
+              }
               break;
             }
           }
         }
-        this.swiper.changeIndex(index);
-        this.vm.setIndex(index);
+        this.swiper.changeIndex(0);
+        this.vm.setIndex(0);
       }
     } catch (err) {
       this.loadError = this.session.isChild ? '没取到句子，再试一次吧' : '取句子失败，请检查网络后重试';
@@ -169,6 +175,39 @@ export struct PracticePage {
   }
 
   // ------------------------------------------------------------------ 页头
+
+  /** 练习游标横幅：上次练到第 N 句 → 继续上次 / 从头开始（与 Web 一致）。 */
+  @Builder
+  resumeBanner() {
+    Row({ space: EcSpace.x2 }) {
+      Text('上次练到第 ' + (this.resumeIndex + 1).toString() + ' 句（共 ' + this.total.toString() + ' 句）')
+        .fontSize(EcFont.caption)
+        .fontColor($r('app.color.ec_ink'))
+        .layoutWeight(1)
+      Text('▶ 继续上次')
+        .fontSize(EcFont.caption)
+        .fontColor($r('app.color.ec_primary'))
+        .padding({ left: EcSpace.x1, right: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .accessibilityText('继续上次练习')
+        .onClick(() => {
+          this.swiper.changeIndex(this.resumeIndex);
+          this.vm.setIndex(this.resumeIndex);
+          this.resumeIndex = -1;
+        })
+      Text('从头开始')
+        .fontSize(EcFont.micro)
+        .fontColor($r('app.color.ec_muted'))
+        .padding({ left: EcSpace.x1, right: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .onClick(() => {
+          void AppConfig.putString('practice_cursor_' + this.level, '');
+          this.resumeIndex = -1;
+        })
+    }
+    .width('100%')
+    .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x2, bottom: EcSpace.x2 })
+    .backgroundColor($r('app.color.ec_primary_soft'))
+    .alignItems(VerticalAlign.Center)
+  }
 
   @Builder
   blindBanner() {
@@ -310,12 +349,11 @@ export struct PracticePage {
       .width('100%')
       .alignItems(VerticalAlign.Center)
 
-      Text(item.text)
-        .fontSize(this.session.isChild ? 26 : EcFont.sentence)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.ec_ink'))
-        .lineHeight(this.session.isChild ? 38 : 34)
-        .width('100%')
+      WordText({
+        text: item.text,
+        fontSizeVp: this.session.isChild ? 26 : EcFont.sentence,
+        lineHeightVp: this.session.isChild ? 38 : 34
+      })
       if (item.translation_zh !== undefined && item.translation_zh.length > 0) {
         Text(item.translation_zh)
           .fontSize(EcFont.caption)
@@ -1242,6 +1280,9 @@ export struct PracticePage {
           }
         })
       } else {
+        if (this.resumeIndex > 0) {
+          this.resumeBanner()
+        }
         Swiper(this.swiper) {
           ForEach(this.vm.sentences, (item: SentenceDto) => {
             this.card(item)

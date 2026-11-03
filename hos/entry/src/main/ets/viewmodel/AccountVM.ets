@@ -63,6 +63,8 @@ export class AccountSettingsVM {
   /** '' = null（provider 默认音色） */
   ttsVoice: string = '';
   ttsRate: string = 'normal';
+  /** 点单词显示音标（默认开；关闭后点词只提示去设置打开） */
+  showWordIpa: boolean = true;
 
   // 用量
   usageMinutes: number = 0;
@@ -123,6 +125,8 @@ export class AccountSettingsVM {
         this.ttsVoice = (prefs.ttsVoice === undefined || prefs.ttsVoice === null) ? '' : prefs.ttsVoice;
         this.ttsRate = (prefs.ttsRate === undefined || prefs.ttsRate.length === 0)
           ? (this.isChild ? 'slow' : 'normal') : prefs.ttsRate;
+        this.showWordIpa = (prefs.showWordIpa === undefined || prefs.showWordIpa === null)
+          ? true : prefs.showWordIpa;
       }
       const usage = dto.usage;
       if (usage !== undefined) {
@@ -194,6 +198,8 @@ export class AccountSettingsVM {
         if (prefs.ttsRate !== undefined) {
           this.ttsRate = prefs.ttsRate;
         }
+        this.showWordIpa = (prefs.showWordIpa === undefined || prefs.showWordIpa === null)
+          ? true : prefs.showWordIpa;
       }
       const usage = dto.usage;
       if (usage !== undefined) {
@@ -240,6 +246,7 @@ export class AccountSettingsVM {
     body.correction_level = this.correctionLevel;
     body.tts_voice = this.ttsVoice.length === 0 ? null : this.ttsVoice;
     body.tts_rate = this.ttsRate;
+    body.show_word_ipa = this.showWordIpa;
     if (!this.isChild) {
       body.daily_limit_minutes = this.dailyLimit;
       body.allow_free_chat = this.allowFreeChat;

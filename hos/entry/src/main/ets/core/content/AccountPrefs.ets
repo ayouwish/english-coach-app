@@ -12,6 +12,8 @@ export class AccountPrefs {
   static ttsRate: string = '';
   static storySentences: number = 0;
   static autoIllustrate: boolean = false;
+  /** 点单词显示音标（null/未设置 = 默认开，成人儿童一致） */
+  static showWordIpa: boolean = true;
 
   static async ensure(): Promise<void> {
     if (AccountPrefs.loaded) {
@@ -30,6 +32,8 @@ export class AccountPrefs {
         AccountPrefs.ttsVoice = (voice === undefined || voice === null) ? '' : voice;
         const rate = prefs.ttsRate;
         AccountPrefs.ttsRate = (rate === undefined || rate === null) ? '' : rate;
+        const showIpa = prefs.showWordIpa;
+        AccountPrefs.showWordIpa = (showIpa === undefined || showIpa === null) ? true : showIpa;
       }
       const user = dto.user;
       if (user !== undefined && user !== null) {

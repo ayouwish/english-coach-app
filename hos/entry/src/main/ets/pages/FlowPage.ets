@@ -3,6 +3,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingBlock } from '../components/LoadingBlock';
 import { Chip } from '../components/EcBlocks';
+import { WordText } from '../components/WordText';
 import { ScoreRing, SubScoreBar } from '../components/ScoreViews';
 import { EcFont, EcRadius, EcScore, EcShadow, EcSpace } from '../design/DesignTokens';
 import { MaterialDto, SentenceDto } from '../core/net/Dtos';
@@ -35,14 +36,24 @@ export struct FlowPage {
     this.vm.onFinished = () => {
       this.openSummary();
     };
+    // 故事页点「朗读这个故事」后跳过来：优先消费请求，不要被 init 重置回 setup
+    if (StoryReadRequest.pending()) {
+      this.started = true;
+      this.consumeStoryRead();
+      return;
+    }
+    // 页面重建（例如从故事详情 clear 掉导航栈）时，连读正在跑：保持 running 而不是重置
+    if (this.vm.phase === FlowPhase.RUNNING && this.vm.items.length > 0) {
+      this.started = true;
+      this.vm.resume();
+      return;
+    }
     if (!this.started) {
       this.started = true;
       void this.vm.init();
     } else {
       this.vm.resume();
     }
-    // 故事页点「朗读这个故事」后跳过来：直接开始连读
-    this.consumeStoryRead();
   }
 
   private consumeStoryRead(): void {
@@ -747,12 +758,12 @@ export struct FlowPage {
   @Builder
   currentCard() {
     Column({ space: EcSpace.x3 }) {
-      Text(this.vm.currentItem() === null ? '' : (this.vm.currentItem() as FlowItem).text)
-        .fontSize(this.session.isChild ? 26 : EcFont.sentence)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.ink())
-        .lineHeight(this.session.isChild ? 38 : 34)
-        .width('100%')
+      WordText({
+        text: this.vm.currentItem() === null ? '' : (this.vm.currentItem() as FlowItem).text,
+        fontSizeVp: this.session.isChild ? 26 : EcFont.sentence,
+        lineHeightVp: this.session.isChild ? 38 : 34,
+        inkColor: this.ink()
+      })
 
       if (this.vm.recording || this.vm.preparing || this.vm.submitting) {
         Row({ space: EcSpace.x2 }) {

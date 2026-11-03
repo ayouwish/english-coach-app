@@ -591,6 +591,9 @@ export class StoryRecordVM {
       if (warnings.indexOf('too_many_sentences') >= 0) {
         warningText = '故事偏长（超过设定的句数），可以调高句子数，或删掉几句再保存';
       }
+      if (warnings.indexOf('tense_mismatch') >= 0) {
+        warningText = '时态可能和中文原意不一致（叙事一般用过去时），可以点「重新生成」再试一次';
+      }
     }
     this.warningText = warningText;
     const weak = dto.weak_phonemes_used;

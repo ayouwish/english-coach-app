@@ -100,6 +100,8 @@ export interface StoryRewriteBodyDto {
   max_sentences?: number;
   weak_phonemes?: string[];
   use_weak_phonemes?: boolean;
+  /** auto | past | present（叙事默认一般过去时，不符会自动重写一次） */
+  tense?: string;
 }
 
 export interface StoryRewriteDto {

@@ -12,6 +12,7 @@ import { StoryRetellRecord, StorySentenceItem } from '../core/net/StoryDtos';
 import { StoryDetailVM, StoryRuntime } from '../viewmodel/StoryVM';
 import { StoryService } from '../core/service/StoryService';
 import { ClipboardUtil } from '../core/util/ClipboardUtil';
+import { WordText } from '../components/WordText';
 import { CapabilityCache } from '../core/content/CapabilityCache';
 
 /**
@@ -292,10 +293,11 @@ export struct StoryDetailPage {
               .width(22)
               .textAlign(TextAlign.End)
               .margin({ top: 3 })
-            Text(item.en)
-              .fontSize(this.session.isChild ? EcFont.childBody : EcFont.body)
-              .fontColor($r('app.color.ec_ink'))
-              .lineHeight(this.session.isChild ? 30 : 26)
+            WordText({
+              text: item.en,
+              fontSizeVp: this.session.isChild ? EcFont.childBody : EcFont.body,
+              lineHeightVp: this.session.isChild ? 30 : 26
+            })
               .layoutWeight(1)
           }
           .width('100%')

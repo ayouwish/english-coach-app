@@ -172,7 +172,8 @@ export class StoryService {
       text_zh: textZh,
       level: level,
       max_sentences: maxSentences,
-      use_weak_phonemes: false
+      use_weak_phonemes: false,
+      tense: 'auto'
     };
     const raw = await ApiClient.postJson('/story/rewrite', JSON.stringify(body), true,
       StoryService.REWRITE_TIMEOUT_MS);

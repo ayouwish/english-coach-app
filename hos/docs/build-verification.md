@@ -215,6 +215,30 @@ url='fd://'+fd → stateChange(initialized) → 设置 audioRendererInfo → pre
 - 构建：BUILD SUCCESSFUL（17 s 686 ms），已 `hdc install -r`；
 - 真机验证：需解锁后手动上滑/下滑确认（当前平板锁屏，脚本无法自动验证手势）。
 
+### 故事「开始朗读」跳回问题修复（2026-11-04）
+
+现象：故事详情点「开始朗读」后只是返回/停在故事页，没有进入连读 reading。
+
+根因：`readAloud()` 只做了 `tab_index=1 + NavigationService.clear()`，但：
+
+1. `HomeTabs` 重建时没有按 `tab_index` 初始化（Tabs 初始 index 恒为 0）；
+2. `FlowPage` 重建时 `aboutToAppear` 先 `vm.init()` 把状态重置回 setup，即使已有故事朗读请求/正在运行。
+
+修复：
+
+- `HomeTabs`：`aboutToAppear` 按 `pendingTab` 初始化 `current`，`Tabs` 显式传 `index: this.current`；
+- `FlowPage`：`aboutToAppear` 先消费 `StoryReadRequest`（有请求就直接进入 running，不再 init）；
+  若 `FlowPhase.RUNNING` 且已有 items，则 `resume()` 而不是重置；
+- 真机验证：故事详情点「开始朗读」→ 切到连读 Tab，显示 `📖 My Morning Story`、`第 1 / 12 句` ✅
+
+另外本轮同步/补齐的 v0.19–v0.20 功能：
+
+- **点单词看音标**（跟读/连读/故事正文）：`GET /api/words/:word`，浮层只显示 `/ipa/`（无发音按钮），
+  设置新增「单词显示音标」开关（`show_word_ipa`，默认开）；实测接口 `think → θɪŋk`、未知词 404；
+- **故事时态修正**：`/story/rewrite` 带 `tense=auto`，`warnings:["tense_mismatch"]` 显示可读提示；
+- **故事预览直接「讲给我听」**：生成后自动保存并跳复述页（不用先进详情页）；
+- **练习游标横幅**：进入跟读显示「上次练到第 N 句」+「▶ 继续上次 / 从头开始」。
+
 ### 真机验证（2026-11-03 晚，MatePad Pro 2BD0223923005246，含两个真实 bug 修复）
 
 **已验证通过：**

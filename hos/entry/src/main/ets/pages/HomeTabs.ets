@@ -14,6 +14,13 @@ export struct HomeTabs {
   @State current: number = 0;
   private controller: TabsController = new TabsController();
 
+  aboutToAppear(): void {
+    // 从故事详情「开始朗读」跳回时 tab_index 已置 1；组件重建也要落到正确 Tab
+    if (this.pendingTab >= 0 && this.pendingTab < this.labels.length) {
+      this.current = this.pendingTab;
+    }
+  }
+
   onTabIndexChanged(): void {
     if (this.pendingTab !== this.current) {
       this.current = this.pendingTab;
@@ -65,7 +72,7 @@ export struct HomeTabs {
       if (this.voiceDegraded) {
         this.degradedBanner()
       }
-      Tabs({ barPosition: BarPosition.End, controller: this.controller }) {
+      Tabs({ barPosition: BarPosition.End, controller: this.controller, index: this.current }) {
         TabContent() {
           PracticePage()
         }.tabBar(this.tabBar(0))
