@@ -13,6 +13,14 @@ function fmt(v: number): string {
   return (Math.round(v * 10) / 10).toString();
 }
 
+/**
+ * Path 的 commands 使用**像素**坐标，而布局尺寸是 vp；直接写 vp 数值会让图形只有一半大
+ * （真机验证：雷达图缩成小菱形、折线只画半屏）。统一在生成 commands 时转成 px。
+ */
+function pxFmt(v: number): string {
+  return fmt(vp2px(v));
+}
+
 @Component
 export struct RadarChart {
   @Prop accuracy: number = -1;
@@ -62,16 +70,16 @@ export struct RadarChart {
 
   private ringCommands(ratio: number): string {
     const radius = this.maxR() * ratio;
-    let cmd = 'M ' + fmt(this.px(0, radius)) + ' ' + fmt(this.py(0, radius));
+    let cmd = 'M ' + pxFmt(this.px(0, radius)) + ' ' + pxFmt(this.py(0, radius));
     for (let i = 1; i < 4; i++) {
-      cmd = cmd + ' L ' + fmt(this.px(i, radius)) + ' ' + fmt(this.py(i, radius));
+      cmd = cmd + ' L ' + pxFmt(this.px(i, radius)) + ' ' + pxFmt(this.py(i, radius));
     }
     return cmd + ' Z';
   }
 
   private axisCommands(index: number): string {
-    return 'M ' + fmt(this.cx()) + ' ' + fmt(this.cy()) + ' L ' +
-      fmt(this.px(index, this.maxR())) + ' ' + fmt(this.py(index, this.maxR()));
+    return 'M ' + pxFmt(this.cx()) + ' ' + pxFmt(this.cy()) + ' L ' +
+      pxFmt(this.px(index, this.maxR())) + ' ' + pxFmt(this.py(index, this.maxR()));
   }
 
   private hasValue(index: number): boolean {
@@ -95,8 +103,8 @@ export struct RadarChart {
         continue;
       }
       const ratio = Math.max(0, Math.min(100, this.scoreOf(i))) / 100;
-      const x = fmt(this.px(i, this.maxR() * ratio));
-      const y = fmt(this.py(i, this.maxR() * ratio));
+      const x = pxFmt(this.px(i, this.maxR() * ratio));
+      const y = pxFmt(this.py(i, this.maxR() * ratio));
       cmd = cmd + (first ? 'M ' : ' L ') + x + ' ' + y;
       first = false;
     }
@@ -277,7 +285,7 @@ export struct PitchChart {
       }
       const x = left + (t / maxT) * width;
       const y = top + height - ((hz - min) / (max - min)) * height;
-      cmd = cmd + (penDown ? ' L ' : ' M ') + fmt(x) + ' ' + fmt(y);
+      cmd = cmd + (penDown ? ' L ' : ' M ') + pxFmt(x) + ' ' + pxFmt(y);
       penDown = true;
     }
     return cmd;
@@ -355,7 +363,7 @@ export struct SparkLine {
       const score = Math.max(0, Math.min(100, this.scores[i]));
       const x = 4 + step * i;
       const y = 4 + height - (score / 100) * height;
-      cmd = cmd + (i === 0 ? 'M ' : ' L ') + fmt(x) + ' ' + fmt(y);
+      cmd = cmd + (i === 0 ? 'M ' : ' L ') + pxFmt(x) + ' ' + pxFmt(y);
     }
     return cmd;
   }
