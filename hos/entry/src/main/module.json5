@@ -32,6 +32,27 @@
           }
         ]
       }
+    ],
+    // 权限申请时机（与 docs/audio.md、docs/permissions-and-privacy.md 一致）：
+    // - INTERNET：系统权限（normal），安装即授予，不弹窗。
+    // - MICROPHONE：user_grant，必须在“用户第一次点录音”时运行时申请
+    //   （abilityAccessCtrl.requestPermissionsFromUser），失败给“去设置”引导；
+    //   不在启动时申请，避免无上下文的权限弹窗被拒。
+    // 不申请 CAMERA：拍照识别走系统 cameraPicker（M2）。
+    "requestPermissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      },
+      {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:reason_microphone",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      }
     ]
   }
 }

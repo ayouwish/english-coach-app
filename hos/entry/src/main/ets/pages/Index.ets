@@ -1,4 +1,5 @@
 import { AppConfig } from '../core/config/AppConfig';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppRuntime } from '../core/config/AppRuntime';
 import { ErrorMapper, UiError } from '../core/error/UiError';
 import { NavigationService } from '../core/router/NavigationService';
@@ -49,6 +50,8 @@ struct Index {
   @State booting: boolean = true;
   @State bootErrorTitle: string = '';
   @State bootError: string = '';
+  /** 诊断用：错误码 + 当前服务器地址（连不上时显示在错误页，便于定位） */
+  @State bootErrorCode: string = '';
   private navStack: NavPathStack = new NavPathStack();
 
   aboutToAppear(): void {
@@ -90,6 +93,9 @@ struct Index {
       const ui: UiError = ErrorMapper.from(err as Error, false);
       this.bootErrorTitle = ui.title;
       this.bootError = ui.message;
+      this.bootErrorCode = ui.code + ' · ' + AppConfig.getBaseUrl();
+      hilog.error(0xEC00, 'Bootstrap', 'boot failed code=%{public}s err=%{public}s base=%{public}s',
+        ui.code, (err as Error).message, AppConfig.getBaseUrl());
     } finally {
       this.booting = false;
     }
@@ -112,7 +118,10 @@ struct Index {
     } else if (name === Routes.CHAT_SESSION) {
       NavDestination() {
         ChatSessionPage()
-      }.title('对话中').backgroundColor($r('app.color.ec_bg'))
+      }
+      // 页面自带 TopBar（返回 + 场景名 + 结束），再显示系统标题会重复占空间
+      .hideTitleBar(true)
+      .backgroundColor($r('app.color.ec_bg'))
     } else if (name === Routes.CHAT_HISTORY) {
       NavDestination() {
         ChatHistoryPage()
@@ -218,6 +227,12 @@ struct Index {
         .fontSize(EcFont.body)
         .fontColor($r('app.color.ec_muted'))
         .textAlign(TextAlign.Center)
+      if (this.bootErrorCode.length > 0) {
+        Text('诊断：' + this.bootErrorCode)
+          .fontSize(EcFont.micro)
+          .fontColor($r('app.color.ec_muted'))
+          .textAlign(TextAlign.Center)
+      }
       EcButton({
         label: '重试',
         kind: EcButtonKind.PRIMARY,

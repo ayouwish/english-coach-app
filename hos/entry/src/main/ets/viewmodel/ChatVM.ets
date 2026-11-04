@@ -8,6 +8,7 @@ import { FileUtil } from '../core/util/FileUtil';
 import { AppConfig } from '../core/config/AppConfig';
 import { PracticeService } from '../core/service/PracticeService';
 import { ChatService } from '../core/service/ChatService';
+import { ChatOpeningZh } from '../core/content/ChatOpeningZh';
 import { NavState } from '../core/router/NavState';
 import {
   ChatCorrectionDto,
@@ -296,10 +297,15 @@ export class ChatVM {
       this.level = typeof sc.level === 'string' ? sc.level : '';
       opening = typeof sc.opening_line === 'string' ? sc.opening_line : '';
     }
-    // 自定义场景分支没有 messages；messages[0] 只是占位，显示/朗读一律用 scenario.opening_line
-    if (opening.length === 0 && session.messages !== undefined && session.messages.length > 0) {
-      const first = session.messages[0];
-      opening = typeof first.text === 'string' ? first.text : '';
+    // 开场白优先用会话消息（服务端会带 text_zh）；没有则用上面场景的 opening_line（无中文）
+    let openingZh = '';
+    const sessionMessages = session.messages;
+    if (sessionMessages !== undefined && sessionMessages.length > 0) {
+      const first = sessionMessages[0];
+      if (typeof first.text === 'string' && first.text.length > 0) {
+        opening = first.text;
+        openingZh = typeof first.text_zh === 'string' ? first.text_zh : '';
+      }
     }
     await this.loadPrefs();
     const list: ChatMsg[] = [];
@@ -308,6 +314,7 @@ export class ChatVM {
       greeting.id = 'opening';
       greeting.role = 'assistant';
       greeting.text = opening;
+      greeting.textZh = openingZh.length > 0 ? openingZh : ChatOpeningZh.lookup(opening);
       list.push(greeting);
     }
     this.messages = list;

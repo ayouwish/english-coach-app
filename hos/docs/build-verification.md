@@ -2,6 +2,21 @@
 
 > 本文件只记录**实际执行过**的构建，不写"应该可以"。真机行为不在本文件范围。
 
+## HOTFIX — 2026-11-05 · 图标提交误删权限 / 对话页布局
+
+1. **启动报「连不上家庭 NAS」**（网络正常、web 可访问）：
+   图标提交（674b495）重写 `entry/src/main/module.json5` 时把整段 `requestPermissions`
+   覆盖丢了 → 所有 HTTP 请求 `Permission denied` → `network_unreachable`。
+   已恢复 `ohos.permission.INTERNET` + `ohos.permission.MICROPHONE`；
+   `Index` 错误页新增「诊断：错误码 · baseUrl」，hilog 输出 `Bootstrap` 错误详情。
+   真机验证：重装后直接进入首页（爸爸，今日 5.5/30 分钟）✅
+2. **对话页布局**：`NavDestination` 系统标题与页面自带 TopBar 重复 → 对话页 `.hideTitleBar(true)`，
+   只保留「返回 + 场景名 + 结束」一行。
+3. **第一句没有中文**：服务端 greeting 的 `text_zh` 为 null；新增
+   `core/content/ChatOpeningZh.ets`（19 个内置场景开场白中文对照，自定义场景回退为空）。
+   真机验证：`Any plans for the weekend?` → 「周末有什么安排吗？」✅
+
+
 ## V1 — 2026-11-02 · DevEco Studio 6.1.1.300 · `assembleHap` 通过
 
 ### 环境（本机实测）
