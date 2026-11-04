@@ -52,6 +52,11 @@ struct Index {
   @State bootError: string = '';
   /** 诊断用：错误码 + 当前服务器地址（连不上时显示在错误页，便于定位） */
   @State bootErrorCode: string = '';
+  /** 启动失败时直接在错误页改服务器地址（不用先到登录页） */
+  @State editingAddress: boolean = false;
+  @State addressInput: string = '';
+  @State addressBusy: boolean = false;
+  @State addressError: string = '';
   private navStack: NavPathStack = new NavPathStack();
 
   aboutToAppear(): void {
@@ -214,6 +219,37 @@ struct Index {
     .backgroundColor($r('app.color.ec_bg'))
   }
 
+  private beginEditAddress(): void {
+    this.addressInput = AppConfig.getBaseUrl();
+    this.addressError = '';
+    this.editingAddress = true;
+  }
+
+  private async saveAddress(): Promise<void> {
+    if (this.addressBusy) {
+      return;
+    }
+    this.addressBusy = true;
+    this.addressError = '';
+    try {
+      await AppConfig.setBaseUrl(this.addressInput);
+      this.editingAddress = false;
+      await this.bootstrap();
+    } catch (err) {
+      this.addressError = '地址格式不对，示例：https://english.dreamsearch.top';
+    } finally {
+      this.addressBusy = false;
+    }
+  }
+
+  /** 不想改地址时，也可以先去登录页（那里有完整的地址编辑与健康检查）。 */
+  private goLogin(): void {
+    SessionStore.set(new SessionState());
+    this.bootErrorTitle = '';
+    this.bootError = '';
+    this.bootErrorCode = '';
+  }
+
   @Builder
   bootErrorView() {
     Column({ space: EcSpace.x4 }) {
@@ -233,6 +269,63 @@ struct Index {
           .fontColor($r('app.color.ec_muted'))
           .textAlign(TextAlign.Center)
       }
+      if (this.editingAddress) {
+        Column({ space: EcSpace.x2 }) {
+          Text('服务器地址')
+            .fontSize(EcFont.caption)
+            .fontColor($r('app.color.ec_muted'))
+            .width('100%')
+            .textAlign(TextAlign.Center)
+          TextInput({ text: this.addressInput, placeholder: 'https://english.dreamsearch.top' })
+            .type(InputType.Normal)
+            .height(48)
+            .width('100%')
+            .fontSize(EcFont.body)
+            .fontColor($r('app.color.ec_ink'))
+            .backgroundColor($r('app.color.ec_surface'))
+            .borderRadius(12)
+            .onChange((value: string) => {
+              this.addressInput = value;
+            })
+          if (this.addressError.length > 0) {
+            Text(this.addressError)
+              .fontSize(EcFont.micro)
+              .fontColor($r('app.color.ec_bad_text'))
+              .textAlign(TextAlign.Center)
+          }
+          Row({ space: EcSpace.x2 }) {
+            EcButton({
+              label: this.addressBusy ? '保存中…' : '保存并重试',
+              kind: EcButtonKind.PRIMARY,
+              btnWidth: '48%',
+              loading: this.addressBusy,
+              onTap: () => {
+                void this.saveAddress();
+              }
+            })
+            EcButton({
+              label: '取消',
+              kind: EcButtonKind.GHOST,
+              btnWidth: '48%',
+              onTap: () => {
+                this.editingAddress = false;
+              }
+            })
+          }
+          .width('60%')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+      } else {
+        EcButton({
+          label: '⚙️ 修改服务器地址',
+          kind: EcButtonKind.GHOST,
+          btnWidth: '200vp',
+          onTap: () => {
+            this.beginEditAddress();
+          }
+        })
+      }
       EcButton({
         label: '重试',
         kind: EcButtonKind.PRIMARY,
@@ -241,9 +334,14 @@ struct Index {
           void this.bootstrap();
         }
       })
-      Text('如果一直连不上，可以在登录页修改服务器地址')
+      Text('也可以先去登录页（那边有完整的地址编辑与网络检查）')
         .fontSize(EcFont.caption)
         .fontColor($r('app.color.ec_muted'))
+        .textAlign(TextAlign.Center)
+        .onClick(() => {
+          this.goLogin();
+        })
+        .decoration({ type: TextDecorationType.Underline })
     }
     .width('100%')
     .height('100%')
