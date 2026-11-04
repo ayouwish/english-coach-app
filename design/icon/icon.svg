@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#7B68FF"/>
+      <stop offset="1" stop-color="#4A34D8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.25" cy="0.15" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <rect width="1024" height="1024" fill="url(#glow)"/>
+
+    <!-- 声波：三圈，从麦克风向右扩散 -->
+    <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+      <path d="M 690 250 A 230 230 0 0 1 690 610" stroke-opacity="0.92" stroke-width="52"/>
+      <path d="M 720 205 A 300 300 0 0 1 720 655" stroke-opacity="0.66" stroke-width="46"/>
+      <path d="M 750 160 A 372 372 0 0 1 750 700" stroke-opacity="0.44" stroke-width="40"/>
+    </g>
+
+    <!-- 麦克风 -->
+    <g fill="#FFFFFF">
+      <rect x="302" y="242" width="176" height="392" rx="88"/>
+      <path d="M 246 540 A 170 170 0 0 0 534 540" fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round"/>
+      <rect x="366" y="700" width="48" height="120" rx="24"/>
+      <rect x="254" y="810" width="272" height="52" rx="26"/>
+    </g>
+    <!-- 网罩细线 -->
+    <g stroke="#D9D5FF" stroke-width="10" stroke-linecap="round" opacity="0.85">
+      <line x1="340" y1="340" x2="440" y2="340"/>
+      <line x1="340" y1="380" x2="440" y2="380"/>
+      <line x1="340" y1="420" x2="440" y2="420"/>
+    </g>
+
+    <!-- 暖色星点 -->
+    <path d="M 828 168 L 848 232 L 912 252 L 848 272 L 828 336 L 808 272 L 744 252 L 808 232 Z" fill="#FFB080"/>
+    <path d="M 722 92 L 734 128 L 770 140 L 734 152 L 722 188 L 710 152 L 674 140 L 710 128 Z" fill="#FFD6AA" opacity="0.9"/>
+
+    <!-- 内侧高光描边 -->
+    <rect x="2" y="2" width="1020" height="1020" rx="228" ry="228" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="6"/>
+  </g>
+</svg>
