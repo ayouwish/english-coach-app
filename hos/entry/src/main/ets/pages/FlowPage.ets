@@ -695,10 +695,55 @@ export struct FlowPage {
 
   // ================================================================== running 页
 
+  /** 退出本轮连读、回到选句/输入界面（已读记录保留在服务端）。 */
+  private exitRun(): void {
+    this.vm.backToSetup();
+    // 停止可能还在跑的录音/轮询（backToSetup 只改状态）
+    this.vm.dispose();
+  }
+
+  private confirmExitRun(): void {
+    let hasProgress = this.vm.currentIndex > 0;
+    for (let i = 0; i < this.vm.items.length; i++) {
+      if (this.vm.items[i].status !== FlowStatus.UNSENT) {
+        hasProgress = true;
+        break;
+      }
+    }
+    if (!hasProgress) {
+      this.exitRun();
+      return;
+    }
+    this.getUIContext().showAlertDialog({
+      title: '退出这次连读？',
+      message: '已经读过的句子会保留在记录里，回去可以重新选句或接着读。',
+      primaryButton: {
+        value: '继续练',
+        action: () => {
+        }
+      },
+      secondaryButton: {
+        value: '退出',
+        fontColor: $r('app.color.ec_bad_text'),
+        action: () => {
+          this.exitRun();
+        }
+      }
+    });
+  }
+
   @Builder
   runningHeader() {
     Column({ space: EcSpace.x2 }) {
       Row({ space: EcSpace.x2 }) {
+        Text('‹ 重新选句')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .accessibilityText('退出连读，重新选句')
+          .onClick(() => {
+            this.confirmExitRun();
+          })
         Text(this.vm.runTitle.length > 0
           ? ('📖 ' + this.vm.runTitle)
           : ('🔗 ' + (this.session.isChild ? '一句一句读' : '连读模式')))
