@@ -123,6 +123,12 @@ export struct WordText {
             .onClick(() => {
               void this.tapWord(token.text);
             })
+            .gesture(
+              LongPressGesture({ repeat: false, duration: 450 })
+                .onAction(() => {
+                  void this.tapWord(token.text);
+                })
+            )
         } else {
           Text(token.text)
             .fontSize(this.fontSizeVp)
