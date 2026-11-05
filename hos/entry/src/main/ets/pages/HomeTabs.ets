@@ -106,5 +106,13 @@ export struct HomeTabs {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.ec_bg'))
+    .onVisibleAreaChange([0.0, 1.0], (isVisible: boolean, currentRatio: number) => {
+      // 被二级页盖住时 tab_index 变化会被忽略（Tabs 不可见时 changeIndex 不生效），
+      // 回到首页时补一次，保证「盲测开始 → 回跟读」「故事去读 → 回连读」落到正确 Tab。
+      if (isVisible && currentRatio > 0 && this.pendingTab !== this.current) {
+        this.current = this.pendingTab;
+        this.controller.changeIndex(this.pendingTab);
+      }
+    })
   }
 }

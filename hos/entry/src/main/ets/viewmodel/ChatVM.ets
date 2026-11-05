@@ -242,6 +242,8 @@ export class ChatVM {
   autoRead: boolean = true;
   ttsRate: string = 'normal';
   ttsVoice: string = '';
+  /** done=true 时：最后一句播完再 endSession（避免掐掉收尾语） */
+  private endAfterLastPlay: boolean = false;
 
   // ---- 错误
   hasError: boolean = false;
@@ -528,10 +530,15 @@ export class ChatVM {
     this.hintText = '';
     this.done = turn.done === true;
     if (this.done) {
-      // 场景自然收尾：不显示录音区，直接汇总 + 整段回放
+      // 场景自然收尾：先把最后一句读出来，播完再汇总 + 整段回放（之前直接 endSession 会掐掉最后一句）
       this.ended = true;
       this.suggestedReplies = [];
-      void this.endSession();
+      if (reply.length > 0 && this.autoRead && !this.recording) {
+        this.endAfterLastPlay = true;
+        void this.autoPlay(bot);
+      } else {
+        void this.endSession();
+      }
     } else if (reply.length > 0) {
       void this.autoPlay(bot);
       this.startPronPoll(userMsg.text);
@@ -716,6 +723,10 @@ export class ChatVM {
         msg.playState = '';
         msg.bump();
         this.refreshMessages();
+        if (this.endAfterLastPlay) {
+          this.endAfterLastPlay = false;
+          void this.endSession();
+        }
       });
     } catch (err) {
       msg.playState = 'failed';
@@ -723,6 +734,10 @@ export class ChatVM {
       this.refreshMessages();
       this.lastFailedMsg = msg;
       this.handleError(err as Error, 'tts');
+      if (this.endAfterLastPlay) {
+        this.endAfterLastPlay = false;
+        void this.endSession();
+      }
     }
   }
 

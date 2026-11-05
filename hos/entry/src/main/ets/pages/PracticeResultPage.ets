@@ -382,19 +382,21 @@ export struct PracticeResultPage {
           .width('100%')
       }
 
-      // ---- 6. 逐词得分 + 音素明细
-      if (this.vm.wordDetails.length > 0 && !this.session.isChild) {
-        this.sectionTitle('逐词得分')
+      // ---- 6. 逐词得分 + 音素明细（儿童也显示「每个词读得怎么样」，与 Web 一致；音素仅成人）
+      if (this.vm.wordDetails.length > 0) {
+        this.sectionTitle(this.session.isChild ? '🔤 每个词读得怎么样' : '逐词得分')
         // 只列一遍（句子顺序）；低于 60 分的词标红即可，不再单独重复一遍「需要练的词」
-        Text('按句子顺序；红色 = 低于 60 分，需要重点练' +
-          (this.needPracticeCount() > 0 ? '（这一句有 ' + this.needPracticeCount().toString() + ' 个）' : ''))
+        Text(this.session.isChild
+          ? '条越长读得越好；红色 = 低于 60 分，多练几遍就好'
+          : '按句子顺序；红色 = 低于 60 分，需要重点练' +
+            (this.needPracticeCount() > 0 ? '（这一句有 ' + this.needPracticeCount().toString() + ' 个）' : ''))
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
           .width('100%')
         ForEach(this.vm.wordDetails, (word: WordScoreDto, index: number) => {
           this.wordBar(word.word, (word.score === undefined || word.score === null) ? -1 : (word.score as number))
         }, (word: WordScoreDto, index: number) => 'wd' + index.toString())
-        if (this.vm.phonemeChipLabels.length > 0) {
+        if (!this.session.isChild && this.vm.phonemeChipLabels.length > 0) {
           Text('音素明细')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))

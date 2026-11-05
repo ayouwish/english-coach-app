@@ -69,18 +69,16 @@ export struct ChatBubbleView {
   }
 
   build() {
-    Column({ space: EcSpace.x1 }) {
+    Row() {
       Column({ space: EcSpace.x2 }) {
         Text(this.bodyText)
           .fontSize(this.childMode ? EcFont.childBody : EcFont.body)
           .fontColor($r('app.color.ec_ink'))
           .lineHeight(this.childMode ? 28 : 24)
-          .width('100%')
         if (this.bodyTextZh.length > 0) {
           Text(this.bodyTextZh)
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))
-            .width('100%')
         }
         if (this.hasCorrection) {
           Column({ space: 2 }) {
@@ -88,12 +86,10 @@ export struct ChatBubbleView {
               .fontSize(EcFont.caption)
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.ec_warn_text'))
-              .width('100%')
             if (this.explainText.length > 0) {
               Text(this.explainText)
                 .fontSize(EcFont.micro)
                 .fontColor($r('app.color.ec_warn_text'))
-                .width('100%')
             }
           }
           .width('100%')
@@ -106,7 +102,6 @@ export struct ChatBubbleView {
           Text('（内容已按儿童安全规则替换）')
             .fontSize(EcFont.micro)
             .fontColor($r('app.color.ec_muted'))
-            .width('100%')
         }
         if (this.hasAudio) {
           Text(this.playLabel())
@@ -122,7 +117,6 @@ export struct ChatBubbleView {
           Text(this.pronLine)
             .fontSize(EcFont.micro)
             .fontColor(this.isUser ? $r('app.color.ec_primary') : $r('app.color.ec_muted'))
-            .width('100%')
         }
         if (this.wordTexts.length > 0) {
           Text(this.toggleWordsLabel())
@@ -148,15 +142,14 @@ export struct ChatBubbleView {
           }
         }
       }
-      .width('100%')
       .padding(EcSpace.x3)
       .backgroundColor(this.bubbleBg())
       .borderRadius(EcRadius.lg)
+      .constraintSize({ maxWidth: '78%' })
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .constraintSize({ maxWidth: '88%' })
-    .alignItems(this.isUser ? HorizontalAlign.End : HorizontalAlign.Start)
+    .justifyContent(this.isUser ? FlexAlign.End : FlexAlign.Start)
   }
 }
 

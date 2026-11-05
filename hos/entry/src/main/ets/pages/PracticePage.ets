@@ -151,7 +151,10 @@ export struct PracticePage {
             }
           }
         }
-        this.swiper.changeIndex(0);
+        // 只在确实需要重置时 changeIndex，避免初次加载触发 onChange 把游标覆盖成第 1 句
+        if (this.vm.index !== 0) {
+          this.swiper.changeIndex(0);
+        }
         this.vm.setIndex(0);
       }
     } catch (err) {
@@ -253,6 +256,16 @@ export struct PracticePage {
         })
         .margin({ top: EcSpace.x1 })
       }
+      EcButton({
+        label: '退出盲测，回普通跟读',
+        kind: EcButtonKind.GHOST,
+        onTap: () => {
+          BlindRuntime.clear();
+          this.vm.clearBlind();
+          void this.load(this.initialLevel());
+        }
+      })
+      .margin({ top: EcSpace.x1 })
     }
     .width('100%')
     .padding({ left: EcSpace.x4, right: EcSpace.x4, bottom: EcSpace.x2 })
@@ -1391,6 +1404,10 @@ export struct PracticePage {
         .curve(Curve.EaseOut)
         .onChange((index: number) => {
           this.vm.setIndex(index);
+          // 用户主动滑动后，横幅不再需要（按当前位置继续，并写入游标）
+          if (this.resumeIndex > 0) {
+            this.resumeIndex = -1;
+          }
           // 记录练习游标（普通练习才记；盲测/专项不污染）
           if (!this.vm.blindActive && this.focusToken.length === 0) {
             const item = this.vm.current();
