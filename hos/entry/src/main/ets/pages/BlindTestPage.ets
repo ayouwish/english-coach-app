@@ -178,6 +178,16 @@ export struct BlindTestPage {
           NavigationService.pop();
         }
       })
+      EcButton({
+        label: '退出盲测，回普通跟读',
+        kind: EcButtonKind.GHOST,
+        onTap: () => {
+          // 只退出本机盲测模式；服务端批次仍是进行中，下次进来可继续
+          BlindRuntime.clear();
+          AppStorage.setOrCreate<number>('tab_index', 0);
+          NavigationService.clear();
+        }
+      })
     }
     .width('100%')
     .padding(EcSpace.x4)
