@@ -43,6 +43,7 @@ export struct SwipeDeleteRow {
 
   build() {
     Stack({ alignContent: Alignment.End }) {
+      // 删除按钮固定高度（不再 100% 撑满整行），避免把卡片拉出一大片空白
       Row() {
         Text('删除')
           .fontSize(15)
@@ -50,9 +51,10 @@ export struct SwipeDeleteRow {
           .fontColor(Color.White)
       }
       .width(this.buttonWidth)
-      .height('100%')
+      .height(56)
       .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.ec_bad'))
+      .borderRadius(10)
       .onClick(() => {
         this.onDelete();
       })
@@ -61,6 +63,8 @@ export struct SwipeDeleteRow {
         this.content()
       }
       .width('100%')
+      // 内容区必须有底色，否则收起时红色按钮会透出来
+      .backgroundColor($r('app.color.ec_surface'))
       .translate({ x: this.offsetX })
       .gesture(
         PanGesture({ direction: PanDirection.Horizontal, distance: 6 })
