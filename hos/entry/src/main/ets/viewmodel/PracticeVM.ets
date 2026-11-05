@@ -5,6 +5,7 @@ import {
   AttemptResponseDto,
   FeedbackDto,
   FeedbackPointDto,
+  IntonationDto,
   IssueDto,
   PronounceResultDto,
   ScoresDto,
@@ -564,12 +565,66 @@ export class PracticeVM {
     this.lowSnr = this.hasWarning(result, 'low_snr');
     this.applyFeedback(resp.feedback);
     this.applyWords(result);
-    this.applyIssues(result);
-    this.applyIntonation(result);
+    this.applyIssues(result.issues);
+    this.applyIntonation(result.intonation, result.issues);
     if (this.degraded) {
       this.setError(new UiError('', '评分服务刚刚不稳定，这条结果是降级结果，可以点「重试评测」',
         '重试评测', true, ApiErrorCode.PROVIDER_ERROR), '重试评测');
     }
+  }
+
+  /** 从历史 attempt 打开详细结果（不重新录音）：用列表里已有的 scores/issues/intonation/feedback 还原。 */
+  showAttemptDetail(item: AttemptItemDto): void {
+    this.resetResult();
+    this.attemptId = item.id;
+    this.attemptIdText = item.id;
+    this.sentenceId = item.sentence_id === undefined || item.sentence_id === null ? '' : item.sentence_id;
+    this.text = item.reference_text === undefined ? '' : item.reference_text;
+    this.refText = this.text;
+    this.recognizedText = item.recognized_text === undefined ? '' : item.recognized_text;
+    this.noSpeech = this.recognizedText.trim().length < 2;
+    const duration = item.duration_ms;
+    this.durationText = (duration === undefined || duration === null || duration <= 0)
+      ? '' : ((Math.round(duration / 100) / 10).toString() + 's');
+    this.resultProvider = '';
+    this.resultGranularity = item.mode === undefined ? '' : item.mode;
+    const scores = item.scores;
+    if (scores !== undefined && scores !== null) {
+      this.scorePron = PracticeVM.scoreOr(scores.pron);
+      this.scoreAccuracy = PracticeVM.scoreOr(scores.accuracy);
+      this.scoreFluency = PracticeVM.scoreOr(scores.fluency);
+      this.scoreCompleteness = PracticeVM.scoreOr(scores.completeness);
+      this.scoreProsody = PracticeVM.scoreOr(scores.prosody);
+    }
+    this.applyIssues(item.issues);
+    this.applyIntonation(item.intonation, item.issues);
+    this.applyFeedback(item.feedback);
+    this.hasResult = true;
+    this.canRetryEvaluate = false;
+    void this.loadHistory();
+  }
+
+  /** 历史列表里点「详情」：从 /attempts 找到该条并还原结果。 */
+  async openAttemptResult(attemptId: string): Promise<boolean> {
+    if (attemptId.length === 0) {
+      return false;
+    }
+    try {
+      const list = await PracticeService.attempts(100);
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].id === attemptId) {
+          this.showAttemptDetail(list[i]);
+          return true;
+        }
+      }
+    } catch (err) {
+      return false;
+    }
+    return false;
+  }
+
+  private static scoreOr(value: number | null | undefined): number {
+    return (value === undefined || value === null) ? -1 : value;
   }
 
   private applyScores(result: PronounceResultDto): void {
@@ -669,11 +724,11 @@ export class PracticeVM {
   }
 
   /** 问题音素 chips + 「需要纠正的地方」卡片（hint_key 文案在本地映射）。 */
-  private applyIssues(result: PronounceResultDto): void {
+  private applyIssues(issueList: IssueDto[] | null | undefined): void {
     this.issueChipLabels = [];
     this.issueChipScores = [];
     this.issueCards = [];
-    const issues = result.issues;
+    const issues = issueList;
     if (issues === undefined || issues === null) {
       return;
     }
@@ -708,13 +763,14 @@ export class PracticeVM {
     }
   }
 
-  private applyIntonation(result: PronounceResultDto): void {
+  private applyIntonation(intonationDto: IntonationDto | null | undefined,
+    issueList: IssueDto[] | null | undefined): void {
     this.intonationAvailable = false;
     this.intonationDistance = '';
     this.regionTexts = [];
     this.userF0 = [];
     this.refF0 = [];
-    const intonation = result.intonation;
+    const intonation = intonationDto;
     if (intonation === undefined || intonation === null || intonation.available !== true) {
       return;
     }
@@ -739,9 +795,9 @@ export class PracticeVM {
     }
     this.regionTexts = texts;
     // 前 2 个 issue 转成人话
-    const issues = result.issues;
+    const issues = issueList;
     const issueTexts: string[] = [];
-    if (issues !== undefined && !this.isChild) {
+    if (issues !== undefined && issues !== null && !this.isChild) {
       for (let i = 0; i < issues.length && i < 2; i++) {
         issueTexts.push(PracticeVM.issueLabel(issues[i]));
       }
@@ -989,6 +1045,16 @@ export class PracticeVM {
     this.wordTexts = [];
     this.wordScores = [];
     this.wordErrors = [];
+    this.wordDetails = [];
+    this.worstWordTexts = [];
+    this.worstWordScores = [];
+    this.phonemeChipLabels = [];
+    this.phonemeChipScores = [];
+    this.issueChipLabels = [];
+    this.issueChipScores = [];
+    this.issueCards = [];
+    this.pointWhys = [];
+    this.pointWords = [];
     this.issueTexts = [];
     this.intonationAvailable = false;
     this.intonationDistance = '';
@@ -997,8 +1063,18 @@ export class PracticeVM {
     this.refF0 = [];
     this.historyScores = [];
     this.historyTimes = [];
+    this.historyAttemptIds = [];
+    this.historyLabels = [];
+    this.historyFirst = -1;
+    this.historyLast = -1;
+    this.playingHistoryId = '';
     this.historyLoaded = false;
     this.attemptId = '';
+    this.attemptIdText = '';
+    this.resultProvider = '';
+    this.resultGranularity = '';
+    this.durationText = '';
+    this.refText = '';
   }
 
   /** 页面销毁/切后台：停计时、丢录音、停播放、释放 fd。 */

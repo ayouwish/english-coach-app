@@ -52,6 +52,14 @@ export struct PracticeResultPage {
     }, 20000);
   }
 
+  /** 历史列表点「详情」：用这条 attempt 还原完整结果（不重新录音）。 */
+  private async openAttempt(attemptId: string): Promise<void> {
+    const ok = await this.vm.openAttemptResult(attemptId);
+    if (ok) {
+      this.mode = 'result';
+    }
+  }
+
   /** 低于 60 分的词数（用于提示文案；列表只展示一遍） */
   private needPracticeCount(): number {
     let count = 0;
@@ -176,11 +184,18 @@ export struct PracticeResultPage {
               .width(40)
             Blank()
             if (this.vm.historyAttemptIds.length > index) {
+              Text('详情')
+                .fontSize(EcFont.caption)
+                .fontColor($r('app.color.ec_ink'))
+                .padding({ left: EcSpace.x2, right: EcSpace.x1, top: 3, bottom: 3 })
+                .onClick(() => {
+                  void this.openAttempt(this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index]);
+                })
               Text(this.playingId ===
                 this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index] ? '播放中…' : '▶ 回放')
                 .fontSize(EcFont.caption)
                 .fontColor($r('app.color.ec_primary'))
-                .padding({ left: EcSpace.x2, right: EcSpace.x2, top: 3, bottom: 3 })
+                .padding({ left: EcSpace.x1, right: EcSpace.x2, top: 3, bottom: 3 })
                 .onClick(() => {
                   this.playHistory(this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index]);
                 })
@@ -349,14 +364,18 @@ export struct PracticeResultPage {
       if (this.vm.scoreAccuracy >= 0 || this.vm.scoreFluency >= 0 ||
         this.vm.scoreCompleteness >= 0 || this.vm.scoreProsody >= 0) {
         this.sectionTitle('能力多边形')
-        RadarChart({
-          accuracy: this.vm.scoreAccuracy,
-          fluency: this.vm.scoreFluency,
-          completeness: this.vm.scoreCompleteness,
-          prosody: this.vm.scoreProsody,
-          isChild: this.session.isChild,
-          chartSize: 280
-        })
+        Row() {
+          RadarChart({
+            accuracy: this.vm.scoreAccuracy,
+            fluency: this.vm.scoreFluency,
+            completeness: this.vm.scoreCompleteness,
+            prosody: this.vm.scoreProsody,
+            isChild: this.session.isChild,
+            chartSize: 300
+          })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
         Text('最需要练的是 ' + this.weakestAxisText())
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_warn_text'))
@@ -472,7 +491,12 @@ export struct PracticeResultPage {
           kind: EcButtonKind.GHOST,
           btnWidth: '48%',
           onTap: () => {
-            void this.vm.playRecording();
+            // 历史 attempt 没有本地录音文件：直接播服务端这条 attempt 的音频
+            if (this.vm.wordDetails.length === 0 && this.vm.attemptIdText.length > 0) {
+              this.playHistory(this.vm.attemptIdText);
+            } else {
+              void this.vm.playRecording();
+            }
           }
         })
         EcButton({
