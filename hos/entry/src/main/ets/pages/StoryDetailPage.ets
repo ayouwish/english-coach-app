@@ -11,6 +11,7 @@ import { SessionState, SessionStore } from '../core/session/SessionStore';
 import { StoryRetellRecord, StorySentenceItem } from '../core/net/StoryDtos';
 import { StoryDetailVM, StoryRuntime } from '../viewmodel/StoryVM';
 import { StoryService } from '../core/service/StoryService';
+import { StoryPrintOptions, StoryPrintService } from '../core/service/StoryPrintService';
 import { ClipboardUtil } from '../core/util/ClipboardUtil';
 import { WordText } from '../components/WordText';
 import { CapabilityCache } from '../core/content/CapabilityCache';
@@ -31,6 +32,8 @@ export struct StoryDetailPage {
   @State renameText: string = '';
   @State actionBusy: boolean = false;
   @State actionError: string = '';
+  /** 打印：生成 A4 图片 + 调起系统打印 */
+  @State printBusy: boolean = false;
   /** capabilities.image=false 时隐藏画图入口（README §2.4） */
   @State imageCapable: boolean = true;
   private started: boolean = false;
@@ -262,6 +265,30 @@ export struct StoryDetailPage {
     this.getUIContext().getPromptAction().showToast({ message: ok ? '已复制英文全文' : '复制失败，请重试' });
   }
 
+  /** 打印这个故事：渲染 A4 图片后调起系统打印（中文原文仅创建者本人会带上）。 */
+  private async printStory(): Promise<void> {
+    if (this.printBusy || this.vm.textEn.trim().length === 0) {
+      return;
+    }
+    this.printBusy = true;
+    try {
+      const opts = new StoryPrintOptions();
+      opts.storyId = this.vm.storyId;
+      opts.title = this.vm.title;
+      opts.authorName = this.vm.authorName;
+      opts.dateText = this.vm.dateText;
+      opts.level = this.vm.level;
+      opts.textEn = this.vm.textEn;
+      opts.sourceZh = this.vm.canSeeSource() ? this.vm.sourceZh : '';
+      const pages = await StoryPrintService.printStory(opts);
+      this.getUIContext().getPromptAction().showToast({ message: '已打开打印（' + pages.toString() + ' 页）' });
+    } catch (err) {
+      this.getUIContext().getPromptAction().showToast({ message: '打印失败，请确认系统打印服务可用' });
+    } finally {
+      this.printBusy = false;
+    }
+  }
+
   @Builder
   englishCard() {
     Column({ space: EcSpace.x2 }) {
@@ -281,6 +308,14 @@ export struct StoryDetailPage {
               void this.copyStory();
             })
         }
+        Text(this.printBusy ? '🖨️ 生成中…' : '🖨️ 打印')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .accessibilityText('打印故事')
+          .onClick(() => {
+            void this.printStory();
+          })
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
