@@ -119,7 +119,10 @@ struct Index {
     } else if (name === Routes.FLOW_SUMMARY) {
       NavDestination() {
         FlowSummaryPage()
-      }.title('连读汇总').backgroundColor($r('app.color.ec_bg'))
+      }
+      // 页面自带 TopBar，隐藏系统标题避免双标题/内容被顶出屏幕
+      .hideTitleBar(true)
+      .backgroundColor($r('app.color.ec_bg'))
     } else if (name === Routes.CHAT_SESSION) {
       NavDestination() {
         ChatSessionPage()
@@ -130,15 +133,21 @@ struct Index {
     } else if (name === Routes.CHAT_HISTORY) {
       NavDestination() {
         ChatHistoryPage()
-      }.title('对话历史').backgroundColor($r('app.color.ec_bg'))
+      }
+      .hideTitleBar(true)
+      .backgroundColor($r('app.color.ec_bg'))
     } else if (name === Routes.CHAT_DETAIL) {
       NavDestination() {
         ChatDetailPage()
-      }.title('对话详情').backgroundColor($r('app.color.ec_bg'))
+      }
+      .hideTitleBar(true)
+      .backgroundColor($r('app.color.ec_bg'))
     } else if (name === Routes.CHAT_CUSTOM) {
       NavDestination() {
         ChatCustomPage()
-      }.title('自定义场景').backgroundColor($r('app.color.ec_bg'))
+      }
+      .hideTitleBar(true)
+      .backgroundColor($r('app.color.ec_bg'))
     } else if (name === Routes.STORY_RECORD) {
       NavDestination() {
         StoryRecordPage()
