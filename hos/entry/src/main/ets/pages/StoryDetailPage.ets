@@ -13,6 +13,8 @@ import { StoryDetailVM, StoryRuntime } from '../viewmodel/StoryVM';
 import { StoryService } from '../core/service/StoryService';
 import { StoryPrintOptions, StoryPrintService } from '../core/service/StoryPrintService';
 import { ClipboardUtil } from '../core/util/ClipboardUtil';
+import { fileIo, picker } from '@kit.CoreFileKit';
+import { AppRuntime } from '../core/config/AppRuntime';
 import { WordText } from '../components/WordText';
 import { CapabilityCache } from '../core/content/CapabilityCache';
 
@@ -271,6 +273,7 @@ export struct StoryDetailPage {
       return;
     }
     this.printBusy = true;
+    let pages: string[] = [];
     try {
       const opts = new StoryPrintOptions();
       opts.storyId = this.vm.storyId;
@@ -280,12 +283,84 @@ export struct StoryDetailPage {
       opts.level = this.vm.level;
       opts.textEn = this.vm.textEn;
       opts.sourceZh = this.vm.canSeeSource() ? this.vm.sourceZh : '';
-      const pages = await StoryPrintService.printStory(opts);
-      this.getUIContext().getPromptAction().showToast({ message: '已打开打印（' + pages.toString() + ' 页）' });
+      pages = await StoryPrintService.buildPages(opts);
+      if (pages.length === 0) {
+        this.getUIContext().getPromptAction().showToast({ message: '这个故事还没有可打印的内容' });
+        return;
+      }
+      await StoryPrintService.printPages(pages);
+      this.getUIContext().getPromptAction().showToast({ message: '已打开打印（' + pages.length.toString() + ' 页）' });
     } catch (err) {
-      this.getUIContext().getPromptAction().showToast({ message: '打印失败，请确认系统打印服务可用' });
+      // 这台平板可能没装「打印服务」：给可执行的兜底——导出成图片，再用 WPS/文件打印
+      if (pages.length > 0) {
+        this.promptExport(pages);
+      } else {
+        this.getUIContext().getPromptAction().showToast({ message: '打印失败，请确认系统打印服务可用' });
+      }
     } finally {
       this.printBusy = false;
+    }
+  }
+
+  private promptExport(pages: string[]): void {
+    this.getUIContext().showAlertDialog({
+      title: '系统打印服务不可用',
+      message: '这台平板没有安装「打印服务」。可以把故事导出成 ' + pages.length.toString() +
+        ' 张图片，用 WPS/文件里的打印功能打印。',
+      buttons: [
+        {
+          value: '导出为图片',
+          action: () => {
+            void this.exportPages(pages);
+          }
+        },
+        {
+          value: '取消',
+          action: () => {
+          }
+        }
+      ]
+    });
+  }
+
+  /** 把生成好的每页 PNG 复制到用户选的位置（文档选择器，不需要额外权限）。 */
+  private async exportPages(pages: string[]): Promise<void> {
+    try {
+      const context = AppRuntime.requireContext();
+      const documentPicker = new picker.DocumentViewPicker(context);
+      const options = new picker.DocumentSaveOptions();
+      const names: string[] = [];
+      for (let i = 0; i < pages.length; i++) {
+        names.push('故事-' + this.vm.title + '-第' + (i + 1).toString() + '页.png');
+      }
+      options.newFileNames = names;
+      const uris = await documentPicker.save(options);
+      if (uris === undefined || uris.length === 0) {
+        return;
+      }
+      let copied = 0;
+      for (let i = 0; i < pages.length && i < uris.length; i++) {
+        const src = fileIo.openSync(pages[i], fileIo.OpenMode.READ_ONLY);
+        try {
+          const size = fileIo.statSync(pages[i]).size;
+          const buffer = new ArrayBuffer(size);
+          fileIo.readSync(src.fd, buffer);
+          const dst = fileIo.openSync(uris[i], fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.TRUNC);
+          try {
+            fileIo.writeSync(dst.fd, buffer);
+            copied++;
+          } finally {
+            fileIo.closeSync(dst);
+          }
+        } finally {
+          fileIo.closeSync(src);
+        }
+      }
+      this.getUIContext().getPromptAction().showToast({
+        message: copied > 0 ? ('已导出 ' + copied.toString() + ' 张图片') : '导出失败，请重试'
+      });
+    } catch (err) {
+      this.getUIContext().getPromptAction().showToast({ message: '导出失败，请重试' });
     }
   }
 

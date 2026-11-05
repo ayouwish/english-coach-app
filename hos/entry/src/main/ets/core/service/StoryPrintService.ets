@@ -49,6 +49,12 @@ export class StoryPrintService {
     if (pages.length === 0) {
       throw new Error('没有可打印的内容');
     }
+    await StoryPrintService.printPages(pages);
+    return pages.length;
+  }
+
+  /** 调起系统打印（图片路径列表）。 */
+  static async printPages(pages: string[]): Promise<void> {
     const context = AppRuntime.requireContext();
     const task = await print.print(pages, context);
     task.on('succeed', () => {
@@ -60,7 +66,6 @@ export class StoryPrintService {
     task.on('cancel', () => {
       hilog.info(DOMAIN, TAG, 'print cancel');
     });
-    return pages.length;
   }
 
   /** 只生成图片（便于调试/后续分享）。 */
