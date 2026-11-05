@@ -2,6 +2,7 @@ import { Chip, TopBar } from '../components/EcBlocks';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { LoadingBlock } from '../components/LoadingBlock';
+import { SwipeDeleteRow } from '../components/SwipeDeleteRow';
 import { EcFont, EcRadius, EcShadow, EcSpace } from '../design/DesignTokens';
 import { ChatNav, ChatSessionListItemDto } from '../core/net/ChatDtos';
 import { NavState } from '../core/router/NavState';
@@ -35,6 +36,39 @@ export struct ChatHistoryPage {
     ChatNav.historyItem = item;
     NavState.setSession(item.id);
     NavigationService.push(Routes.CHAT_DETAIL);
+  }
+
+  /** 左划删除：二次确认后调 DELETE /chat/sessions/:id。 */
+  private confirmDelete(item: ChatSessionListItemDto): void {
+    if (this.vm.deletingId.length > 0) {
+      return;
+    }
+    this.getUIContext().showAlertDialog({
+      title: '删除这次对话？',
+      message: '删除后这次对话的消息、逐句录音和整段回放都无法恢复。',
+      buttons: [
+        {
+          value: '删除',
+          action: () => {
+            void this.deleteItem(item);
+          }
+        },
+        {
+          value: '取消',
+          action: () => {
+          }
+        }
+      ]
+    });
+  }
+
+  private async deleteItem(item: ChatSessionListItemDto): Promise<void> {
+    const ok = await this.vm.deleteSession(item.id, this.session.isChild);
+    if (!ok) {
+      this.getUIContext().getPromptAction().showToast({
+        message: this.vm.actionError.length > 0 ? this.vm.actionError : '删除失败，请重试'
+      });
+    }
   }
 
   private statusText(item: ChatSessionListItemDto): string {
@@ -131,7 +165,14 @@ export struct ChatHistoryPage {
               .width('100%')
               .padding({ top: EcSpace.x2, bottom: EcSpace.x1 })
             ForEach(this.vm.items, (item: ChatSessionListItemDto) => {
-              this.itemRow(item)
+              SwipeDeleteRow({
+                rowKey: item.id,
+                onDelete: () => {
+                  this.confirmDelete(item);
+                }
+              }) {
+                this.itemRow(item)
+              }
             }, (item: ChatSessionListItemDto) => item.id)
             Text('历史记录按时间顺序保存，家长可回看每次对话的校正与评价。')
               .fontSize(EcFont.micro)

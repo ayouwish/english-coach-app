@@ -3,12 +3,14 @@ import { EcButton, EcButtonKind } from '../components/EcButton';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { LoadingBlock } from '../components/LoadingBlock';
+import { SwipeDeleteRow } from '../components/SwipeDeleteRow';
 import { EcFont, EcRadius, EcShadow, EcSpace } from '../design/DesignTokens';
 import { NavState } from '../core/router/NavState';
 import { NavigationService } from '../core/router/NavigationService';
 import { Routes } from '../core/router/Routes';
 import { SessionState } from '../core/session/SessionStore';
 import { StoryCardItem, StoryGroup } from '../core/net/StoryDtos';
+import { StoryService } from '../core/service/StoryService';
 import { StoryHomeVM } from '../viewmodel/StoryVM';
 
 /**
@@ -227,6 +229,35 @@ export struct StoryHomePage {
     })
   }
 
+  /** 左划删除：二次确认后调 DELETE /materials/:id（创建者或家长可删）。 */
+  private confirmDelete(item: StoryCardItem): void {
+    this.getUIContext().showAlertDialog({
+      title: '删除这个故事？',
+      message: '删除后全家都看不到这个故事了，无法恢复。',
+      buttons: [
+        {
+          value: '删除',
+          action: () => {
+            void this.deleteStory(item);
+          }
+        },
+        {
+          value: '取消',
+          action: () => {
+          }
+        }
+      ]
+    });
+  }
+
+  private async deleteStory(item: StoryCardItem): Promise<void> {
+    try {
+      await StoryService.deleteMaterial(item.id);
+      await this.vm.load();
+    } catch (err) {
+      this.getUIContext().getPromptAction().showToast({ message: '删除失败，请重试' });
+    }
+  }
   @Builder
   storyGroups() {
     Column({ space: EcSpace.x2 }) {
@@ -244,7 +275,14 @@ export struct StoryHomePage {
                 Divider()
                   .color($r('app.color.ec_border'))
               }
-              this.storyRow(item)
+              SwipeDeleteRow({
+                rowKey: item.id,
+                onDelete: () => {
+                  this.confirmDelete(item);
+                }
+              }) {
+                this.storyRow(item)
+              }
             }, (item: StoryCardItem) => item.id)
           }
           .width('100%')

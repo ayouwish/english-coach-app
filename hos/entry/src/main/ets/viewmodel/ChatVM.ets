@@ -1146,6 +1146,9 @@ export class ChatHistoryVM {
   errorMessage: string = '';
   items: ChatSessionListItemDto[] = [];
   isChild: boolean = false;
+  /** 正在删除的会话 id（防重复点） */
+  deletingId: string = '';
+  actionError: string = '';
 
   async load(isChild: boolean): Promise<void> {
     this.isChild = isChild;
@@ -1158,6 +1161,31 @@ export class ChatHistoryVM {
       this.errorMessage = SessionStore.toUiError(err as Error, isChild).message;
     } finally {
       this.loading = false;
+    }
+  }
+
+  /** DELETE /chat/sessions/:id（后端 ec16140 起提供；未发布时返回 404，页面给可读提示）。 */
+  async deleteSession(id: string, isChild: boolean): Promise<boolean> {
+    if (id.length === 0 || this.deletingId.length > 0) {
+      return false;
+    }
+    this.deletingId = id;
+    this.actionError = '';
+    try {
+      await ChatService.deleteSession(id);
+      const rest: ChatSessionListItemDto[] = [];
+      for (let i = 0; i < this.items.length; i++) {
+        if (this.items[i].id !== id) {
+          rest.push(this.items[i]);
+        }
+      }
+      this.items = rest;
+      return true;
+    } catch (err) {
+      this.actionError = SessionStore.toUiError(err as Error, isChild).message;
+      return false;
+    } finally {
+      this.deletingId = '';
     }
   }
 }

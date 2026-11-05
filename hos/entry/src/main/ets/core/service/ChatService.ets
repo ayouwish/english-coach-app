@@ -89,6 +89,12 @@ export class ChatService {
   }
 
   /** 删除自定义场景（仅 owner，他人 id 返回 404）。 */
+  /** DELETE /chat/sessions/:id —— 删除自己的历史对话（含消息与录音缓存）。 */
+  static async deleteSession(id: string): Promise<void> {
+    const raw = await ApiClient.deleteJson('/chat/sessions/' + encodeURIComponent(id),
+      ChatService.MUTATE_TIMEOUT_MS);
+    ApiClient.requireOk(raw);
+  }
   static async deleteScenario(id: string): Promise<void> {
     const raw = await ApiClient.deleteJson('/chat/scenarios/' + encodeURIComponent(id),
       ChatService.MUTATE_TIMEOUT_MS);
