@@ -92,7 +92,6 @@ export struct ChatBubbleView {
                 .fontColor($r('app.color.ec_warn_text'))
             }
           }
-          .width('100%')
           .padding(EcSpace.x2)
           .backgroundColor($r('app.color.ec_warn_bg'))
           .borderRadius(EcRadius.sm)
