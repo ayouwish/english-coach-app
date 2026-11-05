@@ -1424,14 +1424,6 @@ export struct PracticePage {
           .fontSize(EcFont.micro)
           .fontColor($r('app.color.ec_muted'))
         Blank()
-        Text('设置')
-          .fontSize(EcFont.caption)
-          .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
-          .accessibilityText('打开设置')
-          .onClick(() => {
-            NavigationService.push(Routes.SETTINGS);
-          })
       }
       .width('100%')
       .padding({ left: EcSpace.x4, right: EcSpace.x4, bottom: EcSpace.x3 })
