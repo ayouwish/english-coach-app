@@ -1,11 +1,21 @@
 import SwiftUI
 
-/// 按钮层级：primary / ghost / text / destructive（对应 design-tokens 的四个层级）。
+/// 按钮层级：primary / tonal / ghost / text / danger（对齐 `docs/design-tokens.md` §组件层级
+/// 与契约 §3.12 的 `EcButtonKind` 对应关系）。
+///
+/// - `primary`：每屏**唯一**主行动（实心主色 + 按钮阴影），成人 48 / 孩子 56；
+/// - `tonal`：次行动（`surfaceMuted` 底 + 主色字）；
+/// - `ghost`：白底 + 描边（听示范、换一版）；
+/// - `text`：无底无边（跳过、查看更多）；
+/// - `danger`：白底 + 深红字（删除、退出）；`destructive` 是 M0 的旧名，行为等价。
 struct AppButton: View {
     enum Kind {
         case primary
+        case tonal
         case ghost
         case text
+        case danger
+        /// M0 兼容别名，等价 `danger`。
         case destructive
     }
 
@@ -16,7 +26,7 @@ struct AppButton: View {
     var isEnabled: Bool
     let action: () -> Void
 
-    @Environment(\.capabilities) private var caps
+    @Environment(\.roleCapabilities) private var caps
 
     init(
         title: String,
@@ -75,7 +85,7 @@ struct AppButton: View {
         switch kind {
         case .primary:
             return caps.isChild ? 56 : 48
-        case .ghost, .destructive:
+        case .ghost, .tonal, .danger, .destructive:
             return caps.isChild ? 52 : 44
         case .text:
             return caps.isChild ? 48 : 44
@@ -86,10 +96,11 @@ struct AppButton: View {
         switch kind {
         case .primary:
             return Tokens.Colors.onPrimary
-        case .ghost, .text:
+        case .ghost, .tonal, .text:
             return Tokens.Colors.primary
-        case .destructive:
-            return Tokens.Colors.danger
+        case .danger, .destructive:
+            // 白底上的红色文字用更深的 dangerText（对比度 ≈5.9:1），填充/图标仍用 danger。
+            return Tokens.Colors.dangerText
         }
     }
 
@@ -97,7 +108,9 @@ struct AppButton: View {
         switch kind {
         case .primary:
             return isEnabled ? Tokens.Colors.primary : Tokens.Colors.primaryDisabled
-        case .ghost, .destructive:
+        case .tonal:
+            return Tokens.Colors.surfaceMuted
+        case .ghost, .danger, .destructive:
             return Tokens.Colors.surfaceCard
         case .text:
             return .clear
@@ -106,18 +119,18 @@ struct AppButton: View {
 
     private var border: Color {
         switch kind {
-        case .ghost, .destructive:
+        case .ghost, .danger, .destructive:
             return Tokens.Colors.borderSubtle
-        case .primary, .text:
+        case .primary, .tonal, .text:
             return .clear
         }
     }
 
     private var borderWidth: CGFloat {
         switch kind {
-        case .ghost, .destructive:
+        case .ghost, .danger, .destructive:
             return 1
-        case .primary, .text:
+        case .primary, .tonal, .text:
             return 0
         }
     }
@@ -126,7 +139,7 @@ struct AppButton: View {
         switch kind {
         case .primary:
             return Tokens.Shadow.buttonTint
-        case .ghost, .text, .destructive:
+        case .tonal, .ghost, .text, .danger, .destructive:
             return .clear
         }
     }

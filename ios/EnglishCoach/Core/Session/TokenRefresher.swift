@@ -46,7 +46,7 @@ actor TokenRefresher: AccessTokenRefreshing {
                 endpoint,
                 baseURL: baseURL,
                 bearerToken: nil,
-                as: AuthTokenResponse.self
+                as: AuthTokenDTO.self
             )
 
             guard let access = response.accessToken, !access.isEmpty else {

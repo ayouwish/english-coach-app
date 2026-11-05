@@ -2,12 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- 不跟踪用户：NSPrivacyTracking=false，且没有跟踪域名。 -->
     <key>NSPrivacyTracking</key>
     <false/>
     <key>NSPrivacyTrackingDomains</key>
     <array/>
 
-    <!-- 收集的数据声明：音频会上传家里服务器并转发 Azure 做识别/评测；邮箱用于登录。 -->
+    <!-- 收集的数据声明：
+         · 音频：跟读/对话/故事录音会上传家里服务器并转发云端语音服务（ASR/发音评测/TTS），
+           hybrid 模式下会离开家庭网络，因此按保守口径声明为「收集」。
+         · 邮箱：登录账号标识，用于登录与家长面板。
+         两者都只用于 App 功能（AppFunctionality），且不做 tracking。 -->
     <key>NSPrivacyCollectedDataTypes</key>
     <array>
         <dict>
@@ -36,8 +41,12 @@
         </dict>
     </array>
 
-    <!-- Required Reason API：只声明实际用到的类别（UserDefaults 存 baseURL）。
-         reason code 需以 Apple 官方列表复核；当前为设计假设，尚未在 Xcode 校验工具中验证。 -->
+    <!-- Required Reason API（只声明实际用到的类别）：
+         · UserDefaults：baseURL、账号偏好、记住登录开关（CA92.1：App 自身设置/偏好）。
+         · FileTimestamp：缓存淘汰/清理需要读取文件修改时间（C617.1：App 自身容器内的文件）。
+         · DiskSpace：TTS/插画/录音缓存容量预检（E174.1：App 自身容器内的可用空间）。
+         reason code 以上为 Apple 官方 Required Reason API 列表中的口径；发布前仍需用
+         Xcode 的隐私清单校验工具复核一次。 -->
     <key>NSPrivacyAccessedAPITypes</key>
     <array>
         <dict>
@@ -46,6 +55,22 @@
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
                 <string>CA92.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>C617.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>E174.1</string>
             </array>
         </dict>
     </array>

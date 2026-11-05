@@ -3,9 +3,9 @@
 > **用途**：客户端开发时按功能查"要调哪些接口、对应哪个页面、文档在哪"。
 > **维护规则**：后端每上线一个新功能/端点，**必须在同一次变更里更新本文件 + 相关文档**（见 `README.md` §0 的同步规则）。
 > **按批次回溯/验收** 见 [`release-notes.md`](release-notes.md)。
-> 最后更新：2026-11-04
-
-图例：✅ 已实现（后端/Web 可用） · 🔄 进行中 · 📋 设计就绪未实现 · 📱 移动端 M0 已写代码（未编译）
+> 最后更新：2026-11-05（ROUND2：Android 补齐雷达/全屏结果/滑动切句/历史回放、VoicePrefs/CapabilityCache 统一、离线失败队列 + 待补评分页、故事分组与持久化、账号页缺口）
+>
+> 图例：✅ 已实现（后端/Web 可用） · 🔄 进行中 · 📋 设计就绪未实现 · 📱 移动端（Android 代码已落地，状态见 §10；本机无 Android SDK，未编译验证）
 
 ---
 
@@ -132,61 +132,99 @@
 
 > **Android 版本以 [`android-feature-list.md`](android-feature-list.md) 为详细清单**（页面级功能点、接口总表、文档↔实现偏差、M1/M2 范围与页面级验收）。
 > 本章只是"功能 → Android 页面 → 状态"的速查；页面范围与签名以 [`../android/CONTRACT.md`](../android/CONTRACT.md) §5 为准。
-> 状态口径：**✅ 已实现**（代码在工作区且行为与鸿蒙一致）· **🚧 进行中**（已排期/已开工，尚未完成）· **⏭️ 延后**（本版不做）。
-> 快照时间：2026-11-04（Android 侧基础设施/组件/导航已落地，页面 UI 正在实现中）。
+> 状态口径：**✅ 已实现**（代码在工作区且已按 Android 实际落地；与鸿蒙的有意取舍见 `android-feature-list.md` §4.1）· **🚧 部分实现**（主体可用，但缺项已写清）· **⏭️ 延后**（本版不做）。
+> 快照时间：**2026-11-05（ROUND2 最终）**——`android/CONTRACT.md` §5 的全部页面 + ROUND2 §4 补齐能力已落地；本表按 `android/app/src/main/java/top/dreamsearch/englishcoach/ui/**`、`core/**` 逐项复核（逐条证据见 `android/QA_ROUND2.md`）。
 
 ### 10.1 基础设施与全局能力
 
 | 功能 | 对应 Android 页面/模块 | 状态 | 章节 |
 |---|---|---|---|
-| Bearer Token 登录 / 单飞刷新 / 吊销 | `core/net/ApiClient.kt`、`core/session/TokenStore.kt` | ✅ 已实现 | §1.1 |
-| 记住密码 + 冷启动自动登录 | `core/session/CredentialStore.kt` | ✅ 已实现 | §2.1 |
+| Bearer Token 登录 / 单飞刷新 / 重放一次 / 吊销 | `core/net/ApiClient.kt`、`core/service/AuthService.kt`、`core/session/TokenStore.kt` | ✅ 已实现 | §1.1 |
+| 启动恢复 / 登录门禁 / 三态 | `ui/AppRoot.kt`（loading / 全屏错误+重试+改服务器地址 / 登录页；自动登录也在这一层） | ✅ 已实现 | §1.1、§2.0 |
+| 记住密码 + 冷启动自动登录（加密） | `core/session/CredentialStore.kt`、`core/config/AppConfig.kt`；**默认关**（A-06，文案待统一） | ✅ 已实现 | §2.1 |
 | 会话/角色/儿童模式（`LocalIsChild`） | `core/session/SessionStore.kt`、`ui/design/EcTheme.kt` | ✅ 已实现 | §1.2 |
 | 错误码映射（成人/儿童两套文案） | `core/error/UiError.kt` | ✅ 已实现 | §1.6 |
-| 录音（m4a/16k/mono/65kbps）与播放互斥 | `core/audio/`（`MicPermission`、`Voices` 已落地；`AudioController` 待补） | 🚧 进行中 | §1.4、§1.5 |
+| 录音（m4a/16k/mono/64kbps）与播放互斥 | `core/audio/AudioController.kt`（+ `MicPermission.kt`） | ✅ 已实现 | §1.4、§1.5 |
 | 内置 9 音色常量 | `core/audio/Voices.kt` | ✅ 已实现 | §2.13 |
 | 点单词看音标 | `ui/component/WordText.kt`、`core/service/DictionaryService.kt` | ✅ 已实现 | §1.8 |
-| 能力开关缓存（image/ocr/avatar_presets） | 由 `AppGraph` + `/health` 服务层承接（页面接入中） | 🚧 进行中 | §1.7 |
-| 今日用量与限额（含前置禁用） | `SessionStore` + 各页面 | 🚧 进行中 | §1.3 |
-| 离线语料缓存 / TTS LRU / 提交队列 | — | ⏭️ 延后（鸿蒙亦未实现） | §1.9、§5.2 |
-| 打印 / 导出文件下载 | 移动端改为"复制全文 / 复制 Markdown" | ⏭️ 延后 | §2.5、§2.11 |
+| 能力开关（image/ocr/avatar_presets/audio_concat/word_ipa） | `core/content/CapabilityCache.kt`（5 分钟 TTL、并发单飞、失败不抛、缺省 true），接线：OCR 入口/故事插画与自动插图/「我的」与设置页形象入口 | ✅ 已实现（ROUND2） | §1.7 |
+| 今日用量与限额（前置禁用） | `SessionStore` + 跟读/连读/对话/盲测/故事/复述各 VM | ✅ 已实现（比鸿蒙更严，D-12） | §1.3 |
+| TTS 先落盘再播放 / 播放互斥 | `AudioController.playBytes/playFile`、`CacheStore.ttsFile/audioFile` | ✅ 已实现 | §1.5 |
+| 示范音语速/音色偏好 | `core/audio/VoicePrefs.kt` 本机镜像；跟读/连读示范音、听鼓励、对话朗读统一 `voicePrefs.resolve(isChild)` | ✅ 已实现（ROUND2） | §1.5 |
+| 手写 DI + ViewModel 工厂（无 Hilt/Retrofit/Coil） | `core/di/AppGraph.kt`、`core/di/VmFactory.kt` | ✅ 已实现（A-05） | §1 |
+| 设计 token / 主题 / 组件库 | `ui/design/*`、`ui/component/*`（ROUND2 新增 `EcRadarChart`） | ✅ 已实现 | §0.4 |
+| 离线能力：TTS/回放 LRU、失败录音队列、待补评分页 | `CacheStore`（trimTtsCache 200MB / trimAudioCache 300MB / 最近结果 50 条）、`core/offline/PendingUploadQueue.kt`、`ui/page/offline/PendingUploadsScreen.kt` + `Routes.PENDING_UPLOADS` | ✅ 已实现（ROUND2；语料全量 JSON 缓存仍 ⏭️） | §1.9、§5.2 |
+| 打印 / 导出文件下载 | 移动端改为「弹层展示 + 复制」；故事详情复制全文已补（ROUND2）；打印/文件下载 ⏭️ | 🚧 部分（平台限制） | §2.5、§2.11 |
 
 ### 10.2 页面
 
 | 功能（页面） | 对应 Android 页面 | 状态 | 章节 |
 |---|---|---|---|
-| 登录（含服务器地址/健康检查/演示账号） | `ui/page/auth/LoginScreen.kt` | 🚧 进行中 | §2.1 |
-| 跟读（卡片流/示范音/评测/结果区） | `ui/page/practice/PracticeScreen.kt` | 🚧 进行中 | §2.2 |
-| 跟读详细结果（全屏） | 契约未列 → 建议页内 sheet 或补 `PRACTICE_RESULT` 路由 | 🚧 待定（见 §2.2 备注） | §2.2 |
-| 连读 setup/running | `ui/page/flow/FlowScreen.kt` | 🚧 进行中 | §2.3 |
-| 连读汇总（再读一遍/鼓励语/本批复述入口） | `ui/page/flow/FlowSummaryScreen.kt` | 🚧 进行中 | §2.3 |
-| 对话场景列表（含自定义入口/受众开关） | `ui/page/chat/ChatScenariosScreen.kt` | 🚧 进行中 | §2.4 |
-| 对话会话（纯语音三步/整段回放） | `ui/page/chat/ChatSessionScreen.kt` | 🚧 进行中 | §2.4 |
-| 对话历史 / 详情 / 自定义场景 | `ChatHistoryScreen.kt`、`ChatDetailScreen.kt`、`ChatCustomScreen.kt` | 🚧 进行中 | §2.4 |
-| 故事列表 / 讲故事 / 详情 / 复述 | `StoryHomeScreen.kt`、`StoryRecordScreen.kt`、`StoryDetailScreen.kt`、`StoryReviewScreen.kt` | 🚧 进行中 | §2.5 |
-| 故事原声回放 + 复述记录持久化 | 同上（线上无接口，仅内存态） | ⏭️ 延后 | §2.5、§4 D-08/D-09 |
-| 盲测（开始/进行/结束/周报） | `ui/page/stats/BlindTestScreen.kt` | 🚧 进行中 | §2.6 |
-| 发音诊断（recent/all + 强化练习跳转） | `ui/page/stats/DiagnosisScreen.kt` | 🚧 进行中 | §2.7 |
-| 错音本（4 档评分） | `ui/page/stats/ReviewScreen.kt` | 🚧 进行中 | §2.8 |
-| 家长面板（403 兜底/盲测环比/剩余时长） | `ui/page/account/ParentScreen.kt` | 🚧 进行中 | §2.9 |
-| 家庭成员（CRUD + 重置密码） | `ui/page/account/FamilyScreen.kt` | 🚧 进行中 | §2.10、§2.16 |
-| 建议箱（5/3 分类 + 导出复制） | `ui/page/account/SuggestionsScreen.kt` | 🚧 进行中 | §2.11 |
-| 虚拟形象（预置库/风格/性别筛选） | `ui/page/account/AvatarScreen.kt` | 🚧 进行中 | §2.12 |
-| 音色（9 内置 + 试听 + 保存） | `ui/page/account/VoicesScreen.kt` | 🚧 进行中 | §2.13 |
-| 设置（偏好/地址/清缓存/退出） | `ui/page/account/SettingsScreen.kt` | 🚧 进行中 | §2.14 |
-| 服务状态（features/capabilities/force） | `ui/page/account/HealthScreen.kt` | 🚧 进行中 | §2.15 |
-| 独立"修改密码"页 | —（并入家庭成员页） | ⏭️ 延后 | §2.16 |
-| 句子列表页 | 契约 §5 有 `Routes.SENTENCES`；鸿蒙已弃用（改为卡片滑动） | ⏭️ 延后（建议不做） | §2.0、§2.2 |
-| 应用壳（启动三态 / 5 Tab / 跨 Tab 跳转） | `ui/AppRoot.kt`、`ui/HomeScreen.kt`、`ui/nav/AppNavHost.kt`、`ui/nav/Routes.kt` | 🚧 进行中 | §2.0 |
+| 登录（含服务器地址/健康检查/演示账号） | `ui/page/auth/LoginScreen.kt` + `LoginViewModel.kt`（demo 填邮箱+密码 A-07；记住密码默认关 A-06） | ✅ 已实现 | §2.1 |
+| 跟读（卡片流/示范音/评测/**页内结果 + 全屏 overlay**） | `ui/page/practice/PracticeScreen.kt` + `PracticeViewModel.kt` + `PracticeModels.kt`（**ROUND2**：能力雷达 `EcRadarChart`、全屏结果 overlay、历史逐条回放 `audioByUrl`、`HorizontalPager` 滑动切句、`VoicePrefs`、失败入队） | ✅ 已实现 | §2.2 |
+| 跟读详细结果（全屏） | 页内 **overlay**（不新增 `PRACTICE_RESULT` 路由）：总分/子项/雷达/逐词/纠错/语调/单句历史 + 关闭/重试评测/下一句/BackHandler | ✅ 已实现（ROUND2） | §2.2、A-01 |
+| 句子列表页（高亮本地游标当前句） | `ui/page/practice/SentenceListScreen.kt` + `SentenceListViewModel.kt`（`Routes.SENTENCES` 已接线） | ✅ 已实现（A-12） | §2.0、§2.2 |
+| 连读 setup/running | `ui/page/flow/FlowScreen.kt` + `FlowViewModel.kt` + `FlowModels.kt`（OCR 走 `CapabilityCache`；失败句入待补评分队列） | ✅ 已实现 | §2.3 |
+| 连读汇总（再读一遍/鼓励语/批次诊断/**复述入口**） | `ui/page/flow/FlowSummaryScreen.kt` + `FlowSummaryViewModel.kt`（**ROUND2**：故事来源时「📝 复述这个故事」→ `onOpenReview(materialId)`；「待补评分 N 条」入口；`VoicePrefs`） | ✅ 已实现 | §2.3 |
+| 对话场景列表（含自定义入口/受众开关） | `ui/page/chat/ChatScenariosScreen.kt` + `ChatScenariosViewModel.kt` | ✅ 已实现 | §2.4 |
+| 对话会话（纯语音三步/整段回放） | `ui/page/chat/ChatSessionScreen.kt` + `ChatSessionViewModel.kt` + `ChatModels.kt` | ✅ 已实现（建议 chips 只朗读不发送，A-14 / §2.4） | §2.4 |
+| 对话历史 / 详情 / 自定义场景 | `ChatHistoryScreen.kt`、`ChatDetailScreen.kt`、`ChatCustomScreen.kt`（+ 各自 VM） | ✅ 已实现 | §2.4 |
+| 故事列表 / 讲故事 / 详情 / 复述 | `StoryHomeScreen.kt`、`StoryRecordScreen.kt`、`StoryDetailScreen.kt`、`StoryReviewScreen.kt`（+ 4 个 VM + `StoryRuntime.kt`/`StoryUi.kt`）。**ROUND2**：今天/昨天/更早分组 + 连续天数、auto_illustrate 自动插图、保存后跳详情、详情复制全文 | ✅ 已实现 | §2.5 |
+| 故事原声回放 + 复述记录（**本机持久化**） | `ui/page/story/StoryRuntime.kt`（原声路径 + `source_zh` + 最近一次复述落 `CacheStore` JSON；杀进程后可回看，文件失效只隐藏回放） | ✅ 已实现（ROUND2，D-08/D-09 的本地化方案） | §2.5 |
+| **待补评分录音页（离线）** | `ui/page/offline/PendingUploadsScreen.kt` + `PendingUploadsViewModel.kt`；`Routes.PENDING_UPLOADS`；首页横幅 + 「我的」入口；列表/试听/删除/全部重试/空态 | ✅ 已实现（ROUND2） | §1.9、§2.0 |
+| 盲测（开始/进行/结束/周报） | `ui/page/stats/BlindTestScreen.kt` + `BlindTestViewModel.kt`（**一页闭环**，A-02） | ✅ 已实现 | §2.6 |
+| 发音诊断（recent/all/attempt/batch + 强化练习跳转） | `ui/page/stats/DiagnosisScreen.kt` + `DiagnosisViewModel.kt`（batch 优先 `NavParams.diagnosisAttemptIds`，缺参回落最近 20 条） | ✅ 已实现 | §2.7 |
+| 错音本（4 档评分） | `ui/page/stats/ReviewScreen.kt` + `ReviewViewModel.kt` | ✅ 已实现 | §2.8 |
+| 家长面板（403 兜底/盲测环比/剩余时长/**盲测周报入口**） | `ui/page/account/ParentScreen.kt` + `ParentViewModel.kt`（ROUND2 接 `onOpenBlindTest`） | ✅ 已实现 | §2.9 |
+| 家庭成员（CRUD + 重置密码） | `ui/page/account/FamilyScreen.kt` + `FamilyViewModel.kt` + `AccountFamilyModels.kt` | ✅ 已实现（无删除成员：服务端无接口） | §2.10、§2.16 |
+| 建议箱（5/3 分类 + 导出复制） | `ui/page/account/SuggestionsScreen.kt` + `SuggestionsViewModel.kt` | ✅ 已实现（导出=弹层展示+复制，无文件下载） | §2.11 |
+| 虚拟形象（预置库/风格/性别筛选） | `ui/page/account/AvatarScreen.kt` + `AvatarViewModel.kt` | ✅ 已实现（无照片上传入口；`avatar_presets` 入口在 Me/Settings 置灰） | §2.12 |
+| 音色（9 内置 + 试听 + 保存 + **去设置**） | `ui/page/account/VoicesScreen.kt` + `VoicesViewModel.kt`（ROUND2 接 `onOpenSettings`；保存后 `voicePrefs.syncFromAccount`） | ✅ 已实现 | §2.13 |
+| 设置（偏好/地址/清缓存/退出/**本人改密弹层**） | `ui/page/account/SettingsScreen.kt` + `SettingsViewModel.kt`（ROUND2：保存后同步 `VoicePrefs`；形象入口按 `avatar_presets` 置灰） | ✅ 已实现（本人改密 A-08） | §2.14、§2.16 |
+| 服务状态（features/capabilities/**force 刷新**） | `ui/page/account/HealthScreen.kt` + `HealthViewModel.kt`（ROUND2：`practice.health(force)` + `stats.healthFull(force)` 并行 + features 区块） | ✅ 已实现 | §2.15 |
+| 独立「修改密码」页 | —（能力并入家庭成员页 + 设置页本人改密弹层） | ⏭️ 延后（A-08） | §2.16 |
+| 应用壳（启动三态 / 5 Tab / 跨 Tab 跳转 / 待补评分横幅） | `ui/AppRoot.kt`、`ui/HomeScreen.kt`、`ui/nav/AppNavHost.kt`、`ui/nav/Routes.kt`（20 条二级路由） | ✅ 已实现 | §2.0 |
 
 ### 10.3 数据层（DTO / Service）
 
 | 功能 | 对应 Android 模块 | 状态 | 章节 |
 |---|---|---|---|
-| 8 个 Service（Auth/Practice/Flow/Chat/Story/Account/Stats/Dictionary） | `core/service/*.kt` | ✅ 已实现 | §3 |
-| 6 组 DTO（Dtos/Flow/Chat/Story/Stats/Account） | `core/net/dto/*.kt` | ✅ 已实现 | §3 |
+| 9 个 Service（Auth/Practice/Flow/Chat/Story/Account/Stats/Dictionary + 全局 ApiClient） | `core/service/*.kt`（`AccountService` 无 deleteMember：服务端无接口） | ✅ 已实现 | §3 |
+| 6 组 DTO（Dtos/Flow/Chat/Story/Stats/Account） | `core/net/dto/*.kt`（全部 `@Serializable`、字段默认值） | ✅ 已实现 | §3 |
 | 线上不存在的接口规避（cursor / 单句 attempts / tts voices / story recordings） | 已按鸿蒙方案移植（本地游标 / `/attempts?limit` / 常量 / 直接 `/asr`） | ✅ 已实现（服务层） | §3.6、§4 D-01/02/08/10 |
-| 盲测同步提交 + 无分数 | `PracticeService.evaluate(..., blindTestId)` | ✅ 已实现（服务层） | §4 D-06 |
+| 盲测同步提交 + 无分数 | `PracticeService.evaluate(..., blindTestId)`（盲测页调用） | ✅ 已实现（服务层） | §4 D-06 |
+| 能力开关统一缓存（ROUND2） | `core/content/CapabilityCache.kt`（5 分钟 TTL / 单飞 / 失败不抛 / 缺省 true）；OCR、插画、自动插图、形象入口、设置页接线 | ✅ 已实现 | §1.1、§1.7 |
+| 语音偏好本机镜像（ROUND2） | `core/audio/VoicePrefs.kt`（儿童强 slow + 内置 Ana；成人读账号偏好；设置/音色页保存后同步） | ✅ 已实现 | §1.2、§1.5 |
+| 离线失败录音队列 + 待补评分页（ROUND2） | `core/offline/PendingUploadQueue.kt`（`enqueue/list/count/remove/clear/retryAll`，`queue.json` + 录音同目录）、`ui/page/offline/PendingUploads*`、`Routes.PENDING_UPLOADS` | ✅ 已实现 | §1.3、§1.9 |
+| 缓存 LRU / 最近结果（ROUND2） | `CacheStore.trimTtsCache(200MB)`、`trimAudioCache(300MB)`、`readRecentResult/writeRecentResult/clearRecentResults`、`cleanupOnBoot` 调用 | ✅ 已实现 | §1.4 |
+| 健康检查两套形状 + force | `PracticeService.health(force)`（简化版，登录/首页/设置/连读用）+ `StatsService.healthFull(force)`（全字段）；健康页两路并行 + 「强制刷新」+ features 区块 | ✅ 已实现（ROUND2 关闭 A-09） | §1.7、§2.15 |
 
 > 变更规则同 §9：Android 侧新增/改变行为时，先改 `android-feature-list.md`，再回填本表状态。
+
+## 11. iOS 端（SwiftUI）实现状态
+
+> **详细清单与页面级签名以 [`../ios/docs/port-contract.md`](../ios/docs/port-contract.md) §3/§4 为准**；实现现状与验收清单见 [`../ios/README.md`](../ios/README.md) §0。
+> 状态口径：**✅ 已实现（代码层）** · **⚠️ 静态校验通过但未编译/未真机** · **⏭️ 延后**
+> 快照时间：**2026-11-05**——`ios/EnglishCoach/` 146 个 Swift 文件 / 约 2.79 万行；`python ios/tools/check_ios.py` → `errors=0 warnings=0`。
+> **全仓 iOS 代码都处于「未编译、未真机」状态**（本机无 macOS/Xcode），下表 ✅ 只表示代码已按契约落地。
+
+| 能力 | 对应 iOS 模块 | 状态 | 备注 |
+|---|---|---|---|
+| Bearer 登录 / 单飞刷新 / 重放 / 吊销 / Keychain | `Core/Session/*`、`Core/Networking/*` | ✅⚠️ | 记住登录默认关；不自动登录（共享设备安全） |
+| 启动三态 / 会话过期 / 5 Tab / 22 路由 | `App/{AppRoot,RootTabView,AppEnvironment}.swift` | ✅⚠️ | 家长入口在「我的」网格，未采用角色化 Tab |
+| 跟读（列表/卡片流/示范音/评测/页内结果） | `Features/Practice/*` | ✅⚠️ | 语料 24h 快照 + 离线兜底 |
+| 跟读详细结果（雷达/音高/单句历史/进步曲线/点词音标） | `Features/Practice/{PracticeResultView,Components}` | ✅⚠️ | 逐词得分只显示一遍、<60 标红仅成人 |
+| 连读（setup/running/汇总） | `Features/Flow/*` | ✅⚠️ | 异步提交 + 轮询 + 批次诊断 |
+| 对话（场景/纯语音会话三步链路/pron 轮询/整段回放/历史/自定义） | `Features/Chat/*` | ✅⚠️ | 会话页无文本输入（产品约束） |
+| 故事（列表/讲述/OCR/改写/详情/复述/插画/导出复制） | `Features/Story/*` | ✅⚠️ | 原始录音无服务端接口 → 本地 `RecordingCache` 副本 |
+| 盲测 / 诊断 / 成长 / 错音本 | `Features/{BlindTest,Report}/*` | ✅⚠️ | 诊断 attempt/batch 无路由载荷，缺参兜底 |
+| 我的 / 设置 / 家长 / 家庭 / 建议箱 / 形象 / 音色 / 服务状态 | `Features/{Home,Settings,Parent}/*` | ✅⚠️ | 「恢复默认」发 `null`；儿童不可达家长页 |
+| 音频（录音 16k/mono/AAC 65k、播放互斥、中断/路由） | `Core/Audio/*` | ✅⚠️ | 真机音频矩阵未验 |
+| 缓存（TTS 200MB / 图 100MB / 录音 300MB-7d / 语料 24h） | `Core/Storage/*` | ✅⚠️ | LRU + 用户级清理 |
+| 设计系统（令牌 + 10 组件文件 + Swift Charts） | `Core/DesignSystem/*`、`Features/Shared/*` | ✅⚠️ | 深色模式/Dynamic Type 未做 |
+| 媒体采集（相机/相册/HEIC→JPEG ≤5MB） | `Core/Media/*` | ✅⚠️ | 相册走 `PhotosPicker`，不申请读权限 |
+| 静态校验工具 | `ios/tools/check_ios.py` | ✅ | 8 类校验 + 16 个负向自测用例 |
+| 锁屏控制 / iPad 分栏 / 深色 / 推送 / Widget / 离线补交 | — | ⏭️ | 见 `ios/docs/roadmap.md` M4 |
+
+> iOS 侧变更规则：先改 `ios/docs/port-contract.md`（接口/签名冻结），再改代码，最后回填本表与 `ios/README.md` §0。
 

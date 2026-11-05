@@ -1,45 +1,24 @@
 import SwiftUI
 
-/// 角色能力。页面与组件只读这里，禁止在 View 里散落 `role == .child` 判断。
-struct RoleCapabilities: Sendable, Equatable {
-    let isChild: Bool
-    let showsIPA: Bool
-    let showsNumericScore: Bool
-    let minTapTarget: CGFloat
-    let bodyFontScale: Double
-    let canChangeLevel: Bool
-    let prefersSlowDemo: Bool
-
-    static let adult = RoleCapabilities(
-        isChild: false,
-        showsIPA: true,
-        showsNumericScore: true,
-        minTapTarget: 44,
-        bodyFontScale: 1.0,
-        canChangeLevel: true,
-        prefersSlowDemo: false
-    )
-
-    static let child = RoleCapabilities(
-        isChild: true,
-        showsIPA: false,
-        showsNumericScore: false,
-        minTapTarget: 56,
-        bodyFontScale: 1.15,
-        canChangeLevel: false,
-        prefersSlowDemo: true
-    )
-
-    static func make(isChild: Bool) -> RoleCapabilities {
-        isChild ? .child : .adult
-    }
-}
+// `RoleCapabilities` 已抽到 `Core/Session/RoleCapabilities.swift`（契约 §3.9，A4）：
+// 全仓只有那一处类型定义，本文件只保留 SwiftUI 环境注入。
+//
+// 规范键：组件/页面统一读 `\.roleCapabilities`。
+// 兼容键：M0 的 `\.capabilities` 与它共享同一个 `CapabilitiesKey` 存储（读写完全等价），
+// 仅为既有 Features/Auth、Features/Practice 暂不炸；新代码一律用 `\.roleCapabilities`。
 
 private struct CapabilitiesKey: EnvironmentKey {
     static let defaultValue: RoleCapabilities = .adult
 }
 
 extension EnvironmentValues {
+    /// 角色能力（规范键）。
+    var roleCapabilities: RoleCapabilities {
+        get { self[CapabilitiesKey.self] }
+        set { self[CapabilitiesKey.self] = newValue }
+    }
+
+    /// M0 兼容别名：与 `roleCapabilities` 是同一份存储，取值永远一致。
     var capabilities: RoleCapabilities {
         get { self[CapabilitiesKey.self] }
         set { self[CapabilitiesKey.self] = newValue }

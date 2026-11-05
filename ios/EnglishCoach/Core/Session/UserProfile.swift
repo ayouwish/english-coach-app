@@ -67,3 +67,23 @@ struct UserProfile: Sendable, Equatable, Decodable {
         }
     }
 }
+
+// MARK: - 从契约 DTO 组装
+
+extension UserProfile {
+    /// 由 A1 的 `AccountUserDTO`（`/auth/me`、`/auth/token`、`/settings` 的 user 形状）构造。
+    ///
+    /// 角色判定以服务端字段为准：`role == "child"` 或 `ageBand == "child"` 或 `isChild == true`
+    /// 都算儿童（家长账号下的儿童档案也必须走儿童能力集）。
+    init(_ dto: AccountUserDTO) {
+        let emailValue = dto.email
+        let displayValue = dto.displayName
+        self.email = emailValue
+        self.id = dto.id.isEmpty ? emailValue : dto.id
+        self.displayName = displayValue.isEmpty ? emailValue : displayValue
+        self.role = UserRole(rawValue: dto.role.lowercased()) ?? (dto.isChildAccount ? .child : .parent)
+        self.cefrLevel = dto.normalizedLevel
+        self.ageBand = dto.ageBand.lowercased()
+        self.avatar = dto.avatar
+    }
+}

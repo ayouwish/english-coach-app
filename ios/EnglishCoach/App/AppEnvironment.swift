@@ -1,237 +1,162 @@
 import Foundation
 import Observation
+import OSLog
 
-/// 组合根 + 全局会话状态。
+/// 组合根（契约 §3.15）：只负责装配依赖与全局状态，**不承载页面状态**。
 ///
-/// 依赖方向：App → Features → Core。这里只负责把 Core 的能力装配起来，
-/// 并把登录/登出/会话过期收敛成 `phase`，View 不直接碰 token。
+/// 关键约束：
+/// - 全 App 只有**一个 `URLSession`**（本类持有的 `HTTPClient`），
+///   `SessionDependencies` 与 `AppServices` 的 8 个 Service 全部复用它（`architecture.md` §4.2）；
+/// - `SessionStore` 是唯一会话事实来源；本类只观察 `phase`，在登录后装配 `AppServices`；
+/// - `Features/**` 不得引用本类型：页面只通过构造参数拿 `AppServices`/`AudioCoordinator`，
+///   通过 Environment 拿 `SessionStore`/`AppRouter`/`RoleCapabilities`。
 @MainActor
 @Observable
 final class AppEnvironment {
-    enum Phase: Equatable {
-        case launching
-        case signedOut
-        case signedIn
-    }
-
     let config: AppConfig
-    private let tokens: TokenStore
-    private var transport: APITransport?
+    let session: SessionStore
+    let audio: AudioCoordinator
+    let router: AppRouter
+    /// 登录后才可用（与 baseURL 绑定）；未登录 / 换服务器时为 nil。
+    private(set) var services: AppServices?
 
-    private(set) var phase: Phase = .launching
-    private(set) var currentUser: UserProfile?
-    /// 冷启动/恢复会话失败时给登录页展示的横幅；网络错误时 token 会保留。
-    private(set) var startupError: APIError?
-    private var didAttemptRestore = false
+    @ObservationIgnored private let tokens: TokenStore
+    @ObservationIgnored private let httpClient: HTTPClient
+    @ObservationIgnored private let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "app")
+    @ObservationIgnored private var servicesBaseURL: URL?
+    @ObservationIgnored private var didBootstrap = false
 
-    init() {
-        self.config = AppConfig()
-        self.tokens = TokenStore()
-    }
+    init(config: AppConfig = AppConfig()) {
+        let tokens = TokenStore()
+        let client = HTTPClient()
+        let credentials = CredentialStore()
+        let audio = AudioCoordinator()
+        let router = AppRouter()
 
-    init(config: AppConfig, tokens: TokenStore) {
         self.config = config
         self.tokens = tokens
-    }
+        self.httpClient = client
+        self.audio = audio
+        self.router = router
 
-    var capabilities: RoleCapabilities {
-        RoleCapabilities.make(isChild: currentUser?.isChild ?? false)
-    }
-
-    var displayName: String {
-        currentUser?.displayName ?? ""
-    }
-
-    var demoBaseURL: String {
-        "https://english.dreamsearch.top/api"
-    }
-
-    // MARK: - 会话恢复
-
-    func restoreIfNeeded() async {
-        guard !didAttemptRestore else { return }
-        didAttemptRestore = true
-        await restore()
-    }
-
-    /// 登录页“重试”：网络恢复后不需要重新输密码。
-    func retryRestore() async {
-        phase = .launching
-        didAttemptRestore = true
-        await restore()
-    }
-
-    private func restore() async {
-        startupError = nil
-
-        guard let baseURL = config.baseURL else {
-            phase = .signedOut
-            return
+        // 认证/账号 Service 与业务 Service 共用同一个 HTTPClient（即同一个 URLSession）。
+        let makeTransport: @Sendable (URL) -> APITransport = { baseURL in
+            makeAPITransport(baseURL: baseURL, client: client, tokens: tokens)
         }
-        guard let stored = await tokens.load(),
-              !stored.accessToken.isEmpty || !stored.refreshToken.isEmpty
-        else {
-            phase = .signedOut
-            return
-        }
-
-        // token 与服务器绑定：地址被改过就不允许拿旧 token 去新服务器。
-        if let boundHost = stored.baseURL,
-           let boundURL = URL(string: boundHost),
-           boundURL.absoluteString != baseURL.absoluteString {
-            await tokens.clear()
-            phase = .signedOut
-            return
-        }
-
-        let transport = makeTransport(baseURL: baseURL)
-        self.transport = transport
-        let auth = AuthAPI(transport: transport)
-
-        do {
-            if !stored.refreshToken.isEmpty {
-                // 主动刷新而不是等 /auth/me 的 401：后端源码里 `/auth/me` 在 Bearer 失效时
-                // 返回 200 `{user:null}`，不会触发网络层的 401 单飞刷新（待运行时复核）。
-                let response = try await auth.refresh(refreshToken: stored.refreshToken)
-                guard let access = response.accessToken else {
-                    throw APIError.unauthorized
-                }
-                let pair = StoredTokens(
-                    accessToken: access,
-                    refreshToken: response.refreshToken ?? stored.refreshToken,
-                    expiresAt: Date().addingTimeInterval(TimeInterval(response.expiresIn ?? 3600)),
-                    baseURL: baseURL.absoluteString
-                )
-                try await tokens.save(pair)
+        let dependencies = SessionDependencies(
+            config: config,
+            tokens: tokens,
+            credentials: credentials,
+            makeAuthService: { baseURL in
+                AuthService(transport: makeTransport(baseURL))
+            },
+            makeAccountService: { baseURL in
+                AccountService(transport: makeTransport(baseURL))
+            },
+            clearUserScopedCache: {
+                CacheJanitor.clearUserScoped()
             }
-
-            let user = try await auth.me()
-            currentUser = user
-            startupError = nil
-            phase = .signedIn
-        } catch let error as APIError {
-            if error.isUnauthorized || error == .forbidden {
-                await tokens.clear()
-            }
-            // 网络错误：保留 token，只展示“连不上服务器”，恢复后可重试。
-            startupError = error
-            phase = .signedOut
-        } catch {
-            startupError = .transport(.unknown)
-            phase = .signedOut
-        }
-    }
-
-    // MARK: - 登录 / 退出
-
-    func signIn(baseURLText: String, email: String, password: String) async throws {
-        guard let baseURL = AppConfig.normalize(baseURLText) else {
-            throw APIError.invalidBaseURL
-        }
-        startupError = nil
-
-        // 切换服务器必须先清旧凭据（token 与服务器绑定）；同一服务器登录失败则保留旧 token，
-        // 这样离线/输错密码不会把仍可用的会话顺手清掉。
-        if config.baseURL?.absoluteString != baseURL.absoluteString {
-            await tokens.clear()
-        }
-        config.updateBaseURL(baseURL.absoluteString)
-
-        let transport = makeTransport(baseURL: baseURL)
-        let auth = AuthAPI(transport: transport)
-        let response = try await auth.token(email: email, password: password)
-
-        guard let access = response.accessToken,
-              let refresh = response.refreshToken
-        else {
-            throw APIError.decoding(path: "auth/token")
-        }
-        let pair = StoredTokens(
-            accessToken: access,
-            refreshToken: refresh,
-            expiresAt: Date().addingTimeInterval(TimeInterval(response.expiresIn ?? 3600)),
-            baseURL: baseURL.absoluteString
         )
-        try await tokens.save(pair)
-
-        self.transport = transport
-        if let user = response.user {
-            currentUser = user
-        } else {
-            currentUser = try await auth.me()
-        }
-        startupError = nil
-        phase = .signedIn
+        self.session = SessionStore(dependencies: dependencies)
     }
 
-    /// 主动退出：先吊销 refresh（204 视为成功），再清本地。
-    /// 离线时吊销失败仍然清本地——服务端 refresh 可能继续有效，属已知限制（ADR-0003 §6）。
-    func signOut() async {
-        if let transport = self.transport, let stored = await tokens.load(), !stored.refreshToken.isEmpty {
-            try? await AuthAPI(transport: transport).revoke(refreshToken: stored.refreshToken)
-        }
-        await tokens.clear()
-        clearUserScopedCache()
-        currentUser = nil
-        self.transport = nil
-        startupError = nil
-        phase = .signedOut
+    // MARK: - 启动
+
+    /// AppRoot `.task` 调用：清缓存 → 恢复会话（幂等，只真正执行一次）。
+    ///
+    /// 启动阶段**不**并发请求 `/health`：`session.restore()` 内部已有 refresh + `/auth/me`
+    /// 两个串行网络往返，健康探活交给 `syncServicesWithSession()` 在会话确定后执行，
+    /// 避免冷启动白屏时间叠加。
+    func bootstrap() async {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+        CacheJanitor.cleanupOnBoot()
+        await session.restore()
     }
 
-    /// 业务接口返回 401 且刷新失败：清本地并回登录页。
-    func handleSessionExpired() async {
-        await tokens.clear()
-        clearUserScopedCache()
-        currentUser = nil
-        transport = nil
-        startupError = .unauthorized
-        phase = .signedOut
-    }
-
-    /// 退出/会话失效时清掉用户相关音频（录音副本、TTS），避免共用设备串号。
-    /// 语料快照 M0 尚未落盘；M1 统一走 CacheJanitor。
-    private func clearUserScopedCache() {
-        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+    /// AppRoot 在 `session.phase` 变化时调用：
+    /// - 已登录 → 按当前 baseURL 装配（或复用）`AppServices`，并探活 voice 更新降级横幅；
+    /// - 未登录 → 释放 Service、清空路由栈（避免退出后仍停在家长页）。
+    func syncServicesWithSession() async {
+        guard session.isSignedIn, let baseURL = config.baseURL else {
+            if services != nil || !router.path.isEmpty {
+                services = nil
+                servicesBaseURL = nil
+                router.reset(to: [])
+            }
             return
         }
-        for name in ["Recordings", "TTS"] {
-            try? FileManager.default.removeItem(at: caches.appendingPathComponent(name, isDirectory: true))
+        let installed = configure(baseURL: baseURL)
+        await refreshVoiceHealth(using: installed.practice)
+    }
+
+    // MARK: - 服务装配
+
+    /// 登录成功后按 baseURL 装配 Service；同一 baseURL 幂等复用，换服务器则重建。
+    @discardableResult
+    func configure(baseURL: URL) -> AppServices {
+        if let existing = services, servicesBaseURL == baseURL {
+            return existing
         }
+        let transport = makeAPITransport(baseURL: baseURL, client: httpClient, tokens: tokens)
+        let built = AppServices(
+            practice: PracticeService(transport: transport),
+            flow: FlowService(transport: transport),
+            chat: ChatService(transport: transport),
+            story: StoryService(transport: transport),
+            stats: StatsService(transport: transport),
+            account: AccountService(transport: transport),
+            dictionary: DictionaryService(transport: transport),
+            media: MediaService(transport: transport)
+        )
+        services = built
+        servicesBaseURL = baseURL
+        router.reset(to: [])
+        logger.notice("services configured")
+        return built
     }
 
-    // MARK: - API 访问
+    // MARK: - 登录页“测试连接”
 
-    func sentenceAPI() throws -> SentenceAPI {
-        SentenceAPI(transport: try requireTransport())
-    }
-
-    func attemptAPI() throws -> AttemptAPI {
-        AttemptAPI(transport: try requireTransport())
-    }
-
-    func ttsAPI() throws -> TTSAPI {
-        TTSAPI(transport: try requireTransport())
-    }
-
-    /// 登录页“测试连接”：用填写的地址发一次 `/health`（不需要鉴权）。
-    func testConnection(baseURLText: String) async throws {
+    /// 用共享 URLSession 构造一次性 `PracticeService` 调 `/health`（不需要 Bearer）。
+    ///
+    /// 不写任何状态：未登录不装配业务 Service；非法地址抛 `APIError.invalidBaseURL`，
+    /// 网络/服务端失败抛 `APIError`，由登录页用 `ErrorMapper` 出文案。
+    func testConnection(baseURLText: String) async throws -> HealthDTO {
         guard let baseURL = AppConfig.normalize(baseURLText) else {
             throw APIError.invalidBaseURL
         }
-        let transport = makeTransport(baseURL: baseURL)
-        try await HealthAPI(transport: transport).ping()
+        let transport = makeAPITransport(baseURL: baseURL, client: httpClient, tokens: tokens)
+        return try await PracticeService(transport: transport).health()
     }
 
-    private func requireTransport() throws -> APITransport {
-        guard let transport = self.transport else {
-            throw APIError.unauthorized
+    // MARK: - voice 降级
+
+    /// `/health.voice.reachable == false` 时置全局琥珀条；网络失败**不改变**当前判定
+    /// （避免把一次抖动误判成语音服务故障）。
+    private func refreshVoiceHealth(using practice: PracticeService) async {
+        do {
+            let health = try await practice.health()
+            if let voice = health.voice, voice.reachable == false {
+                session.markDegraded(true, reason: nil)
+            } else {
+                session.markDegraded(false, reason: nil)
+            }
+        } catch {
+            logger.notice("health probe failed")
         }
-        return transport
     }
+}
 
-    private func makeTransport(baseURL: URL) -> APITransport {
-        let client = HTTPClient()
-        let refresher = TokenRefresher(client: client, store: tokens, baseURL: baseURL)
-        return APITransport(baseURL: baseURL, client: client, tokens: tokens, refresher: refresher)
-    }
+// MARK: - 共享传输层
+
+/// 构造与 baseURL 绑定的 `APITransport`：全 App 复用同一个 `HTTPClient`（URLSession）；
+/// 每个 baseURL 一个 `TokenRefresher`（单飞刷新，禁止跨服务器复用 token）。
+private func makeAPITransport(
+    baseURL: URL,
+    client: HTTPClient,
+    tokens: any TokenStoring
+) -> APITransport {
+    let refresher = TokenRefresher(client: client, store: tokens, baseURL: baseURL)
+    return APITransport(baseURL: baseURL, client: client, tokens: tokens, refresher: refresher)
 }
