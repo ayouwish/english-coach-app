@@ -267,13 +267,14 @@ export struct StoryDetailPage {
     this.getUIContext().getPromptAction().showToast({ message: ok ? '已复制英文全文' : '复制失败，请重试' });
   }
 
-  /** 打印这个故事：渲染 A4 图片后调起系统打印（中文原文仅创建者本人会带上）。 */
+  /** 打印这个故事：生成 PDF 后调起系统打印（中文原文仅创建者本人会带上）。 */
   private async printStory(): Promise<void> {
     if (this.printBusy || this.vm.textEn.trim().length === 0) {
       return;
     }
     this.printBusy = true;
-    let pages: string[] = [];
+    let pdfPath = '';
+    let pageCount = 0;
     try {
       const opts = new StoryPrintOptions();
       opts.storyId = this.vm.storyId;
@@ -283,35 +284,38 @@ export struct StoryDetailPage {
       opts.level = this.vm.level;
       opts.textEn = this.vm.textEn;
       opts.sourceZh = this.vm.canSeeSource() ? this.vm.sourceZh : '';
-      pages = await StoryPrintService.buildPages(opts);
-      if (pages.length === 0) {
+      const result = await StoryPrintService.buildPdf(opts);
+      pdfPath = result.pdfPath;
+      pageCount = result.pageCount;
+      if (pageCount === 0) {
         this.getUIContext().getPromptAction().showToast({ message: '这个故事还没有可打印的内容' });
         return;
       }
-      await StoryPrintService.printPages(pages);
-      this.getUIContext().getPromptAction().showToast({ message: '已打开打印（' + pages.length.toString() + ' 页）' });
+      await StoryPrintService.printPdf(pdfPath);
+      this.getUIContext().getPromptAction().showToast({
+        message: '已打开打印（' + pageCount.toString() + ' 页 PDF）'
+      });
     } catch (err) {
-      // 这台平板可能没装「打印服务」：给可执行的兜底——导出成图片，再用 WPS/文件打印
-      if (pages.length > 0) {
-        this.promptExport(pages);
+      // 打印框架异常时仍保留已生成的 PDF：让用户导出后用 WPS/文件打印
+      if (pdfPath.length > 0) {
+        this.promptExport(pdfPath, pageCount);
       } else {
-        this.getUIContext().getPromptAction().showToast({ message: '打印失败，请确认系统打印服务可用' });
+        this.getUIContext().getPromptAction().showToast({ message: '打印失败，请重试' });
       }
     } finally {
       this.printBusy = false;
     }
   }
 
-  private promptExport(pages: string[]): void {
+  private promptExport(pdfPath: string, pageCount: number): void {
     this.getUIContext().showAlertDialog({
-      title: '系统打印服务不可用',
-      message: '这台平板没有安装「打印服务」。可以把故事导出成 ' + pages.length.toString() +
-        ' 张图片，用 WPS/文件里的打印功能打印。',
+      title: '系统打印面板打不开',
+      message: '已生成 ' + pageCount.toString() + ' 页 PDF，可以导出后用 WPS/文件里的打印功能打印。',
       buttons: [
         {
-          value: '导出为图片',
+          value: '导出 PDF',
           action: () => {
-            void this.exportPages(pages);
+            void this.exportPdf(pdfPath);
           }
         },
         {
@@ -323,42 +327,33 @@ export struct StoryDetailPage {
     });
   }
 
-  /** 把生成好的每页 PNG 复制到用户选的位置（文档选择器，不需要额外权限）。 */
-  private async exportPages(pages: string[]): Promise<void> {
+  /** 把 PDF 复制到用户选的位置（文档选择器，不需要额外权限）。 */
+  private async exportPdf(pdfPath: string): Promise<void> {
     try {
       const context = AppRuntime.requireContext();
       const documentPicker = new picker.DocumentViewPicker(context);
       const options = new picker.DocumentSaveOptions();
-      const names: string[] = [];
-      for (let i = 0; i < pages.length; i++) {
-        names.push('故事-' + this.vm.title + '-第' + (i + 1).toString() + '页.png');
-      }
-      options.newFileNames = names;
+      const safeTitle = this.vm.title.length > 0 ? this.vm.title : '故事';
+      options.newFileNames = ['故事-' + safeTitle + '.pdf'];
       const uris = await documentPicker.save(options);
       if (uris === undefined || uris.length === 0) {
         return;
       }
-      let copied = 0;
-      for (let i = 0; i < pages.length && i < uris.length; i++) {
-        const src = fileIo.openSync(pages[i], fileIo.OpenMode.READ_ONLY);
+      const src = fileIo.openSync(pdfPath, fileIo.OpenMode.READ_ONLY);
+      try {
+        const size = fileIo.statSync(pdfPath).size;
+        const buffer = new ArrayBuffer(size);
+        fileIo.readSync(src.fd, buffer);
+        const dst = fileIo.openSync(uris[0], fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.TRUNC);
         try {
-          const size = fileIo.statSync(pages[i]).size;
-          const buffer = new ArrayBuffer(size);
-          fileIo.readSync(src.fd, buffer);
-          const dst = fileIo.openSync(uris[i], fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.TRUNC);
-          try {
-            fileIo.writeSync(dst.fd, buffer);
-            copied++;
-          } finally {
-            fileIo.closeSync(dst);
-          }
+          fileIo.writeSync(dst.fd, buffer);
         } finally {
-          fileIo.closeSync(src);
+          fileIo.closeSync(dst);
         }
+      } finally {
+        fileIo.closeSync(src);
       }
-      this.getUIContext().getPromptAction().showToast({
-        message: copied > 0 ? ('已导出 ' + copied.toString() + ' 张图片') : '导出失败，请重试'
-      });
+      this.getUIContext().getPromptAction().showToast({ message: '已导出 PDF' });
     } catch (err) {
       this.getUIContext().getPromptAction().showToast({ message: '导出失败，请重试' });
     }

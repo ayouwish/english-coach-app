@@ -1,7 +1,9 @@
 import { image } from '@kit.ImageKit';
 import { drawing } from '@kit.ArkGraphics2D';
 import { print } from '@kit.BasicServicesKit';
+import { fileUri } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { util } from '@kit.ArkTS';
 import { AppRuntime } from '../config/AppRuntime';
 import { CacheService } from './CacheService';
 import { FileUtil } from '../util/FileUtil';
@@ -20,6 +22,12 @@ export class StoryPrintOptions {
   sourceZh: string = '';
 }
 
+/** 打印结果：PDF 路径 + 页数。 */
+export class StoryPrintResult {
+  pdfPath: string = '';
+  pageCount: number = 0;
+}
+
 /** 一行待排版的文本（先算好行，再按页切分）。 */
 class PrintLine {
   text: string = '';
@@ -30,11 +38,20 @@ class PrintLine {
   height: number = 46;
 }
 
+/** 渲染好的一页：JPEG 字节用于嵌 PDF，也落一份图片便于排查。 */
+class PrintPageAsset {
+  jpeg: Uint8Array = new Uint8Array(0);
+  imagePath: string = '';
+}
+
 /**
- * 故事打印：把故事渲染成 A4 比例的 PNG（每页一张），交给系统打印框架。
+ * 故事打印。
  *
- * 为什么用图片：`@ohos.print` 只接受 PDF / 图片；工程里没有 PDF 生成库，
- * 用 drawing 直接把文字画到 PixelMap 再编码 PNG 最稳（中英文都能显示）。
+ * 实现要点：
+ * - `@ohos.print` 对沙箱图片经常报「文件格式不支持」；
+ * - 因此这里用 drawing 把故事画成 A4 页面（1240×1754），每页编码成 JPEG，
+ *   再手工拼成**单文件 PDF**（JPEG 直接以 /DCTDecode 嵌入，无需压缩库）；
+ * - 打印时只传这一个 PDF，兼容性最好；「另存为 PDF」也拿到同一个有效文件。
  */
 export class StoryPrintService {
   private static readonly PAGE_W: number = 1240;
@@ -43,20 +60,21 @@ export class StoryPrintService {
   private static readonly BODY_SIZE: number = 32;
   private static readonly BODY_LINE: number = 46;
 
-  /** 生成打印页并调起系统打印。返回页数。 */
-  static async printStory(opts: StoryPrintOptions): Promise<number> {
-    const pages: string[] = await StoryPrintService.buildPages(opts);
-    if (pages.length === 0) {
+  /** 生成 PDF 并调起系统打印。 */
+  static async printStory(opts: StoryPrintOptions): Promise<StoryPrintResult> {
+    const result = await StoryPrintService.buildPdf(opts);
+    if (result.pdfPath.length === 0) {
       throw new Error('没有可打印的内容');
     }
-    await StoryPrintService.printPages(pages);
-    return pages.length;
+    await StoryPrintService.printPdf(result.pdfPath);
+    return result;
   }
 
-  /** 调起系统打印（图片路径列表）。 */
-  static async printPages(pages: string[]): Promise<void> {
+  /** 调起系统打印（只传一个 PDF）。 */
+  static async printPdf(pdfPath: string): Promise<void> {
     const context = AppRuntime.requireContext();
-    const task = await print.print(pages, context);
+    const uris: string[] = [fileUri.getUriFromPath(pdfPath)];
+    const task = await print.print(uris, context);
     task.on('succeed', () => {
       hilog.info(DOMAIN, TAG, 'print succeed');
     });
@@ -68,17 +86,18 @@ export class StoryPrintService {
     });
   }
 
-  /** 只生成图片（便于调试/后续分享）。 */
-  static async buildPages(opts: StoryPrintOptions): Promise<string[]> {
+  /** 只生成 PDF（不调打印；导出/排查用）。 */
+  static async buildPdf(opts: StoryPrintOptions): Promise<StoryPrintResult> {
+    const result = new StoryPrintResult();
     const lines: PrintLine[] = StoryPrintService.layoutLines(opts);
     if (lines.length === 0) {
-      return [];
+      return result;
     }
     CacheService.ensureAll();
     const dir = CacheService.printDir();
     FileUtil.ensureDir(dir);
     const safeId = opts.storyId.length > 0 ? opts.storyId : 'story';
-    const pages: string[] = [];
+    const assets: PrintPageAsset[] = [];
     let lineIndex = 0;
     let pageNo = 1;
     while (lineIndex < lines.length) {
@@ -96,25 +115,31 @@ export class StoryPrintService {
         y += line.height;
         lineIndex++;
       }
-      const path = dir + '/story_' + safeId + '_p' + pageNo.toString() + '.png';
-      await StoryPrintService.renderPage(pageLines, pageNo, path);
-      pages.push(path);
+      const asset = await StoryPrintService.renderPage(pageLines, pageNo);
+      asset.imagePath = dir + '/story_' + safeId + '_p' + pageNo.toString() + '.jpg';
+      FileUtil.writeBytesAtomic(asset.imagePath, asset.jpeg);
+      assets.push(asset);
       pageNo++;
       if (pageLines.length === 0) {
         break;
       }
     }
-    return pages;
+    if (assets.length === 0) {
+      return result;
+    }
+    const pdfPath = dir + '/story_' + safeId + '.pdf';
+    const pdfBytes = StoryPrintService.assemblePdf(assets);
+    FileUtil.writeBytesAtomic(pdfPath, pdfBytes);
+    result.pdfPath = pdfPath;
+    result.pageCount = assets.length;
+    return result;
   }
 
   private static layoutLines(opts: StoryPrintOptions): PrintLine[] {
     const lines: PrintLine[] = [];
     const contentW = StoryPrintService.PAGE_W - StoryPrintService.MARGIN * 2;
-    const titleFont = StoryPrintService.makeFont(46);
-    const metaFont = StoryPrintService.makeFont(24);
     const bodyFont = StoryPrintService.makeFont(StoryPrintService.BODY_SIZE);
     const zhFont = StoryPrintService.makeFont(30);
-    const headingFont = StoryPrintService.makeFont(32);
 
     lines.push(StoryPrintService.line(opts.title.length > 0 ? opts.title : '未命名故事',
       46, 0xFF1B1B2F, 0, 62));
@@ -153,10 +178,6 @@ export class StoryPrintService {
         }
       }
     }
-    // 标题字体只用于测量，避免未使用告警
-    titleFont.measureText(opts.title, drawing.TextEncoding.TEXT_ENCODING_UTF8);
-    metaFont.measureText(meta.join(''), drawing.TextEncoding.TEXT_ENCODING_UTF8);
-    headingFont.measureText('', drawing.TextEncoding.TEXT_ENCODING_UTF8);
     return lines;
   }
 
@@ -225,7 +246,6 @@ export class StoryPrintService {
       if (current.length > 0 && StoryPrintService.measure(font, candidate) > maxWidth) {
         lines.push(current);
         if (StoryPrintService.measure(font, word) > maxWidth) {
-          // 超长单词：按字符拆
           let chunk = '';
           for (let k = 0; k < word.length; k++) {
             const ch = word.charAt(k);
@@ -254,7 +274,7 @@ export class StoryPrintService {
     return font.measureText(text, drawing.TextEncoding.TEXT_ENCODING_UTF8);
   }
 
-  private static async renderPage(lines: PrintLine[], pageNo: number, path: string): Promise<void> {
+  private static async renderPage(lines: PrintLine[], pageNo: number): Promise<PrintPageAsset> {
     const w = StoryPrintService.PAGE_W;
     const h = StoryPrintService.PAGE_H;
     const buffer = new ArrayBuffer(w * h * 4);
@@ -266,6 +286,7 @@ export class StoryPrintService {
       alphaType: image.AlphaType.OPAQUE,
       editable: true
     });
+    const asset = new PrintPageAsset();
     try {
       const canvas = new drawing.Canvas(pm);
       const brush = new drawing.Brush();
@@ -284,7 +305,6 @@ export class StoryPrintService {
         }
         y += line.height;
       }
-      // 页脚
       const footerFont = StoryPrintService.makeFont(22);
       const footer = 'english-coach · 第 ' + pageNo.toString() + ' 页';
       const footerBlob = drawing.TextBlob.makeFromString(footer, footerFont,
@@ -294,13 +314,105 @@ export class StoryPrintService {
       canvas.detachBrush();
       const packer = image.createImagePacker();
       try {
-        const encoded = await packer.packing(pm, { format: 'image/png', quality: 100 });
-        FileUtil.writeBytesAtomic(path, new Uint8Array(encoded));
+        // PDF 里用 JPEG 最省事：/DCTDecode 可直接嵌入，无需 zlib
+        const encoded = await packer.packing(pm, { format: 'image/jpeg', quality: 90 });
+        asset.jpeg = new Uint8Array(encoded);
       } finally {
         packer.release();
       }
     } finally {
       pm.release();
     }
+    return asset;
+  }
+
+  // ------------------------------------------------------------------ PDF 拼装
+
+  private static assemblePdf(assets: PrintPageAsset[]): Uint8Array {
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    const encoder = new util.TextEncoder();
+    const pushText = (text: string): void => {
+      const bytes = encoder.encodeInto(text);
+      chunks.push(bytes);
+      length += bytes.length;
+    };
+    const pushBytes = (bytes: Uint8Array): void => {
+      chunks.push(bytes);
+      length += bytes.length;
+    };
+    const offsets: number[] = [];
+    const objectCount = 2 + assets.length * 3;
+    const mark = (): void => {
+      offsets.push(length);
+    };
+
+    pushText('%PDF-1.4\n%\u00E2\u00E3\u00CF\u00D3\n');
+
+    // obj 1: catalog
+    mark();
+    pushText('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+
+    // obj 2: pages
+    mark();
+    let kids = '';
+    for (let i = 0; i < assets.length; i++) {
+      kids += (3 + i * 3).toString() + ' 0 R ';
+    }
+    pushText('2 0 obj\n<< /Type /Pages /Kids [' + kids + '] /Count ' + assets.length.toString() +
+      ' >>\nendobj\n');
+
+    for (let i = 0; i < assets.length; i++) {
+      const pageObj = 3 + i * 3;
+      const imageObj = 4 + i * 3;
+      const contentObj = 5 + i * 3;
+      const content = 'q 595.28 0 0 841.89 0 0 cm /Im0 Do Q\n';
+      // page
+      mark();
+      pushText(pageObj.toString() + ' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] ' +
+        '/Resources << /XObject << /Im0 ' + imageObj.toString() + ' 0 R >> >> /Contents ' +
+        contentObj.toString() + ' 0 R >>\nendobj\n');
+      // image xobject (JPEG)
+      mark();
+      const jpeg = assets[i].jpeg;
+      pushText(imageObj.toString() + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' +
+        StoryPrintService.PAGE_W.toString() + ' /Height ' + StoryPrintService.PAGE_H.toString() +
+        ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' +
+        jpeg.length.toString() + ' >>\nstream\n');
+      pushBytes(jpeg);
+      pushText('\nendstream\nendobj\n');
+      // content
+      mark();
+      pushText(contentObj.toString() + ' 0 obj\n<< /Length ' + content.length.toString() +
+        ' >>\nstream\n' + content + 'endstream\nendobj\n');
+    }
+
+    const xrefOffset = length;
+    let xref = 'xref\n0 ' + (objectCount + 1).toString() + '\n0000000000 65535 f \n';
+    for (let i = 0; i < offsets.length; i++) {
+      xref += StoryPrintService.pad10(offsets[i]) + ' 00000 n \n';
+    }
+    xref += 'trailer\n<< /Size ' + (objectCount + 1).toString() + ' /Root 1 0 R >>\nstartxref\n' +
+      xrefOffset.toString() + '\n%%EOF\n';
+    pushText(xref);
+    return StoryPrintService.concat(chunks, length);
+  }
+
+  private static pad10(value: number): string {
+    let text = value.toString();
+    while (text.length < 10) {
+      text = '0' + text;
+    }
+    return text;
+  }
+
+  private static concat(chunks: Uint8Array[], total: number): Uint8Array {
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      out.set(chunks[i], offset);
+      offset += chunks[i].length;
+    }
+    return out;
   }
 }
