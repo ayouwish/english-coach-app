@@ -40,6 +40,9 @@ object Routes {
     const val VOICES = "voices"
     const val HEALTH = "health"
     const val SETTINGS = "settings"
+
+    /** 离线能力：待重试的评测录音队列（网络恢复后统一重试） */
+    const val PENDING_UPLOADS = "pending_uploads"
 }
 
 /** 一级 Tab 下标（与 HomeTabs 顺序一致）。 */
@@ -72,8 +75,8 @@ object NavParams {
     /** 故事：材料 id */
     @Volatile var storyMaterialId: String? = null
 
-    /** 诊断：指定音素 focus 跳到跟读 */
-    @Volatile var diagnosisFocus: String? = null
+    /** 诊断「连读这一批」：由连读汇总页跳转前写入本批 attempt id（可为空 = 用最近一次批次） */
+    @Volatile var diagnosisAttemptIds: List<String>? = null
 
     fun clearPractice() {
         practiceLevel = null

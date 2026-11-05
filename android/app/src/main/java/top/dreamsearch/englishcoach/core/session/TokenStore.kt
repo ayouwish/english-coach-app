@@ -34,7 +34,8 @@ class TokenStore(context: Context) {
         load()
     }
 
-    private fun load() {
+    /** 冷启动从加密存储读一次（SessionStore.restore 会显式调用；构造时也会执行）。 */
+    internal fun load() {
         val p = prefs ?: return
         accessTokenCache = p.getString(KEY_ACCESS, "") ?: ""
         refreshTokenCache = p.getString(KEY_REFRESH, "") ?: ""

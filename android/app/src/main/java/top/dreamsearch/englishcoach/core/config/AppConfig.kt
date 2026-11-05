@@ -57,6 +57,7 @@ class AppConfig(private val prefs: AppPrefs) {
             prefs.putString(KEY_BASE_URL, normalizeUrl(value))
         }
 
+    /** 「记住密码」开关。Android 侧默认**关**（比鸿蒙更保守）：用户显式开启后才加密保存。 */
     var rememberPassword: Boolean
         get() = prefs.getBoolean(KEY_REMEMBER_PASSWORD, false)
         set(value) {

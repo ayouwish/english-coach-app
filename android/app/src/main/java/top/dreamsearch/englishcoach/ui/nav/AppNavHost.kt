@@ -1,6 +1,7 @@
 package top.dreamsearch.englishcoach.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,6 +19,7 @@ import top.dreamsearch.englishcoach.ui.page.chat.ChatDetailScreen
 import top.dreamsearch.englishcoach.ui.page.chat.ChatHistoryScreen
 import top.dreamsearch.englishcoach.ui.page.chat.ChatSessionScreen
 import top.dreamsearch.englishcoach.ui.page.flow.FlowSummaryScreen
+import top.dreamsearch.englishcoach.ui.page.offline.PendingUploadsScreen
 import top.dreamsearch.englishcoach.ui.page.practice.SentenceListScreen
 import top.dreamsearch.englishcoach.ui.page.stats.BlindTestScreen
 import top.dreamsearch.englishcoach.ui.page.stats.DiagnosisScreen
@@ -39,7 +41,7 @@ import top.dreamsearch.englishcoach.ui.page.story.StoryReviewScreen
 fun AppNavHost() {
     val nav = rememberNavController()
     // 让 Tab 根页也能导航（见 Navigator 注释）
-    androidx.compose.runtime.DisposableEffect(nav) {
+    DisposableEffect(nav) {
         Navigator.bind(nav)
         onDispose { Navigator.unbind() }
     }
@@ -61,6 +63,11 @@ fun AppNavHost() {
                 onOpenFlowTab = {
                     TabNav.go(Tabs.FLOW)
                     goHome()
+                },
+                // 汇总页「复述这个故事」：只有本轮来自故事材料时可用（id 由汇总页给出）
+                onOpenReview = { materialId ->
+                    NavParams.storyMaterialId = materialId
+                    nav.navigate(Routes.STORY_REVIEW) { launchSingleTop = true }
                 },
             )
         }
@@ -136,6 +143,7 @@ fun AppNavHost() {
                 onBack = back,
                 onOpenFamily = { nav.navigate(Routes.FAMILY) { launchSingleTop = true } },
                 onOpenSuggestions = { nav.navigate(Routes.SUGGESTIONS) { launchSingleTop = true } },
+                onOpenBlindTest = { nav.navigate(Routes.BLIND_TEST) { launchSingleTop = true } },
             )
         }
 
@@ -152,7 +160,14 @@ fun AppNavHost() {
         }
 
         composable(Routes.VOICES) {
-            VoicesScreen(onBack = back)
+            VoicesScreen(
+                onBack = back,
+                onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+            )
+        }
+
+        composable(Routes.PENDING_UPLOADS) {
+            PendingUploadsScreen(onBack = back)
         }
 
         composable(Routes.HEALTH) {
@@ -172,12 +187,5 @@ fun AppNavHost() {
                 },
             )
         }
-
-        // 兜底：不存在的路由 → 回首页
-        composable("") { HomeScreen(onNavigate = { nav.navigate(it) { launchSingleTop = true } }) }
     }
 }
-
-/** 供调试/深链使用（M1 未启用深链，保留入口）。 */
-@Composable
-fun rememberAppNavController(): NavHostController = rememberNavController()

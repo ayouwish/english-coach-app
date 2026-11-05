@@ -38,7 +38,7 @@ def rel(p: Path) -> str:
 # ---------------------------------------------------------------- 收集声明
 DECL_RE = re.compile(
     r"^\s*(?:(?:public|internal|private|protected|open|abstract|sealed|data|enum|annotation|value|inline|suspend|operator|infix|tailrec|external|actual|expect)\s+)*"
-    r"(class|interface|object|fun|val|var|typealias)\s+([A-Za-z_][A-Za-z0-9_]*)",
+    r"(class|interface|object|fun|val|var|typealias)\s+(?:<[^>]*>\s*)?([A-Za-z_][A-Za-z0-9_]*)",
     re.MULTILINE,
 )
 PKG_RE = re.compile(r"^\s*package\s+([\w.]+)", re.MULTILINE)
@@ -90,7 +90,10 @@ def strip_noise(src: str) -> str:
     return "".join(out)
 
 
+IMPORT_RE = re.compile(r"^import\s+([\w.]+)(?:\.\*)?\s*$", re.MULTILINE)
+
 declarations: dict[str, set[str]] = {}   # package -> {name}
+type_decls: dict[tuple[str, str], list[str]] = {}   # (package, name) -> [file]
 for path in SRC.rglob("*.kt"):
     raw = path.read_text(encoding="utf-8", errors="replace")
     clean = strip_noise(raw)
@@ -105,6 +108,11 @@ for path in SRC.rglob("*.kt"):
     names = declarations.setdefault(pkg, set())
     for kind, name in DECL_RE.findall(clean):
         names.add(name)
+        if kind in ("class", "object", "interface", "typealias"):
+            key = (pkg, name)
+            owners = type_decls.setdefault(key, [])
+            if rel(path) not in owners:
+                owners.append(rel(path))
     # 括号配平
     for open_ch, close_ch, label in (("{", "}", "花括号"), ("(", ")", "圆括号"), ("[", "]", "方括号")):
         if clean.count(open_ch) != clean.count(close_ch):
@@ -116,8 +124,23 @@ for path in SRC.rglob("*.kt"):
         if marker in raw:
             warnings.append(f"{rel(path)}: 含 {marker}")
 
+# 同包重名类型（Kotlin 编译错误：Redeclaration）
+for (pkg, name), owners in type_decls.items():
+    if len(owners) > 1:
+        errors.append(f"重复声明：{pkg}.{name} 出现在 {', '.join(owners)}")
+
+# 未声明依赖（白名单外的第三方库直接报错）
+FORBIDDEN_IMPORTS = (
+    "coil.", "retrofit2.", "dagger.", "hilt", "com.google.gson", "com.squareup.moshi",
+    "io.ktor.", "okio.", "com.airbnb.", "com.github.", "org.koin.",
+)
+for path in SRC.rglob("*.kt"):
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    for imp in IMPORT_RE.findall(strip_noise(raw)):
+        if imp.startswith(FORBIDDEN_IMPORTS):
+            errors.append(f"{rel(path)}: import {imp} —— 该依赖未在 build.gradle.kts 声明")
+
 # ---------------------------------------------------------------- 检查 import
-IMPORT_RE = re.compile(r"^import\s+([\w.]+)(?:\.\*)?\s*$", re.MULTILINE)
 for path in SRC.rglob("*.kt"):
     raw = path.read_text(encoding="utf-8", errors="replace")
     clean = strip_noise(raw)
@@ -166,7 +189,7 @@ PAGE_REQUIREMENTS = {
     "ui/page/account/MeScreen.kt": [("fun MeTab(", ["onNavigate"])],
     "ui/page/auth/LoginScreen.kt": [("fun LoginScreen(", [])],
     "ui/page/practice/SentenceListScreen.kt": [("fun SentenceListScreen(", ["onBack"])],
-    "ui/page/flow/FlowSummaryScreen.kt": [("fun FlowSummaryScreen(", ["onBack", "onOpenFlowTab"])],
+    "ui/page/flow/FlowSummaryScreen.kt": [("fun FlowSummaryScreen(", ["onBack", "onOpenFlowTab", "onOpenReview"])],
     "ui/page/chat/ChatSessionScreen.kt": [("fun ChatSessionScreen(", ["onBack"])],
     "ui/page/chat/ChatHistoryScreen.kt": [("fun ChatHistoryScreen(", ["onBack", "onOpenDetail"])],
     "ui/page/chat/ChatDetailScreen.kt": [("fun ChatDetailScreen(", ["onBack"])],
@@ -177,11 +200,12 @@ PAGE_REQUIREMENTS = {
     "ui/page/stats/DiagnosisScreen.kt": [("fun DiagnosisScreen(", ["onBack", "onPracticeFocus"])],
     "ui/page/stats/ReviewScreen.kt": [("fun ReviewScreen(", ["onBack"])],
     "ui/page/stats/BlindTestScreen.kt": [("fun BlindTestScreen(", ["onBack"])],
-    "ui/page/account/ParentScreen.kt": [("fun ParentScreen(", ["onBack", "onOpenFamily", "onOpenSuggestions"])],
+    "ui/page/account/ParentScreen.kt": [("fun ParentScreen(", ["onBack", "onOpenFamily", "onOpenSuggestions", "onOpenBlindTest"])],
     "ui/page/account/FamilyScreen.kt": [("fun FamilyScreen(", ["onBack"])],
     "ui/page/account/SuggestionsScreen.kt": [("fun SuggestionsScreen(", ["onBack"])],
     "ui/page/account/AvatarScreen.kt": [("fun AvatarScreen(", ["onBack"])],
-    "ui/page/account/VoicesScreen.kt": [("fun VoicesScreen(", ["onBack"])],
+    "ui/page/account/VoicesScreen.kt": [("fun VoicesScreen(", ["onBack", "onOpenSettings"])],
+    "ui/page/offline/PendingUploadsScreen.kt": [("fun PendingUploadsScreen(", ["onBack"])],
     "ui/page/account/HealthScreen.kt": [("fun HealthScreen(", ["onBack"])],
     "ui/page/account/SettingsScreen.kt": [
         ("fun SettingsScreen(", ["onBack", "onOpenAvatar", "onOpenVoices", "onOpenHealth", "onOpenSuggestions", "onLogout"])

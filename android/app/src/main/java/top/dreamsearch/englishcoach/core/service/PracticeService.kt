@@ -78,9 +78,33 @@ class PracticeService(private val api: ApiClient) {
         return decodeBody<AttemptListDto>(raw.text, "评测记录").attempts
     }
 
-    /** `GET /api/audio/:id` → 录音回放字节（交给 VM 落盘后播放）。 */
+    /** `GET /api/audio/:id` → 录音回放字节（交给 VM 落盘后播放；带 Bearer 鉴权）。 */
     suspend fun audio(audioId: String): ByteArray {
         val raw = api.getBytes("/audio/${encodePath(audioId)}", null, TTS_TIMEOUT_MS)
+        api.requireOk(raw)
+        val bytes = raw.bytes
+        if (bytes == null || bytes.isEmpty()) {
+            throw ApiError(ApiErrorCode.BAD_RESPONSE, raw.status, "录音内容为空")
+        }
+        return bytes
+    }
+
+    /**
+     * 按 `AttemptItemDto.audio_url` 取录音回放字节（ROUND2_CONTRACT §1.5）。
+     *
+     * 兼容多种来源形状：
+     * - `/api/audio/cm_x`（服务端 `audio_url` 的常规形状）
+     * - `/audio/cm_x`、完整 URL（`https://host/api/audio/cm_x?t=...`）
+     * - 纯 audio id（`cm_x`）
+     *
+     * 单句历史逐条回放 / 对话消息回放都走这里，页面不再自己拼 URL。
+     */
+    suspend fun audioByUrl(audioUrl: String): ByteArray {
+        val path = audioPathOf(audioUrl)
+        if (path.isEmpty()) {
+            throw ApiError.local(ApiErrorCode.AUDIO_NOT_FOUND, "这条记录没有录音")
+        }
+        val raw = api.getBytes(path, null, TTS_TIMEOUT_MS)
         api.requireOk(raw)
         val bytes = raw.bytes
         if (bytes == null || bytes.isEmpty()) {
@@ -141,12 +165,18 @@ class PracticeService(private val api: ApiClient) {
         return dto
     }
 
-    /** `GET /api/health`（无需登录，5s 超时）。 */
-    suspend fun health(): HealthDto {
+    /**
+     * `GET /api/health`（无需登录，5s 超时）。
+     *
+     * @param force true 时加 `?force=1` 跳过服务端 15s 缓存（健康页「强制刷新」用）；
+     *   默认 false，既有 `health()` 调用点保持编译。
+     */
+    suspend fun health(force: Boolean = false): HealthDto {
         val raw = api.request(
             ApiRequest(
                 method = "GET",
                 path = "/health",
+                query = if (force) mapOf("force" to "1") else null,
                 auth = false,
                 retryOn401 = false,
                 timeoutMs = HEALTH_TIMEOUT_MS,
@@ -181,6 +211,28 @@ class PracticeService(private val api: ApiClient) {
     }
 
     // ------------------------------------------------------------------ 内部
+
+    /**
+     * 把各种形状的 `audio_url` 归一为 `ApiClient` 需要的「不含 `/api` 前缀」路径。
+     *
+     * `/api/audio/cm_1` → `/audio/cm_1`；`/audio/cm_1` 原样；完整 URL 取 path；
+     * 纯 id → `/audio/<id>`；带 query/fragment 的先剥掉。
+     */
+    private fun audioPathOf(rawUrl: String): String {
+        var url = rawUrl.trim()
+        if (url.isEmpty()) return ""
+        val cut = url.indexOfFirst { it == '?' || it == '#' }
+        if (cut >= 0) url = url.substring(0, cut)
+        if (url.isEmpty()) return ""
+        val apiIndex = url.indexOf("/api/")
+        if (apiIndex >= 0) return url.substring(apiIndex + 4)
+        if (url.startsWith("/")) return url
+        if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+            val path = url.substringAfter("://").substringAfter('/', "")
+            return if (path.isEmpty()) "" else "/$path"
+        }
+        return "/audio/${encodePath(url)}"
+    }
 
     /** 路径段编码（id 只含安全字符，仍做一次编码避免拼出怪 URL）。 */
     private fun encodePath(segment: String): String =

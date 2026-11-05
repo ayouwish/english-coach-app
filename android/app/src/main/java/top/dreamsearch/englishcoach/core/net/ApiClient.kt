@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -93,7 +94,7 @@ private data class RefreshResponse(
  * 行为：
  * - Bearer 注入 + 401 单飞刷新 + 每请求最多重放一次；
  * - refresh 被拒（400/401）→ 清 token 抛 unauthorized；refresh 网络失败/5xx → **不清 token**；
- * - `/auth/*`、`/health` 不参与 401 重试（auth=false）。
+ * - `/auth/...`、`/health` 不参与 401 重试（auth=false）。
  */
 class ApiClient(
     private val config: AppConfig,

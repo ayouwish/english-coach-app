@@ -47,12 +47,14 @@ import top.dreamsearch.englishcoach.ui.design.LocalIsChild
  * @param score 0–100；null 表示无分数（环空转、中间显示 —）
  * @param isChild 默认取 [LocalIsChild]（主题注入），页面一般不用传
  * @param label 环内小标签（如「总分」「继续加油」），null 时不显示
+ * @param caption 环下方一行小字（如「综合分」），null 时不占位
  */
 @Composable
 fun ScoreBadge(
     score: Double?,
     isChild: Boolean = LocalIsChild.current,
     label: String? = null,
+    caption: String? = null,
 ) {
     val ringColor = EcScore.color(score, isChild)
     val showNumber = EcScore.showNumber(score, isChild)
@@ -62,56 +64,77 @@ fun ScoreBadge(
         isChild -> "🌱"
         else -> "—"
     }
-    val description = if (showNumber) {
-        (label ?: "总分") + EcScore.numberText(score) + "分"
-    } else {
-        EcScore.encouragement(score, isChild)
+    val description = buildString {
+        if (showNumber) {
+            append(label ?: "总分")
+            append(EcScore.numberText(score))
+            append("分")
+        } else {
+            append(EcScore.encouragement(score, isChild))
+        }
+        if (!caption.isNullOrEmpty()) {
+            append("，")
+            append(caption)
+        }
     }
-    Box(
-        modifier = Modifier
-            .size(96.dp)
-            .semantics { contentDescription = description },
-        contentAlignment = Alignment.Center,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Canvas(modifier = Modifier.size(96.dp)) {
-            val stroke = 9.dp.toPx()
-            val inset = stroke / 2f
-            val arcSize = Size(size.width - stroke, size.height - stroke)
-            drawArc(
-                color = EcColor.surfaceAlt,
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
-            )
-            val safeScore = (score ?: 0.0).coerceIn(0.0, 100.0)
-            if (safeScore > 0.0) {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .semantics { contentDescription = description },
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.size(96.dp)) {
+                val stroke = 9.dp.toPx()
+                val inset = stroke / 2f
+                val arcSize = Size(size.width - stroke, size.height - stroke)
                 drawArc(
-                    color = ringColor,
-                    startAngle = -90f,
-                    sweepAngle = (safeScore / 100.0 * 360.0).toFloat(),
+                    color = EcColor.surfaceAlt,
+                    startAngle = 0f,
+                    sweepAngle = 360f,
                     useCenter = false,
                     topLeft = Offset(inset, inset),
                     size = arcSize,
                     style = Stroke(width = stroke, cap = StrokeCap.Round),
                 )
+                val safeScore = (score ?: 0.0).coerceIn(0.0, 100.0)
+                if (safeScore > 0.0) {
+                    drawArc(
+                        color = ringColor,
+                        startAngle = -90f,
+                        sweepAngle = (safeScore / 100.0 * 360.0).toFloat(),
+                        useCenter = false,
+                        topLeft = Offset(inset, inset),
+                        size = arcSize,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    )
+                }
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+            ) {
+                Text(
+                    text = centerText,
+                    fontSize = if (isChild) EcFont.h2 else EcFont.h1,
+                    fontWeight = FontWeight.Bold,
+                    color = ringColor,
+                )
+                if (!label.isNullOrEmpty()) {
+                    Text(text = label, fontSize = EcFont.micro, color = EcColor.muted)
+                }
             }
         }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
+        if (!caption.isNullOrEmpty()) {
             Text(
-                text = centerText,
-                fontSize = if (isChild) EcFont.h2 else EcFont.h1,
-                fontWeight = FontWeight.Bold,
-                color = ringColor,
+                text = caption,
+                fontSize = EcFont.micro,
+                color = EcColor.muted,
+                textAlign = TextAlign.Center,
             )
-            if (!label.isNullOrEmpty()) {
-                Text(text = label, fontSize = EcFont.micro, color = EcColor.muted)
-            }
         }
     }
 }
