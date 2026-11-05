@@ -5,6 +5,8 @@ import { TokenSession } from '../net/TokenSession';
 import { AuthService } from '../service/AuthService';
 import { CacheService } from '../service/CacheService';
 import { CredentialStore } from './CredentialStore';
+import { BlindRuntime } from './BlindRuntime';
+import { PracticeFocus } from './PracticeFocus';
 
 /**
  * 全局会话状态（登录用户 / 角色 / 今日用量）。
@@ -87,6 +89,9 @@ export class SessionStore {
     }
     // 切换账号：旧账号缓存必须失效（docs/architecture.md §7.4）
     CacheService.clearAll();
+    // 切账号时清掉上一个人的盲测/专项练习状态（否则新用户会“继承”盲测批次）
+    BlindRuntime.clear();
+    PracticeFocus.clear();
     SessionStore.applyUser(user, result.usage);
   }
 
@@ -101,6 +106,8 @@ export class SessionStore {
     }
     await TokenSession.clear();
     CacheService.clearAll();
+    BlindRuntime.clear();
+    PracticeFocus.clear();
     SessionStore.set(new SessionState());
   }
 
@@ -114,6 +121,8 @@ export class SessionStore {
     } catch (err) {
       // 清凭证失败也要把 UI 退回登录态
     }
+    BlindRuntime.clear();
+    PracticeFocus.clear();
     SessionStore.set(new SessionState());
   }
 
