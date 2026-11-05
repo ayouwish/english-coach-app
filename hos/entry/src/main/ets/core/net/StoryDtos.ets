@@ -224,6 +224,8 @@ export class StoryGroup {
 
 /** 本次会话里的一次复述结果（服务端没有复述历史接口，只能内存保留）。 */
 export class StoryRetellRecord {
+  /** 复述者（本地内存按人隔离，切换账号不串） */
+  userId: string = '';
   createdAt: string = '';
   coverage: number = -1;
   coveredCount: number = 0;

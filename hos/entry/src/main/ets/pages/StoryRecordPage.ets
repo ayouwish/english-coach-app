@@ -29,7 +29,7 @@ export struct StoryRecordPage {
       return;
     }
     this.started = true;
-    this.vm.configure(this.session.isChild, this.session.cefrLevel);
+    this.vm.configure(this.session.isChild, this.session.cefrLevel, this.session.userId);
   }
 
   aboutToDisappear(): void {

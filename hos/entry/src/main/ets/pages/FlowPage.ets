@@ -1221,9 +1221,36 @@ export struct FlowPage {
       // Tab 切换 / 被二级页覆盖：不可见时停轮询，回来立刻补拉一次（规格 §5.4）
       if (isVisible) {
         this.vm.resume();
+        this.resetStoryStateOnManualEntry();
       } else {
         this.vm.dispose();
       }
     })
+  }
+
+  /**
+   * 从故事「开始朗读」跳到连读、故事读完后回到连读 Tab：默认回到「语料」来源。
+   * 与 Web v0.21 一致（连读页状态残留修复）：无参数进入连读应显示语料。
+   */
+  private resetStoryStateOnManualEntry(): void {
+    if (StoryReadRequest.pending()) {
+      return;
+    }
+    if (this.vm.phase !== FlowPhase.SETUP) {
+      return;
+    }
+    if (this.vm.runTitle.length === 0 || this.vm.items.length > 0) {
+      return;
+    }
+    this.vm.backToSetup();
+    this.vm.sourceTab = 0;
+    this.vm.runTitle = '';
+    this.vm.runMaterialId = '';
+    this.vm.customInput = '';
+    this.vm.customSentences = [];
+    this.vm.saveTitle = '';
+    this.vm.savedPageId = '';
+    this.vm.savedPageTitle = '';
+    this.vm.clearSetupError();
   }
 }

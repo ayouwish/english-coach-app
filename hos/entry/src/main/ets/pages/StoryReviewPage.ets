@@ -30,7 +30,7 @@ export struct StoryReviewPage {
       this.vm.loadError = '没有找到这个故事，返回详情页重新进入试试';
       return;
     }
-    void this.vm.load(id, this.session.isChild, this.session.cefrLevel);
+    void this.vm.load(id, this.session.isChild, this.session.cefrLevel, this.session.userId);
   }
 
   aboutToDisappear(): void {
@@ -355,7 +355,7 @@ export struct StoryReviewPage {
             actionLabel: '重试',
             onAction: () => {
               if (this.vm.storyId.length > 0) {
-                void this.vm.load(this.vm.storyId, this.session.isChild, this.session.cefrLevel);
+                void this.vm.load(this.vm.storyId, this.session.isChild, this.session.cefrLevel, this.session.userId);
               }
             }
           })

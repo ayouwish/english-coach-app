@@ -26,40 +26,45 @@ import { FileUtil } from '../core/util/FileUtil';
  * 详情页必须标注「本次录音，仅本次可用」。
  */
 export class StoryRuntime {
-  /** material_id → 本次录制的中文原声本地路径 */
+  /** key = userId#materialId（中文原文/原声/复述都只属于本人，切账号不串） */
   private static originals: Map<string, string> = new Map();
-  /** material_id → 本次录制对应的中文原文 */
   private static originalTexts: Map<string, string> = new Map();
-  /** material_id → 本次会话里的复述结果（服务端没有复述历史接口） */
   private static retells: Map<string, StoryRetellRecord[]> = new Map();
 
-  static setOriginal(materialId: string, audioPath: string, textZh: string): void {
+  private static key(userId: string, materialId: string): string {
+    return (userId.length === 0 ? 'anon' : userId) + '#' + materialId;
+  }
+
+  static setOriginal(userId: string, materialId: string, audioPath: string, textZh: string): void {
     if (materialId.length === 0 || audioPath.length === 0) {
       return;
     }
-    StoryRuntime.originals.set(materialId, audioPath);
-    StoryRuntime.originalTexts.set(materialId, textZh);
+    const key = StoryRuntime.key(userId, materialId);
+    StoryRuntime.originals.set(key, audioPath);
+    StoryRuntime.originalTexts.set(key, textZh);
   }
 
-  static originalAudio(materialId: string): string {
-    const path = StoryRuntime.originals.get(materialId);
+  static originalAudio(userId: string, materialId: string): string {
+    const path = StoryRuntime.originals.get(StoryRuntime.key(userId, materialId));
     return path === undefined ? '' : path;
   }
 
-  static originalText(materialId: string): string {
-    const text = StoryRuntime.originalTexts.get(materialId);
+  static originalText(userId: string, materialId: string): string {
+    const text = StoryRuntime.originalTexts.get(StoryRuntime.key(userId, materialId));
     return text === undefined ? '' : text;
   }
 
-  static addRetell(materialId: string, record: StoryRetellRecord): void {
+  static addRetell(userId: string, materialId: string, record: StoryRetellRecord): void {
     if (materialId.length === 0) {
       return;
     }
-    let list = StoryRuntime.retells.get(materialId);
+    const key = StoryRuntime.key(userId, materialId);
+    let list = StoryRuntime.retells.get(key);
     if (list === undefined) {
       list = [];
-      StoryRuntime.retells.set(materialId, list);
+      StoryRuntime.retells.set(key, list);
     }
+    record.userId = userId;
     list.unshift(record);
     while (list.length > 5) {
       list.pop();
@@ -67,8 +72,8 @@ export class StoryRuntime {
     StoryRuntime.bump('storyRetellTick');
   }
 
-  static retellsOf(materialId: string): StoryRetellRecord[] {
-    const list = StoryRuntime.retells.get(materialId);
+  static retellsOf(userId: string, materialId: string): StoryRetellRecord[] {
+    const list = StoryRuntime.retells.get(StoryRuntime.key(userId, materialId));
     // 返回副本：页面拿到新数组引用才会触发刷新
     return list === undefined ? [] : list.slice();
   }
@@ -356,16 +361,20 @@ export class StoryRecordVM {
 
   saving: boolean = false;
 
+  /** 当前登录用户（原声/复述按人隔离） */
+  userId: string = '';
+
   private originalPath: string = '';
   private originalTextZh: string = '';
   private recordStartedAt: number = 0;
   private timerId: number = -1;
   private lastAction: RecordAction = RecordAction.NONE;
 
-  configure(isChild: boolean, cefrLevel: string): void {
+  configure(isChild: boolean, cefrLevel: string, userId: string): void {
     this.isChild = isChild;
     this.level = StoryRecordVM.normalizeLevel(cefrLevel);
     this.maxSentences = isChild ? 5 : 8;
+    this.userId = userId;
     void this.applyAccountPrefs();
   }
 
@@ -642,7 +651,7 @@ export class StoryRecordVM {
     try {
       const created = await StoryService.createMaterial(title, text, sourceZh, this.level);
       if (this.originalPath.length > 0 && FileUtil.exists(this.originalPath)) {
-        StoryRuntime.setOriginal(created.id, this.originalPath, sourceZh);
+        StoryRuntime.setOriginal(this.userId, created.id, this.originalPath, sourceZh);
       }
       StoryRuntime.notifySaved();
       // 账号偏好 auto_illustrate=开 时，保存后按 Web 行为自动画一张（失败静默，详情页可手动重画）
@@ -818,12 +827,26 @@ export class StoryDetailVM {
 
   retells: StoryRetellRecord[] = [];
 
+  /** 当前登录用户（中文原文/原声/复述/朗读缓存都只属于本人） */
+  userId: string = '';
+  /** 故事创建者 id（隐私：中文原文仅创建者可见） */
+  createdBy: string = '';
+
   private pollTimerId: number = -1;
   private pollCount: number = 0;
   private lastAction: DetailAction = DetailAction.NONE;
 
-  configure(isChild: boolean): void {
+  configure(isChild: boolean, userId: string): void {
     this.isChild = isChild;
+    this.userId = userId;
+  }
+
+  /** 中文原文是否可见：服务端只给创建者；客户端再兜一层（防旧服务端）。 */
+  canSeeSource(): boolean {
+    if (!this.hasSourceZh) {
+      return false;
+    }
+    return this.createdBy.length === 0 || this.createdBy === this.userId;
   }
 
   async load(id: string): Promise<void> {
@@ -841,9 +864,9 @@ export class StoryDetailVM {
       return;
     }
     this.loading = false;
-    this.originalPath = StoryRuntime.originalAudio(id);
-    this.originalText = StoryRuntime.originalText(id);
-    this.retells = StoryRuntime.retellsOf(id);
+    this.originalPath = StoryRuntime.originalAudio(this.userId, id);
+    this.originalText = StoryRuntime.originalText(this.userId, id);
+    this.retells = StoryRuntime.retellsOf(this.userId, id);
     if (this.hasImage) {
       this.imageLoading = true;
       try {
@@ -864,6 +887,7 @@ export class StoryDetailVM {
     this.dateText = StoryDates.displayText(StoryDates.keyFromIso(dto.created_at === undefined ? '' : dto.created_at));
     this.sentenceCount = dto.sentence_count === undefined ? 0 : dto.sentence_count;
     this.authorName = dto.created_by_name === undefined ? '' : dto.created_by_name;
+    this.createdBy = (dto.created_by === undefined || dto.created_by === null) ? '' : dto.created_by;
     this.textEn = dto.text === undefined ? '' : dto.text;
     const source = dto.source_zh;
     this.hasSourceZh = source !== undefined && source !== null && source.trim().length > 0;
@@ -892,7 +916,7 @@ export class StoryDetailVM {
   }
 
   refreshRetells(): void {
-    this.retells = StoryRuntime.retellsOf(this.storyId);
+    this.retells = StoryRuntime.retellsOf(this.userId, this.storyId);
   }
 
   reportImageError(): void {
@@ -1041,7 +1065,7 @@ export class StoryDetailVM {
     this.audioLoading = true;
     this.lastAction = DetailAction.AUDIO;
     try {
-      const dest = CacheService.audioDir() + '/story_' + this.storyId + '_read.wav';
+      const dest = CacheService.audioDir() + '/story_' + this.storyId + '_read_' + (this.userId.length > 0 ? this.userId : 'anon') + '.wav';
       if (!FileUtil.exists(dest)) {
         const downloaded = await StoryService.downloadStoryAudio(this.storyId, dest, false);
         if (!downloaded) {
@@ -1076,7 +1100,7 @@ export class StoryDetailVM {
     this.audioState = 'building';
     this.audioStatusText = '正在重新生成整段朗读…';
     try {
-      const dest = CacheService.audioDir() + '/story_' + this.storyId + '_read.wav';
+      const dest = CacheService.audioDir() + '/story_' + this.storyId + '_read_' + (this.userId.length > 0 ? this.userId : 'anon') + '.wav';
       FileUtil.remove(dest);
       const downloaded = await StoryService.downloadStoryAudio(this.storyId, dest, true);
       if (downloaded) {
@@ -1188,9 +1212,12 @@ export class StoryReviewVM {
   private lastAction: ReviewAction = ReviewAction.NONE;
   private lastTranscript: string = '';
 
-  async load(id: string, isChild: boolean, cefrLevel: string): Promise<void> {
+  userId: string = '';
+
+  async load(id: string, isChild: boolean, cefrLevel: string, userId: string): Promise<void> {
     this.storyId = id;
     this.isChild = isChild;
+    this.userId = userId;
     this.level = StoryReviewVM.normalizeLevel(cefrLevel);
     this.loading = true;
     this.loadError = '';
@@ -1356,7 +1383,7 @@ export class StoryReviewVM {
     record.feedbackZh = this.feedbackZh;
     record.feedbackEn = this.feedbackEn;
     record.transcript = transcript;
-    StoryRuntime.addRetell(this.storyId, record);
+    StoryRuntime.addRetell(this.userId, this.storyId, record);
   }
 
   canPlayRecording(): boolean {

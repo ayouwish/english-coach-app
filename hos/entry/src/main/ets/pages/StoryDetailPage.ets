@@ -40,7 +40,7 @@ export struct StoryDetailPage {
       return;
     }
     this.started = true;
-    this.vm.configure(this.session.isChild);
+    this.vm.configure(this.session.isChild, this.session.userId);
     const id = NavState.story.storyId;
     if (id.length === 0) {
       this.vm.loading = false;
@@ -315,7 +315,7 @@ export struct StoryDetailPage {
 
   @Builder
   sourceCard() {
-    if (this.vm.hasSourceZh) {
+    if (this.vm.canSeeSource()) {
       Column({ space: EcSpace.x2 }) {
         Row({ space: EcSpace.x1 }) {
           Text('🗒️ 看看你当时怎么讲的（中文）')
