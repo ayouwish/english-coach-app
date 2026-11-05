@@ -7,8 +7,10 @@ import { AppConfig } from '../config/AppConfig';
 const DOMAIN: number = 0xEC00;
 const TAG: string = 'Token';
 
-/** 【待确认】Asset Store Kit 错误码：24000001 = 资产不存在、24000002 = 资产已存在。 */
-const ERR_ASSET_NOT_FOUND: number = 24000001;
+/** Asset Store Kit 错误码（@ohos.security.asset）：1 服务不可用 / 2 不存在 / 3 已存在 / 5 锁屏状态不匹配。 */
+const ERR_ASSET_UNAVAILABLE: number = 24000001;
+const ERR_ASSET_NOT_FOUND: number = 24000002;
+const ERR_ASSET_ALREADY_EXISTS: number = 24000003;
 
 /**
  * access / refresh token 的唯一存放处（Asset Store Kit）。
@@ -163,13 +165,12 @@ export class TokenSession {
       await TokenSession.removeSecret(alias);
       return;
     }
-    const updateMap: asset.AssetMap = new Map();
-    updateMap.set(asset.Tag.ALIAS, TokenSession.encode(alias));
-    updateMap.set(asset.Tag.SECRET, TokenSession.encode(secret));
-    // asset.update 的真实签名是 (query, attributesToUpdate) 两个参数：
-    // 第一个参数定位资产（ALIAS），第二个参数给出要更新的字段。
     const queryMap: asset.AssetMap = new Map();
     queryMap.set(asset.Tag.ALIAS, TokenSession.encode(alias));
+    // 注意：asset.update 的第二个参数只放「可更新属性」（SECRET 等），**不能带 ALIAS**，
+    // 否则系统按参数错误处理（24000001），随后 add 又因已存在报 24000003 → 误判降级。
+    const updateMap: asset.AssetMap = new Map();
+    updateMap.set(asset.Tag.SECRET, TokenSession.encode(secret));
     try {
       await asset.update(queryMap, updateMap);
       TokenSession.degraded = false;
@@ -185,6 +186,21 @@ export class TokenSession {
       TokenSession.degradedCode = 0;
     } catch (addErr) {
       const ae = addErr as BusinessError;
+      if (ae.code === ERR_ASSET_ALREADY_EXISTS) {
+        // 已存在但 update 没成功：用正确的属性集再 update 一次
+        try {
+          await asset.update(queryMap, updateMap);
+          TokenSession.degraded = false;
+          TokenSession.degradedCode = 0;
+          return;
+        } catch (retryErr) {
+          const re = retryErr as BusinessError;
+          TokenSession.degraded = true;
+          TokenSession.degradedCode = re.code;
+          hilog.error(DOMAIN, TAG, 'asset.update retry failed (code=%{public}d)', re.code);
+          return;
+        }
+      }
       hilog.warn(DOMAIN, TAG, 'asset.add with full attrs failed (code=%{public}d), retry minimal', ae.code);
       try {
         // 兜底：去掉 ACCESSIBILITY/SYNC_TYPE 再试一次（部分机型组合属性会报错）
@@ -217,7 +233,7 @@ export class TokenSession {
       return '';
     } catch (err) {
       const e = err as BusinessError;
-      if (e.code === ERR_ASSET_NOT_FOUND) {
+      if (e.code === ERR_ASSET_NOT_FOUND || e.code === ERR_ASSET_UNAVAILABLE) {
         return '';
       }
       // 读失败不等于不能写：不在这里降级，留给 writeSecret 判定（否则首次启动读不到就永远不写）

@@ -5,6 +5,10 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const DOMAIN: number = 0xEC00;
 const TAG: string = 'Cred';
+/** Asset Store Kit 错误码：1 服务不可用 / 2 不存在 / 3 已存在。 */
+const ERR_ASSET_UNAVAILABLE: number = 24000001;
+const ERR_ASSET_NOT_FOUND: number = 24000002;
+const ERR_ASSET_ALREADY_EXISTS: number = 24000003;
 
 /** 「记住密码」保存的登录信息（只放 Asset Store，绝不写 Preferences/日志）。 */
 export class SavedLogin {
@@ -47,12 +51,11 @@ export class CredentialStore {
     saved.email = email;
     saved.password = password;
     const value = JSON.stringify(saved);
-    // 先 update（已存在）再 add（首次）
-    const updateMap: asset.AssetMap = new Map();
-    updateMap.set(asset.Tag.ALIAS, CredentialStore.encode(CredentialStore.ALIAS));
-    updateMap.set(asset.Tag.SECRET, CredentialStore.encode(value));
     const queryMap: asset.AssetMap = new Map();
     queryMap.set(asset.Tag.ALIAS, CredentialStore.encode(CredentialStore.ALIAS));
+    // asset.update 的第二个参数不能带 ALIAS（系统按参数错误处理），只更新 SECRET
+    const updateMap: asset.AssetMap = new Map();
+    updateMap.set(asset.Tag.SECRET, CredentialStore.encode(value));
     try {
       await asset.update(queryMap, updateMap);
       CredentialStore.degraded = false;
@@ -70,6 +73,20 @@ export class CredentialStore {
       return true;
     } catch (addErr) {
       const ae = addErr as BusinessError;
+      if (ae.code === ERR_ASSET_ALREADY_EXISTS) {
+        // 已存在但 update 没成功：用正确属性集再 update 一次（不再重复 add）
+        try {
+          await asset.update(queryMap, updateMap);
+          CredentialStore.degraded = false;
+          return true;
+        } catch (retryErr) {
+          const re = retryErr as BusinessError;
+          CredentialStore.degraded = true;
+          CredentialStore.degradedCode = re.code;
+          hilog.error(DOMAIN, TAG, 'asset.update retry failed (code=%{public}d)', re.code);
+          return false;
+        }
+      }
       hilog.warn(DOMAIN, TAG, 'asset.add with full attrs failed (code=%{public}d), retry minimal', ae.code);
       try {
         // 兜底：最小属性集再试一次（部分机型组合属性会报错）
@@ -114,7 +131,7 @@ export class CredentialStore {
       return saved;
     } catch (err) {
       const e = err as BusinessError;
-      if (e.code === 24000001) {
+      if (e.code === ERR_ASSET_UNAVAILABLE || e.code === ERR_ASSET_NOT_FOUND) {
         return null;
       }
       // 读失败不直接降级（否则首次启动读不到就永远不写）
