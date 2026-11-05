@@ -3,8 +3,9 @@ import { EcButton, EcButtonKind } from '../components/EcButton';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { LoadingBlock } from '../components/LoadingBlock';
-import { EcFont, EcRadius, EcShadow, EcSpace } from '../design/DesignTokens';
+import { EcFont, EcRadius, EcScore, EcShadow, EcSpace } from '../design/DesignTokens';
 import { DiagnosisContrastDto, DiagnosisItemDto } from '../core/net/StatsDtos';
+import { AttemptItemDto } from '../core/net/Dtos';
 import { NavigationService } from '../core/router/NavigationService';
 import { PracticeFocus } from '../core/session/PracticeFocus';
 import { SessionState } from '../core/session/SessionStore';
@@ -316,11 +317,83 @@ export struct DiagnosisPage {
     NavigationService.clear();
   }
 
+  /** 🧾 最近练习记录（20 条，可回放；对齐 Web /report 底部列表）。 */
+  @Builder
+  recentSection() {
+    Column({ space: EcSpace.x2 }) {
+      Row({ space: EcSpace.x2 }) {
+        Text('🧾 最近练习记录')
+          .fontSize(EcFont.body)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.ec_ink'))
+          .layoutWeight(1)
+        Text('刷新')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_primary'))
+          .onClick(() => {
+            void this.vm.loadRecent();
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      if (this.vm.recentLoading) {
+        LoadingBlock({ text: '正在读最近记录…' })
+      } else if (this.vm.recent.length === 0) {
+        Text(this.vm.recentError.length > 0 ? this.vm.recentError : '还没有练习记录，先去跟读几句吧')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_muted'))
+          .width('100%')
+      } else {
+        ForEach(this.vm.recent, (item: AttemptItemDto, index: number) => {
+          Row({ space: EcSpace.x2 }) {
+            Text(DiagnosisVM.recentTime(item.created_at === undefined ? '' : item.created_at))
+              .fontSize(EcFont.micro)
+              .fontColor($r('app.color.ec_muted'))
+              .width(92)
+            Text(this.session.isChild || DiagnosisVM.recentScore(item) < 0
+              ? '—' : Math.round(DiagnosisVM.recentScore(item)).toString())
+              .fontSize(EcFont.caption)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(EcScore.colorByMode(this.session.isChild || DiagnosisVM.recentScore(item) < 0
+                ? null : DiagnosisVM.recentScore(item), this.session.isChild))
+              .width(36)
+            Text(DiagnosisVM.recentText(item))
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_ink'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(this.vm.playingAttemptId === item.id ? '播放中…' : '▶ 回放')
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_primary'))
+              .onClick(() => {
+                void this.vm.playRecent(item.id);
+              })
+          }
+          .width('100%')
+          .padding(EcSpace.x2)
+          .backgroundColor($r('app.color.ec_surface'))
+          .borderRadius(EcRadius.sm)
+          .alignItems(VerticalAlign.Center)
+        }, (item: AttemptItemDto, index: number) => 'recent-' + item.id)
+        if (this.vm.recentError.length > 0) {
+          Text(this.vm.recentError)
+            .fontSize(EcFont.micro)
+            .fontColor($r('app.color.ec_warn_text'))
+            .width('100%')
+        }
+      }
+    }
+    .width('100%')
+    .padding({ top: EcSpace.x2 })
+    .alignItems(HorizontalAlign.Start)
+  }
+
   build() {
     Scroll() {
       Column({ space: EcSpace.x3 }) {
         this.headerCard()
-
         if (this.vm.hasError) {
           ErrorBanner({
             title: this.vm.error.title,
@@ -354,6 +427,8 @@ export struct DiagnosisPage {
             this.okSection()
           }
         }
+
+        this.recentSection()
 
         if (this.vm.loadedOnce) {
           Text('诊断依据：每个音素的历次评测均分与最近 3 次趋势；' +

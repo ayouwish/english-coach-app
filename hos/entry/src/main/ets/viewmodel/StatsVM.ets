@@ -10,6 +10,11 @@ import {
   ReviewWordErrorDto
 } from '../core/net/StatsDtos';
 import { StatsService } from '../core/service/StatsService';
+import { PracticeService } from '../core/service/PracticeService';
+import { AudioController } from '../core/audio/AudioController';
+import { CacheService } from '../core/service/CacheService';
+import { FileUtil } from '../core/util/FileUtil';
+import { AttemptItemDto } from '../core/net/Dtos';
 import { SessionState, SessionStore } from '../core/session/SessionStore';
 
 /**
@@ -43,6 +48,11 @@ export class DiagnosisVM {
 
   loading: boolean = false;
   loadedOnce: boolean = false;
+  /** 🧾 最近练习记录（20 条，可回放；对齐 Web /report） */
+  recent: AttemptItemDto[] = [];
+  recentLoading: boolean = false;
+  recentError: string = '';
+  playingAttemptId: string = '';
   hasError: boolean = false;
   error: UiError = new UiError('', '', '', false, '');
   showOk: boolean = false;
@@ -50,6 +60,74 @@ export class DiagnosisVM {
   async init(isChild: boolean): Promise<void> {
     this.isChild = isChild;
     await this.load();
+    void this.loadRecent();
+  }
+
+  /** 最近练习记录：GET /attempts?limit=20（与跟读历史同一接口）。 */
+  async loadRecent(): Promise<void> {
+    if (this.recentLoading) {
+      return;
+    }
+    this.recentLoading = true;
+    this.recentError = '';
+    try {
+      const list = await PracticeService.attempts(20);
+      this.recent = list;
+    } catch (err) {
+      this.recentError = '最近练习记录暂时取不到';
+    } finally {
+      this.recentLoading = false;
+    }
+  }
+
+  /** 回放某次练习的录音（GET /audio/:attemptId）。 */
+  async playRecent(attemptId: string): Promise<void> {
+    if (attemptId.length === 0 || AudioController.isRecording()) {
+      return;
+    }
+    try {
+      CacheService.ensureAll();
+      const dest = CacheService.audioDir() + '/rec_' + attemptId + '.audio';
+      if (!FileUtil.exists(dest)) {
+        await PracticeService.downloadAudio(attemptId, dest);
+      }
+      this.playingAttemptId = attemptId;
+      await AudioController.play(dest, () => {
+        this.playingAttemptId = '';
+      });
+    } catch (err) {
+      this.playingAttemptId = '';
+      this.recentError = '回放失败，可以稍后再试';
+    }
+  }
+
+  static recentScore(item: AttemptItemDto): number {
+    const scores = item.scores;
+    if (scores === undefined || scores === null) {
+      return -1;
+    }
+    const pron = scores.pron;
+    return (pron === undefined || pron === null) ? -1 : pron;
+  }
+
+  static recentText(item: AttemptItemDto): string {
+    const ref = item.reference_text;
+    if (ref !== undefined && ref.length > 0) {
+      return ref;
+    }
+    const recognized = item.recognized_text;
+    return (recognized === undefined || recognized.length === 0) ? '（这条没有文本）' : recognized;
+  }
+
+  static recentTime(iso: string): string {
+    if (iso.length < 16) {
+      return iso;
+    }
+    const month = Number(iso.substring(5, 7));
+    const day = Number(iso.substring(8, 10));
+    const hour = iso.substring(11, 13);
+    const minute = iso.substring(14, 16);
+    return month.toString() + '/' + day.toString() + ' ' + hour + ':' + minute;
   }
 
   async switchScope(scope: string): Promise<void> {
