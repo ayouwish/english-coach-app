@@ -191,7 +191,7 @@ export struct VoicesPage {
         if (voice.lang === 'en') {
           this.voiceRow(voice)
         }
-      }, (voice: VoiceOption) => 'en-' + voice.id)
+      }, (voice: VoiceOption) => 'en-' + voice.id + '-' + this.vm.currentVoice)
 
       Text('中文音色')
         .fontSize(EcFont.caption)
@@ -203,7 +203,7 @@ export struct VoicesPage {
         if (voice.lang === 'zh') {
           this.voiceRow(voice)
         }
-      }, (voice: VoiceOption) => 'zh-' + voice.id)
+      }, (voice: VoiceOption) => 'zh-' + voice.id + '-' + this.vm.currentVoice)
 
       Text('共 ' + this.vm.voices.length.toString() + ' 个音色。试听需要网络与语音服务；试听失败不影响保存偏好。')
         .fontSize(EcFont.micro)

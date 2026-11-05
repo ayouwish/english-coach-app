@@ -341,7 +341,7 @@ export struct PracticePage {
                   void this.load(item);
                 }
               })
-          }, (item: string) => item)
+          }, (item: string) => item + '-' + this.level)
           Blank()
           Text('↻ 换一批')
             .fontSize(EcFont.caption)

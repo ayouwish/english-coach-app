@@ -135,7 +135,7 @@ export struct FamilyPage {
           this.smallChoice(label, this.vm.role === this.roleKeys[index], () => {
             this.vm.role = this.roleKeys[index];
           })
-        }, (label: string, index: number) => 'role-' + index.toString())
+        }, (label: string, index: number) => 'role-' + index.toString() + '-' + this.vm.role)
       }
       .width('100%')
 
@@ -145,7 +145,7 @@ export struct FamilyPage {
           this.smallChoice(level, this.vm.cefrLevel === level, () => {
             this.vm.cefrLevel = level;
           })
-        }, (level: string) => 'cefr-' + level)
+        }, (level: string) => 'cefr-' + level + '-' + this.vm.cefrLevel)
       }
       .width('100%')
 
@@ -247,7 +247,7 @@ export struct FamilyPage {
           this.smallChoice(level, this.vm.editCefrLevel === level, () => {
             this.vm.editCefrLevel = level;
           })
-        }, (level: string) => 'edit-cefr-' + level)
+        }, (level: string) => 'edit-cefr-' + level + '-' + this.vm.editCefrLevel)
       }
       .width('100%')
 

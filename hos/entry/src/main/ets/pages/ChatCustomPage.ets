@@ -297,7 +297,7 @@ export struct ChatCustomPage {
               .onClick(() => {
                 this.level = item;
               })
-          }, (item: string) => 'lv_' + item)
+          }, (item: string) => 'lv_' + item + '_' + this.level)
         }
         .width('100%')
       }

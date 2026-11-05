@@ -193,7 +193,7 @@ export struct SettingsPage {
           this.choiceChip(label, this.vm.gender === this.genderKeys[index], () => {
             this.vm.gender = this.genderKeys[index];
           })
-        }, (label: string, index: number) => 'gender-' + index.toString())
+        }, (label: string, index: number) => 'gender-' + index.toString() + '-' + this.vm.gender)
       }
       .width('100%')
       Text('只用于插画提示词与形象筛选，不会展示给其他人。')
@@ -213,7 +213,7 @@ export struct SettingsPage {
           this.choiceChip(count.toString(), this.vm.storySentences === count, () => {
             this.vm.storySentences = count;
           })
-        }, (count: number) => 'story-' + count.toString())
+        }, (count: number) => 'story-' + count.toString() + '-' + this.vm.storySentences.toString())
         this.choiceChip('恢复默认', this.vm.storySentences === -1, () => {
           this.vm.applyStoryDefault();
         })
@@ -235,7 +235,7 @@ export struct SettingsPage {
           this.choiceChip(label, this.vm.correctionLevel === this.correctionKeys[index], () => {
             this.vm.correctionLevel = this.correctionKeys[index];
           })
-        }, (label: string, index: number) => 'corr-' + index.toString())
+        }, (label: string, index: number) => 'corr-' + index.toString() + '-' + this.vm.correctionLevel)
       }
       .width('100%')
 

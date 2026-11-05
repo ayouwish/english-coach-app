@@ -278,7 +278,7 @@ export struct FlowPage {
           .onClick(() => {
             this.onSourceTab(index);
           })
-      }, (label: string, index: number) => label + index.toString())
+      }, (label: string, index: number) => label + index.toString() + '-' + this.vm.sourceTab)
     }
     .width('100%')
   }
@@ -313,7 +313,7 @@ export struct FlowPage {
             .onClick(() => {
               this.vm.setLevel(item);
             })
-        }, (item: string) => item)
+        }, (item: string) => item + '-' + this.vm.level)
       }
       .width('100%')
 
@@ -397,7 +397,7 @@ export struct FlowPage {
               .onClick(() => {
                 this.vm.setCount(n);
               })
-          }, (n: number) => n.toString())
+          }, (n: number) => n.toString() + '-' + this.vm.count)
         }
         .width('100%')
         .alignItems(VerticalAlign.Center)

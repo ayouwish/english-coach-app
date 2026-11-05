@@ -246,7 +246,7 @@ export struct AvatarPage {
             .onClick(() => {
               this.vm.selectedStyle = style.id;
             })
-        }, (style: AvatarStyleDto) => 'style-' + style.id)
+        }, (style: AvatarStyleDto) => 'style-' + style.id + '-' + this.vm.selectedStyle)
       }
       .width('100%')
 
