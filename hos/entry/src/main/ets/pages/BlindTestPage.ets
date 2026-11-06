@@ -179,13 +179,18 @@ export struct BlindTestPage {
         }
       })
       EcButton({
+        label: this.vm.cancelling ? '正在取消…' : '取消这轮盲测',
+        kind: EcButtonKind.DANGER,
+        loading: this.vm.cancelling,
+        onTap: () => {
+          this.confirmCancel();
+        }
+      })
+      EcButton({
         label: '退出盲测，回普通跟读',
         kind: EcButtonKind.GHOST,
         onTap: () => {
-          // 只退出本机盲测模式；服务端批次仍是进行中，下次进来可继续
-          BlindRuntime.clear();
-          AppStorage.setOrCreate<number>('tab_index', 0);
-          NavigationService.clear();
+          void this.cancelAndExit();
         }
       })
     }
@@ -435,6 +440,55 @@ export struct BlindTestPage {
     const ok = await this.vm.finish();
     if (ok) {
       BlindRuntime.clear();
+    }
+  }
+
+  /** 退出盲测：先尝试服务端取消，再回普通跟读（取消接口未发布也不阻塞退出）。 */
+  private async cancelAndExit(): Promise<void> {
+    let cancelled = false;
+    if (this.vm.inProgressId.length > 0) {
+      cancelled = await this.vm.cancelCurrent();
+    }
+    BlindRuntime.clear();
+    AppStorage.setOrCreate<number>('tab_index', 0);
+    NavigationService.clear();
+    this.getUIContext().getPromptAction().showToast({
+      message: cancelled ? '已取消这轮盲测' : '已退出盲测模式'
+    });
+  }
+  /** 取消进行中的盲测（服务端取消接口未发布时给出可读提示）。 */
+  private confirmCancel(): void {
+    if (this.vm.cancelling) {
+      return;
+    }
+    this.getUIContext().showAlertDialog({
+      title: '取消这轮盲测？',
+      message: '取消后这轮进度作废，不会计入周报；下次可以重新开始。',
+      buttons: [
+        {
+          value: '取消盲测',
+          action: () => {
+            void this.doCancel();
+          }
+        },
+        {
+          value: '继续做',
+          action: () => {
+          }
+        }
+      ]
+    });
+  }
+
+  private async doCancel(): Promise<void> {
+    const ok = await this.vm.cancelCurrent();
+    if (ok) {
+      BlindRuntime.clear();
+      this.getUIContext().getPromptAction().showToast({ message: '已取消这轮盲测' });
+    } else {
+      this.getUIContext().getPromptAction().showToast({
+        message: this.vm.cancelError.length > 0 ? this.vm.cancelError : '取消失败，请重试'
+      });
     }
   }
 

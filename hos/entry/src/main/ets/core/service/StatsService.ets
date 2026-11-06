@@ -101,6 +101,34 @@ export class StatsService {
   }
 
   /** POST /blind-tests/:id/finish（幂等）。 */
+  /**
+   * 取消（放弃）一轮进行中的盲测。
+   *
+   * 后端取消接口尚未发布：按「DELETE /blind-tests/:id」→「POST /blind-tests/:id/cancel」
+   * →「POST /blind-tests/:id/abandon」顺序尝试，任一成功即视为取消成功；
+   * 全失败时抛最后一个错误，页面提示「服务端未发布取消接口」。
+   */
+  static async cancelBlindTest(blindTestId: string): Promise<void> {
+    const id = encodeURIComponent(blindTestId);
+    try {
+      const raw = await ApiClient.deleteJson('/blind-tests/' + id, StatsService.POST_TIMEOUT);
+      ApiClient.requireOk(raw);
+      return;
+    } catch (e1) {
+      // 继续尝试其它命名
+    }
+    try {
+      const raw = await ApiClient.postJson('/blind-tests/' + id + '/cancel', '{}', false,
+        StatsService.POST_TIMEOUT);
+      ApiClient.requireOk(raw);
+      return;
+    } catch (e2) {
+      // 继续尝试其它命名
+    }
+    const raw = await ApiClient.postJson('/blind-tests/' + id + '/abandon', '{}', false,
+      StatsService.POST_TIMEOUT);
+    ApiClient.requireOk(raw);
+  }
   static async finishBlindTest(blindTestId: string): Promise<BlindFinishDto> {
     const path = '/blind-tests/' + encodeURIComponent(blindTestId) + '/finish';
     const raw = await ApiClient.postJson(path, '{}', true, StatsService.POST_TIMEOUT);

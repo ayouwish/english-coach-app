@@ -16,6 +16,7 @@ import { AppConfig } from '../core/config/AppConfig';
 import { PracticeResultStore } from '../core/session/PracticeResultStore';
 import { SessionState } from '../core/session/SessionStore';
 import { BlindRuntime } from '../core/session/BlindRuntime';
+import { StatsService } from '../core/service/StatsService';
 import { PracticeFocus } from '../core/session/PracticeFocus';
 import { PracticeVM, ResultIssue } from '../viewmodel/PracticeVM';
 
@@ -165,6 +166,25 @@ export struct PracticePage {
     }
   }
 
+  /** 退出盲测：先尝试服务端取消，失败也回普通跟读并提示。 */
+  private async exitBlind(): Promise<void> {
+    let cancelled = false;
+    const testId = BlindRuntime.testId;
+    if (testId.length > 0) {
+      try {
+        await StatsService.cancelBlindTest(testId);
+        cancelled = true;
+      } catch (err) {
+        cancelled = false;
+      }
+    }
+    BlindRuntime.clear();
+    this.vm.clearBlind();
+    await this.load(this.initialLevel());
+    this.getUIContext().getPromptAction().showToast({
+      message: cancelled ? '已取消这轮盲测' : '已退出盲测模式（服务端取消接口未发布，批次仍保留）'
+    });
+  }
   private async openHistory(): Promise<void> {
     PracticeResultStore.open(this.vm, 'history');
   }
@@ -260,9 +280,7 @@ export struct PracticePage {
         label: '退出盲测，回普通跟读',
         kind: EcButtonKind.GHOST,
         onTap: () => {
-          BlindRuntime.clear();
-          this.vm.clearBlind();
-          void this.load(this.initialLevel());
+          void this.exitBlind();
         }
       })
       .margin({ top: EcSpace.x1 })

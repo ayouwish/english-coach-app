@@ -513,6 +513,31 @@ export class BlindTestVM {
   startTotal: number = 0;
   finishing: boolean = false;
   finishError: string = '';
+  /** 取消进行中的盲测（后端取消接口未发布时给可读失败提示） */
+  cancelling: boolean = false;
+  cancelError: string = '';
+
+  async cancelCurrent(): Promise<boolean> {
+    const id = this.inProgressId;
+    if (id.length === 0) {
+      return false;
+    }
+    this.cancelling = true;
+    this.cancelError = '';
+    try {
+      await StatsService.cancelBlindTest(id);
+      this.hasInProgress = false;
+      this.inProgress = null;
+      this.inProgressId = '';
+      await this.load();
+      return true;
+    } catch (err) {
+      this.cancelError = '取消失败：' + SessionStore.toUiError(err as Error, this.isChild).message;
+      return false;
+    } finally {
+      this.cancelling = false;
+    }
+  }
   finishResult: BlindFinishDto | null = null;
 
   // 结束结果扁平字段（页面不做深层可选链）
