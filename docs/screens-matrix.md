@@ -31,7 +31,7 @@
 
 | 页面 | 接口 | 要点 |
 |---|---|---|
-| 选来源 | `GET /api/sentences`、`GET /api/materials?kind=page`、`POST /api/ocr`（拍照）| 语料 / 我的书页 / 自己输入 / 拍照 |
+| 选来源 | `GET /api/sentences`、`GET /api/materials?kind=page`、`POST /api/ocr`（拍照）| 语料 / 我的书页 / 自己输入 / 拍照；**无参数进入默认「语料」**；`?material=<id>` 才自动载入材料 |
 | 逐句提交 | `POST /api/attempts/async` | 立即返回，不阻塞 |
 | 轮询进度 | `GET /api/attempts/status?ids=` | 1–2s，显示 待评分→评分中→分数 |
 | 汇总 | 本地聚合 | 平均分、最差 2–3 句、鼓励语 |
@@ -59,7 +59,7 @@
 | 生成英文 | `POST /api/story/rewrite` | `level` 取账号 CEFR（A1–C1）；返回 readability | 文案口语化 |
 | 保存 | `POST /api/materials`（`kind=story`）| — | — |
 | 故事集 | `GET /api/materials?kind=story` | 按日期分组、连续天数、只看我的 | 不显示分数 |
-| 故事详情 | `GET /api/materials/:id` | 英文全文 + **「🗣️ 我当时讲的原话」**（中文原文 + 原始录音播放 + 转录状态）+ 朗读录音回放 + 复述记录 | 分数仅家长 |
+| 故事详情 | `GET /api/materials/:id` | 英文全文（家庭可见）+ **「🗣️ 我当时讲的原话」**（**仅创建者**：中文原文 + 原声 + 转录状态）+ 朗读录音回放 + 复述记录 | 分数仅家长 |
 | **整段朗读回放** | `GET /api/story/:id/audio/status`、`/audio[?force=1]` | 异步预生成；ready→200、building→202；单条录音直接返回 | 「听一听我读的故事」|
 | **打印（单篇·整页）** | 页面 `/story/[id]/print[?zh=1&lines=1]` | A4 整页练习纸：大字编号句子、可选中文/书写线、白底黑字、`window.print()` | 「🖨️ 打印出来读」|
 | **打印（单篇·卡片）** | 页面 `/story/[id]/print?layout=card[&zh=1&lines=1]` | **A5 卡片**（148×210mm）居中 + 虚线裁切框 + 标题/级别/日期 + 编号句子 12pt + 姓名/日期栏；工具栏可切换整页/卡片 | 「🖨️ 打印卡片出来读」|
@@ -67,6 +67,20 @@
 | 复述 | `POST /api/story/retell` | 覆盖度，不评发音分 | 只看鼓励 |
 | 插画 | `POST /api/story/:id/illustrate` | 每天一张；**自动带用户的 `character_desc` + `avatar_style`**；失败可见；插画下方显示 `prompt_used` + 「这个提示词有问题」反馈（预填提建议）| 「给我画一张画」|
 | 虚拟形象（M4+）| `GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image` | 拍照/上传 + 5 风格（水彩/卡通/像素/剪纸/黏土）+ 角色卡可编辑 + 提示词可见；`capabilities.image_avatar=false` 时隐藏入口 | 「给我画一个我」|
+
+### 5.1 故事数据可见范围（隐私模型）
+
+| 数据 | 可见范围 |
+|---|---|
+| **英文正文**（最终故事） | **家庭可见**（所有成员可读、可打印） |
+| 中文原文 `source_zh` | **仅创建者**（详情页 + 打印页 `?zh=1`；其他人即使带参数也不显示） |
+| 原始录音（原声） | 仅本人 |
+| 朗读记录 / 趋势 / 单条回放 | 仅朗读者本人（家长看孩子故事显示的是"你自己读过 N 次"） |
+| 整段拼接朗读回放 | 仅朗读者本人（缓存按用户隔离 `story-audio/<userId>/<materialId>.wav`） |
+| 复述记录 | 仅复述者本人 |
+| 插画 / 提示词 | 家庭可见 |
+
+---
 
 ## 6. 盲测 / 诊断 / 复习
 

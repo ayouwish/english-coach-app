@@ -72,7 +72,7 @@
 | 人性化句子数默认 | 页面 `/story` + `/api/settings.story_sentences` | ✅ | 同上 |
 | 保存故事（回填 recording_id） | `POST /api/materials`（`kind=story`） | ✅ | README §6.4 |
 | 故事集列表/筛选 | `GET /api/materials?kind=story` | ✅ | 同上 |
-| **原声回顾（我当时讲的原话）** | 页面 `/story/[id]`、`GET /api/materials/:id` | ✅ | `design-overview.md` §5.4 |
+| **原声回顾（我当时讲的原话）** | 页面 `/story/[id]`、`GET /api/materials/:id` | ✅（**仅创建者可见**） | `design-overview.md` §5.4 |
 | **整段朗读回放** | `GET /api/story/:id/audio/status`、`/audio` | ✅ | 同上 |
 | 复述评估（覆盖度，不评发音分） | `POST /api/story/retell` | ✅ | README §6.4 |
 | 插画（默认关，可在设置开自动） | `POST /api/story/:id/illustrate`、`/api/settings.auto_illustrate` | ✅ | README §6.4、§1.3 |
