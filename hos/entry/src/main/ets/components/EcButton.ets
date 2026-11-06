@@ -61,7 +61,8 @@ export struct EcButton {
     return $r('app.color.ec_primary');
   }
 
-  private borderWidth(): number {
+  // 注意：不能叫 borderWidth——与 CommonAttribute 的同名属性方法冲突（编译期报不兼容）。
+  private ghostBorderWidth(): number {
     return this.kind === EcButtonKind.GHOST ? 1 : 0;
   }
 
@@ -86,7 +87,7 @@ export struct EcButton {
     .padding({ left: EcSpace.x4, right: EcSpace.x4 })
     .backgroundColor(this.bgColor())
     .borderRadius(this.big ? EcRadius.lg : EcRadius.md)
-    .border({ width: this.borderWidth(), color: $r('app.color.ec_border') })
+    .border({ width: this.ghostBorderWidth(), color: $r('app.color.ec_border') })
     .opacity((this.disabled || this.loading) ? 0.45 : 1)
     .enabled(!(this.disabled || this.loading))
     .accessibilityText(this.label)

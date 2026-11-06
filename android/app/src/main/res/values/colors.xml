@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 docs/design-tokens.md / hos entry resources/base/element/color.json 一致 -->
+    <color name="ec_bg">#F5F7FF</color>
+    <color name="ec_surface">#FFFFFF</color>
+    <color name="ec_surface_alt">#F1F3FF</color>
+    <color name="ec_ink">#1B1F3B</color>
+    <color name="ec_muted">#6B7290</color>
+    <color name="ec_border">#E3E6F3</color>
+    <color name="ec_primary">#5B5BD6</color>
+    <color name="ec_primary_pressed">#4A4AC4</color>
+    <color name="ec_primary_soft">#ECEBFF</color>
+    <color name="ec_focus">#A5B4FC</color>
+    <color name="ec_good">#16A34A</color>
+    <color name="ec_good_text">#15803D</color>
+    <color name="ec_good_bg">#F0FDF4</color>
+    <color name="ec_warn">#F59E0B</color>
+    <color name="ec_warn_text">#B45309</color>
+    <color name="ec_warn_bg">#FFF3D6</color>
+    <color name="ec_bad">#EF4444</color>
+    <color name="ec_bad_text">#B91C1C</color>
+    <color name="ec_bad_bg">#FEF2F2</color>
+    <color name="ec_info">#0EA5E9</color>
+</resources>

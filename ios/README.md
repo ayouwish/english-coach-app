@@ -1,14 +1,83 @@
 # English Coach iOS 客户端
 
-> 状态：**M0 垂直切片代码已落地（未编译验证）**。Swift/SwiftUI 源码在 `EnglishCoach/`，工程用 XcodeGen 生成。
-> **本仓库没有 macOS/Xcode 环境：所有 Swift 代码均未编译、未在真机运行。** 必须由维护者在 Xcode 26 中构建验证。
+> 状态：**九大功能域全量代码已落地（146 个 Swift 文件 / 约 2.79 万行），但未编译、未真机运行**。
+> **本仓库没有 macOS/Xcode 环境：所有 Swift 代码均未经编译器与真机验证。** 必须由维护者在 Xcode 26 中 `xcodegen generate` 后构建验证。
 > 后端（Next.js `web` + FastAPI `voice`）已在家庭 NAS 上跑通，iOS 端所有能力都通过 `web` 的 `/api/*` 调用。
 
 ---
 
-## 0. M0 代码现状（必读）
+## 0. 当前实现状态（2026-11-05）
 
-### 0.1 已实现（代码层，未验证）
+### 0.1 覆盖范围
+
+| 层 | 内容 | 入口文档 |
+| --- | --- | --- |
+| 工程 | XcodeGen（`project.yml`）、iOS 26.0、Swift 6 严格并发、零第三方依赖、Info.plist / PrivacyInfo / Assets | §6、§7 |
+| Core | 网络（`APITransport` + 9 个域 Service + 8 个 DTO 文件）、会话（`SessionStore`/Keychain/单飞刷新/记住登录）、音频（录音/播放/互斥/中断）、存储（TTS 200MB、图片 100MB、录音 300MB/7天、语料 24h 快照）、设计系统（令牌 + 10 个组件文件 + Charts）、错误映射（成人/儿童两套全 code）、音素提示表、媒体采集（相机/相册/HEIC→JPEG） | [`docs/port-contract.md`](docs/port-contract.md) §3 |
+| App | `EnglishCoachApp` → `AppEnvironment`（组合根）→ `AppRoot`（启动三态/会话过期）→ `RootTabView`（5 Tab + voice 降级条 + **22 个路由全分发**） | `App/` |
+| 功能域 | 登录、跟读（卡片流/示范音/评测/页内结果/详细结果页/单句历史/点词音标）、连读（setup/running/汇总）、对话（场景/纯语音会话/历史/详情/自定义）、故事（列表/讲述/详情/复述/插画）、盲测、诊断与成长、错音本、我的、设置、家长面板、家庭成员、建议箱、虚拟形象、音色、服务状态 | [`docs/screens.md`](docs/screens.md)、§0.6 |
+
+### 0.2 本仓库能验证到什么程度（重要）
+
+- ✅ **静态校验**：`python ios/tools/check_ios.py`（纯标准库、只读、无需 macOS）。覆盖：Swift 词法/括号与 `#if` 配平、顶层类型唯一、文件名=主类型、符号引用、分层规则（Features 禁 `URLSession`、DesignSystem/Shared 禁网络类型、Core 禁引用 Features）、规范禁用词（`print`/`TODO`/`fatalError`/`try!`/`as!`/`@unchecked Sendable`/`#available`）、`project.yml` 覆盖全部源码、Info.plist/PrivacyInfo 键校验、`AppRoute` ↔ `navigationDestination` 对齐、**契约 §3.15.1 冻结的 26 个根页面签名**。
+  - 当前结果：`SUMMARY errors=0 warnings=0 files=146`；`--selftest` 16 个负向用例通过（能真的报错，不是"永远绿"）。
+- ❌ **未验证**：`xcodegen generate`、Swift 6 严格并发编译、iOS 26 API 可用性、SwiftUI 布局/Dynamic Type/小屏、Keychain 真机行为、录音参数与路由中断矩阵、TTS/评测真实时延、所有接口的运行时响应形状。
+  > **静态校验通过 ≠ 编译通过**。任何文档、PR、验收记录都不许把本仓库的静态结果写成"已编译/已跑通"。
+
+### 0.3 在 Mac 上的第一步
+
+```bash
+cd ios && brew install xcodegen && xcodegen generate && open EnglishCoach.xcodeproj
+```
+然后：选付费 Team 签名 → Run 到 iOS 26 真机 → 按 §0.6 的主链路清单逐条验收。
+若 `xcodebuild` 报错，优先看 `docs/port-contract.md` §3 的签名是否与页面调用一致（并行开发期最可能出现的漂移点），再修实现。
+
+### 0.4 已知取舍（都在代码注释里标注了原因）
+
+| 点 | 取舍 |
+| --- | --- |
+| `AppRoute` 位置 | 放在 `Core/DesignSystem/Navigation/`（而非设计期规划的 `App/Navigation/`），因为 `Features` 也要 push 路由 |
+| 第 4 个环境值 | `@Environment(AppConfig.self)` 用于设置页展示/修改服务器地址（`Features` 不能引用 `AppEnvironment`） |
+| `AppRoute.practice` 关联值 | 带整个 `SentenceDTO`（DesignSystem 唯一的 DTO 引用，checker 已豁免） |
+| 空占位文件 | 本机沙箱禁止删除文件，`Core/Networking/{APIs,DTOs,Endpoints}.swift` 与 `Features/Practice/{PracticeListView,PracticeViewModel,SentenceView}.swift` 保留为纯注释占位；**内容已无任何引用**，在有写权限的环境可直接删除 |
+| 故事原始录音 | 服务端无留存接口，保存时落 `RecordingCache` 本地副本（7 天/300MB）供"原声回顾" |
+| 助手语音 TTS | 对话回复逐条合成（未接本地 TTS 缓存）；跟读/故事逐句走 `AudioCache` |
+| 监听整段音频 | 严格"先 `audioStatus` 轮询到 ready 再下载"（`storyAudio` 遇 202 抛 `providerUnavailable`） |
+
+### 0.5 与设计文档的偏差
+
+`docs/screens.md` / `docs/design-system.md` 是设计期的期望值；本轮以 **HOS 实现为功能事实来源、契约 `docs/port-contract.md` 为实现事实**。已知偏差（分数阈值 60 而非 55、`AppButton` 新增 tonal/danger、复述录音上限 60s、对话录音 30s、诊断 attempt/batch 缺路由载荷等）在各 Feature 的代码注释与 `docs/port-contract.md` 里逐条注明。
+
+### 0.6 主链路验收清单（必须在 Mac 真机逐条勾）
+
+- [ ] `xcodegen generate` 成功，Xcode 26 无编译错误（Swift 6 严格并发）。
+- [ ] 新装 → 填服务器地址（可只填域名，自动补 `https://` 与 `/api`）→ 演示账号登录 → 杀进程重开无需重登。
+- [ ] access 过期后业务请求自动刷新并重放一次；refresh 被拒才回登录页。
+- [ ] 跟读：播放示范 → 录音 → 看到分数/词级结果 → 下一页；端到端 ≤8s（局域网）。
+- [ ] 点词看音标（成人开、儿童关）；儿童账号无 IPA、无数字分、无红色低分、按钮 ≥56pt。
+- [ ] 连读 10 句：录完立即进下一句，评分后台完成，汇总页出现且有批次诊断。
+- [ ] 对话：说一句 → ASR → 回复文本 → 自动播放；对话页**没有键盘/文本输入**；整段回放可用。
+- [ ] 故事：拍书页 → OCR → 中文转写 → 改写 → 保存 → 详情逐句朗读/整段朗读/复述评分。
+- [ ] 盲测：一页闭环，揭晓前看不到文本；诊断四档 scope；错音本 4 档评分。
+- [ ] 家长面板（成人）、儿童访问 403 兜底；建议箱提交与导出复制。
+- [ ] 设置：偏好保存、恢复默认真的发 `null`、清缓存、退出登录清 Keychain。
+- [ ] 拒绝麦克风 → 引导卡 → 去设置开启 → 返回可直接录音；录音时来电/拔耳机不崩。
+- [ ] 断网：缓存语料可读、错误文案来自 `ErrorMapper`、不把网络错误误报成登录过期。
+
+### 0.7 交接注意事项
+
+- **接口运行时形状**来自后端源码与 HOS 实现的一致性推导，**没有用真实 token 跑通**；字段缺失/类型漂移可能导致 `decoding` 错误（DTO 已按"可能缺失"容错）。
+- `project.yml` 未创建测试 target（`Tests/` 只有 `.gitkeep`）：XcodeGen 对空测试 target 会生成不可构建产物，等有真实测试用例再加。
+- 隐私清单的 Required Reason reason code 需在 Xcode 上传时用官方列表复核；麦克风/相机文案在 `PROVIDER_MODE` 变化时必须同步改。
+- 未做：后台锁屏播放控制、iPad 分栏、深色模式、Dynamic Type 自定义字号缩放、离线补交队列、推送、Widget（均在 `docs/roadmap.md` M4）。
+
+---
+
+## 0A. M0 时期快照（历史，保留作回溯）
+
+> 下面是 2026-10 那版「M0 垂直切片」的记录，**已完成并被上面的全量实现取代**，保留是为了回溯当时的取舍与风险清单。
+
+### 0A.1 已实现（代码层，未验证）
 
 | 模块 | 文件 | 说明 |
 | --- | --- | --- |
@@ -30,7 +99,7 @@
 - 登录失败返回 401 + `code=bad_request`；连续失败 5 次返回 429 `too_many_requests`；儿童超时返回 429 `daily_limit_reached`。
 - 录音上传字段与顺序：`audio` → `sentence_id` → `reference_text` → `mode=scripted` → `duration_ms`。
 
-### 0.2 生成并运行工程（在 Mac 上）
+### 0A.2 生成并运行工程（在 Mac 上）
 
 ```bash
 cd ios
@@ -45,7 +114,7 @@ open EnglishCoach.xcodeproj
 
 为什么用 XcodeGen 而不是“Xcode 新建 App 再拖源码”：本仓库无法生成/校验 `pbxproj`，手写或让用户拖文件容易产生“文件没进 target”的隐性错误；`project.yml` 是文本，review 得到，且 `xcodegen generate` 可重复生成。代价是用户首次需要安装 xcodegen（`brew` 一行）。
 
-### 0.3 填基地址 / 登录
+### 0A.3 填基地址 / 登录
 
 - 首次启动 → 登录页 → “服务器地址”填 `https://english.dreamsearch.top/api`（只填主机名会自动补 `/api`）。
 - 地址存 `UserDefaults`；**token 与服务器绑定**：改地址后登录会先清旧 token。
@@ -53,7 +122,7 @@ open EnglishCoach.xcodeproj
 - 退出：确认后 `POST /api/auth/revoke` → 清 Keychain → 回登录页；离线时失败也清本地（已知限制：服务端 refresh 最长 30 天仍有效）。
 - 演示账号（种子数据，非生产承诺）：孩子 `girl@example.com` / 密码 `Girl12345!`（A1）；家长 `dad@example.com` / 密码 `Dad12345!`（B1）。登录页“填入演示邮箱”**只填邮箱**（共享文档要求不猜密码，也避免把密码编译进 App），密码需手动输入；若 NAS 用 `BOOTSTRAP_*` 覆盖过种子，以实际部署为准。
 
-### 0.4 明确未验证（不要在验收前当作已完成）
+### 0A.4 明确未验证（M0 时期，已被 §0.2 取代）
 
 - **能否编译**：未执行 `xcodebuild`，Swift 6 严格并发/API 可用性均可能报错。仅用 tree-sitter 做过**语法解析**（无 ERROR 节点），这不等于类型检查或编译通过。
 - **XcodeGen 产物**：`project.yml` 的 target/scheme/Info.plist 排除规则未实际生成验证。
@@ -66,7 +135,7 @@ open EnglishCoach.xcodeproj
 - **UI**：未在小屏、Dynamic Type AX 字号、横屏（本期锁定竖屏）验证；自定义字号未用 `relativeTo` 缩放。
 - **打包/TestFlight**：没有 Assets.xcassets/App Icon，也没有签名 Team 配置；Archive/TestFlight 上传前必须补图标并设置 Team。
 
-### 0.5 待办（M1 及以后，代码中未留 TODO 占位）
+### 0A.5 M0 时期的待办（现已全部落地或明确延后，见 §0.1/§0.7）
 
 - 语料快照/TTS 磁盘 LRU 缓存、离线三态横幅与自动重试；`GET /api/audio/:id` 服务端录音回放。
 - 录音中断/路由变化监听、后台播放与锁屏控制、蓝牙专项。
@@ -76,7 +145,7 @@ open EnglishCoach.xcodeproj
 - 登录页“记住邮箱”、设置页、家长面板、连读、对话、故事、盲测、诊断。
 - **分层偏差（M0 有意简化）**：`Features/Auth`、`Features/Practice` 的 ViewModel 直接持有 `AppEnvironment`，严格来说违反“App → Features → Core”的单向依赖；M1 抽 `SessionStore` / API 协议后注入，避免 Feature 依赖 App。
 
-### 0.6 M0 验收清单（在 Mac/真机上逐条勾）
+### 0A.6 M0 验收清单（历史，最新清单见 §0.6）
 
 - [ ] `xcodegen generate` 成功，Xcode 无编译错误（Swift 6）。
 - [ ] 新装 → 填地址 → 演示账号 → 登录成功；杀进程重开**无需重登**。

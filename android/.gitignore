@@ -1,0 +1,18 @@
+# Gradle
+.gradle/
+build/
+/app/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 密钥/签名（绝不入库）
+*.jks
+*.keystore
+keystore.properties

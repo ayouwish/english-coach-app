@@ -1,0 +1,61 @@
+# ---- iOS 构建产物（XcodeGen 生成，不提交）----
+# xcodegen generate 的产物；工程描述是 project.yml，pbxproj 不应进版本库
+*.xcodeproj/
+*.xcworkspace/
+project.xcworkspace/
+xcuserdata/
+
+# ---- 构建 / 索引 / 派生数据 ----
+build/
+DerivedData/
+.derivedData/
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.moved-aside
+*.hmap
+*.xccheckout
+*.xcscmblueprint
+*.xcresult/
+Index.noindex/
+*.xcindex/
+
+# ---- Xcode 用户态状态（每人本机各自一份）----
+*.xcuserstate
+*.xcuserdatad/
+*.xcuserdata
+xcuserdata/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# ---- 依赖管理（本项目零第三方依赖，理论上不应出现）----
+.swiftpm/
+.build/
+Packages/
+Package.resolved
+
+# ---- 打包 / 签名 / 证书（绝不入库）----
+*.mobileprovision
+*.p12
+*.cer
+*.pem
+*.key
+ExportOptions.plist
+
+# ---- 工具与编辑器 ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+*~
+.vscode/
+.idea/

@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { ApiClient, ApiRequest } from '../net/ApiClient';
 import { ApiError, ApiErrorCode } from '../net/ApiError';
-import { AttemptResponseDto, HealthDto, SentenceDto, SentenceListDto, TtsBodyDto } from '../net/Dtos';
+import { AttemptItemDto, AttemptListDto, AttemptResponseDto, HealthDto, SentenceDto, SentenceListDto } from '../net/Dtos';
 import { CacheService } from './CacheService';
 import { FileUtil } from '../util/FileUtil';
 
@@ -16,9 +16,15 @@ export class PracticeService {
   private static readonly ATTEMPT_TIMEOUT_MS: number = 120000;
   private static readonly HEALTH_TIMEOUT_MS: number = 5000;
 
-  /** GET /api/sentences?level=A1 */
-  static async sentences(level: string): Promise<SentenceDto[]> {
-    const query: Record<string, string> = { level: level };
+  /** GET /api/sentences?level=A1[&focus=<音素>] */
+  static async sentences(level: string, focus: string = ''): Promise<SentenceDto[]> {
+    const query = new Map<string, string>();
+    if (level.length > 0) {
+      query.set('level', level);
+    }
+    if (focus.length > 0) {
+      query.set('focus', focus);
+    }
     const raw = await ApiClient.getJson('/sentences', query, PracticeService.SENTENCES_TIMEOUT_MS);
     ApiClient.requireOk(raw);
     let dto: SentenceListDto | null = null;
@@ -42,8 +48,18 @@ export class PracticeService {
    * 「先看 HTTP 状态，再决定写文件」——不能无条件把字节落盘。
    */
   static async fetchTts(text: string, rate: string): Promise<string> {
-    const body: TtsBodyDto = { text: text, rate: rate, format: 'wav' };
-    const raw = await ApiClient.postJsonForBytes('/tts', JSON.stringify(body), PracticeService.TTS_TIMEOUT_MS);
+    return PracticeService.fetchTtsFile(text, rate, '', 'wav');
+  }
+
+  /** 可指定音色/容器（对话用 mp3，音色试听用 voice）。 */
+  static async fetchTtsFile(text: string, rate: string, voice: string, format: string): Promise<string> {
+    let body = '{"text":' + JSON.stringify(text) + ',"rate":' + JSON.stringify(rate) +
+      ',"format":' + JSON.stringify(format);
+    if (voice.length > 0) {
+      body = body + ',"voice":' + JSON.stringify(voice);
+    }
+    body = body + '}';
+    const raw = await ApiClient.postJsonForBytes('/tts', body, PracticeService.TTS_TIMEOUT_MS);
     if (raw.status !== 200) {
       throw ApiClient.errorOf(raw);
     }
@@ -59,12 +75,57 @@ export class PracticeService {
     return path;
   }
 
+  /** GET /api/attempts?limit=N —— 我的评测记录（单句历史/进步曲线的替代数据源）。 */
+  static async attempts(limit: number): Promise<AttemptItemDto[]> {
+    const query = new Map<string, string>();
+    query.set('limit', limit.toString());
+    const raw = await ApiClient.getJson('/attempts', query, PracticeService.SENTENCES_TIMEOUT_MS);
+    ApiClient.requireOk(raw);
+    let dto: AttemptListDto | null = null;
+    try {
+      dto = JSON.parse(raw.text) as AttemptListDto;
+    } catch (err) {
+      dto = null;
+    }
+    if (dto === null) {
+      throw new ApiError(ApiErrorCode.BAD_RESPONSE, raw.status, '评测记录格式异常');
+    }
+    const list = dto.attempts;
+    return list === undefined ? [] : list;
+  }
+
+  /** GET /api/audio/:id → 落盘，返回本地路径（录音回放）。 */
+  static async downloadAudio(audioId: string, destPath: string): Promise<string> {
+    await ApiClient.download('/audio/' + encodeURIComponent(audioId), destPath, PracticeService.TTS_TIMEOUT_MS);
+    return destPath;
+  }
+
+  /** POST /api/warmup（fire-and-forget，失败不展示）。 */
+  static warmup(texts: string[], rate: string): void {
+    if (texts.length === 0) {
+      return;
+    }
+    const parts: string[] = [];
+    for (let i = 0; i < texts.length && i < 12; i++) {
+      parts.push(JSON.stringify(texts[i]));
+    }
+    const body = '{"texts":[' + parts.join(',') + '],"rate":' + JSON.stringify(rate) + '}';
+    const req = new ApiRequest();
+    req.method = http.RequestMethod.POST;
+    req.path = '/warmup';
+    req.jsonBody = body;
+    req.timeoutMs = 30000;
+    ApiClient.request(req).catch(() => {
+      // 预热失败静默
+    });
+  }
+
   /**
    * POST /api/attempts（multipart，同步）。
    * 字段名严格按契约：audio / sentence_id / reference_text / mode / duration_ms。
    */
   static async evaluate(filePath: string, sentenceId: string, referenceText: string,
-    durationMs: number): Promise<AttemptResponseDto> {
+    durationMs: number, blindTestId: string = ''): Promise<AttemptResponseDto> {
     const size = FileUtil.sizeOf(filePath);
     if (size <= 0) {
       throw new ApiError(ApiErrorCode.RECORD_FAILED, 0, '录音文件为空');
@@ -100,6 +161,9 @@ export class PracticeService {
         data: durationMs.toString()
       }
     ];
+    if (blindTestId.length > 0) {
+      form.push({ name: 'blind_test_id', contentType: 'text/plain', data: blindTestId });
+    }
     const raw = await ApiClient.postMultipart('/attempts', form, PracticeService.ATTEMPT_TIMEOUT_MS);
     ApiClient.requireOk(raw);
     return PracticeService.parseAttempt(raw.text, raw.status);

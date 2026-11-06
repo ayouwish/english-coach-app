@@ -1,137 +1,246 @@
 import AVFoundation
 import Foundation
-import Observation
+import OSLog
 
-enum AudioError: Error, Equatable, Sendable {
-    case permissionDenied
-    case sessionFailed
-    case recorderFailed
-    case playerFailed
-    case tooShort
-    case noSpeech
-    case fileTooLarge(bytes: Int)
-    case noRecording
-    case fileUnavailable
-    case interrupted
+private let playerLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "audio")
 
-    func userMessage(forChild isChild: Bool) -> String {
-        switch self {
-        case .permissionDenied:
-            return isChild ? "麦克风被关掉了，去设置里打开就能录音啦" : "麦克风权限被关闭了，请到系统设置里打开"
-        case .sessionFailed:
-            return isChild ? "没能打开麦克风，再试一次" : "音频会话启动失败，请重试或换一副耳机"
-        case .recorderFailed:
-            return isChild ? "录音没有开始，再点一下试试" : "录音启动失败，请重试"
-        case .playerFailed:
-            return isChild ? "这段声音暂时放不出来" : "音频播放失败，请重试"
-        case .tooShort:
-            return isChild ? "太短啦，再说一次" : "录音太短了，请再说一次"
-        case .noSpeech:
-            return isChild ? "没有听到声音，靠近一点再说一次" : "没有检测到人声，请靠近麦克风重试"
-        case .fileTooLarge:
-            return isChild ? "说得太久啦，短一点再试" : "录音文件超过 12MB，请缩短录音"
-        case .noRecording:
-            return isChild ? "还没有录音哦" : "尚无可用的录音"
-        case .fileUnavailable:
-            return isChild ? "录音找不到了" : "录音文件不可用，请重新录制"
-        case .interrupted:
-            return isChild ? "刚刚被打断了，再录一次" : "录音被系统中断，请重新录制"
-        }
-    }
-}
-
-/// 播放器门面：同一时刻只允许一个实例在播。
+/// 播放器门面：**同一时刻只播一个音频**，换源 = 先停旧的再播新的。
 ///
-/// 不用 `AVAudioPlayerDelegate`（避免在 Swift 6 下给 @objc 协议补 nonisolated 实现）：
-/// 用 100ms 轮询 `isPlaying` 观察播放结束，对短句 TTS 足够。
+/// 设计要点：
+/// - `AVAudioPlayer` 非 Sendable，整个类限定在 `@MainActor`；
+/// - 完成回调走 `AVAudioPlayerDelegate`（`nonisolated` 实现里 hop 回主线程），
+///   同时提供 `playAndWait*` 的 continuation 版本给“播完自动开录”这类串行动作；
+/// - 传入 `Data` 时先写临时文件再播（audio.md §6.1：统一“先落盘再播”，
+///   `formatHint` 决定临时文件扩展名），播完/停止即删；
+/// - 不碰 `AVAudioSession`（category/active 只由 `AudioSessionController` 负责）。
 @MainActor
-@Observable
-final class AudioPlayer {
+final class AudioPlayer: NSObject, AVAudioPlayerDelegate {
     private(set) var isPlaying = false
+    private(set) var progress: Double = 0
+    private(set) var currentTime: TimeInterval = 0
+    private(set) var duration: TimeInterval = 0
 
-    @ObservationIgnored private var player: AVAudioPlayer?
-    @ObservationIgnored private var watcher: Task<Void, Never>?
-    @ObservationIgnored private var generation = UUID()
+    private var player: AVAudioPlayer?
+    private var completionHandler: (@MainActor () -> Void)?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var progressTask: Task<Void, Never>?
+    private var temporaryFileURL: URL?
+    /// 每次播放/停止递增；迟到的进度任务与 delegate 回调靠它自证归属。
+    private var generation = 0
 
-    func play(url: URL) throws {
-        stop(deactivateSession: false)
-        try activatePlaybackSession()
+    /// `nonisolated` 覆写 `NSObject.init()`：全部存储属性都有默认值，构造本身不需要主线程；
+    /// 真正的 `AVAudioPlayer` 操作仍然只在 `@MainActor` 方法里发生。
+    nonisolated override init() {
+        super.init()
+    }
 
+    // MARK: - 播放
+
+    /// 播放内存字节（TTS 返回的 mp3/wav）。
+    func play(
+        data: Data,
+        formatHint: String?,
+        completion: (@MainActor () -> Void)? = nil
+    ) throws {
+        let tempURL: URL
         do {
-            let newPlayer = try AVAudioPlayer(contentsOf: url)
-            newPlayer.volume = 1
-            guard newPlayer.prepareToPlay(), newPlayer.play() else {
-                throw AudioError.playerFailed
-            }
-            player = newPlayer
-            isPlaying = true
-
-            let currentGeneration = UUID()
-            generation = currentGeneration
-            watcher = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    guard let self, self.generation == currentGeneration, let current = self.player else {
-                        return
-                    }
-                    if !current.isPlaying {
-                        break
-                    }
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-                guard let self, self.generation == currentGeneration else { return }
-                self.player = nil
-                self.isPlaying = false
-                self.deactivateSession()
-            }
-        } catch let error as AudioError {
-            deactivateSession()
-            throw error
+            tempURL = try writeTemporaryFile(data: data, formatHint: formatHint)
         } catch {
-            deactivateSession()
-            throw AudioError.playerFailed
+            playerLogger.error("write playback temp file failed")
+            throw AudioError.engine("player_temp_file_failed")
+        }
+        do {
+            try startPlayback(fileURL: tempURL, ownsFile: true, completion: completion)
+        } catch {
+            try? FileManager.default.removeItem(at: tempURL)
+            throw error
         }
     }
 
-    /// 播完再返回。“跟我读”依赖它实现“示范音结束自动开录”。
-    func playAndWait(url: URL) async throws {
-        try play(url: url)
+    /// 播放本地文件（录音回放、已落盘的 TTS）。
+    func play(fileURL: URL, completion: (@MainActor () -> Void)? = nil) throws {
+        try startPlayback(fileURL: fileURL, ownsFile: false, completion: completion)
+    }
+
+    /// 播完再返回（“示范音结束自动开录”依赖它）。
+    func playAndWait(data: Data, formatHint: String?) async throws {
+        try play(data: data, formatHint: formatHint)
         await waitUntilFinished()
     }
 
-    func waitUntilFinished() async {
-        while isPlaying {
-            if Task.isCancelled {
-                return
+    func playAndWait(fileURL: URL) async throws {
+        try play(fileURL: fileURL)
+        await waitUntilFinished()
+    }
+
+    /// 主动停止。不会触发完成回调（调用方自己知道是主动停的）。
+    func stop() {
+        teardown()
+    }
+
+    // MARK: - 内部
+
+    private func startPlayback(
+        fileURL: URL,
+        ownsFile: Bool,
+        completion: (@MainActor () -> Void)?
+    ) throws {
+        teardown()
+
+        let newPlayer: AVAudioPlayer
+        do {
+            newPlayer = try AVAudioPlayer(contentsOf: fileURL)
+        } catch {
+            playerLogger.error("create audio player failed")
+            throw AudioError.engine("player_decode_failed")
+        }
+
+        newPlayer.delegate = self
+        newPlayer.volume = 1
+        newPlayer.rate = 1
+        guard newPlayer.prepareToPlay() else {
+            playerLogger.error("prepare audio player failed")
+            throw AudioError.engine("player_prepare_failed")
+        }
+        guard newPlayer.play() else {
+            playerLogger.error("start audio player failed")
+            throw AudioError.engine("player_play_failed")
+        }
+
+        player = newPlayer
+        duration = newPlayer.duration
+        currentTime = 0
+        progress = 0
+        completionHandler = completion
+        temporaryFileURL = ownsFile ? fileURL : nil
+        isPlaying = true
+
+        let currentGeneration = generation
+        progressTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self,
+                      self.generation == currentGeneration,
+                      let current = self.player
+                else {
+                    return
+                }
+                let time = current.currentTime
+                let total = current.duration
+                self.currentTime = time
+                self.duration = total
+                self.progress = total > 0 ? min(max(time / total, 0), 1) : 0
+                if !current.isPlaying {
+                    // delegate 通常先到；这里兜底，避免个别格式不回调时 UI 一直显示“播放中”。
+                    self.finishPlayback()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(100))
             }
-            try? await Task.sleep(for: .milliseconds(100))
         }
     }
 
-    func stop(deactivateSession: Bool = true) {
-        generation = UUID()
-        watcher?.cancel()
-        watcher = nil
+    /// 自然播放结束：清状态 → 调完成回调。
+    private func finishPlayback() {
+        guard isPlaying else { return }
+        let finishedDuration = duration
+        let handler = completionHandler
+        teardown()
+        duration = finishedDuration
+        currentTime = finishedDuration
+        progress = 1
+        handler?()
+    }
+
+    /// 解码/播放出错：清状态并把完成回调也走掉，让协调器回到 idle（错误细节只写日志）。
+    private func failPlayback() {
+        guard isPlaying else { return }
+        playerLogger.error("audio player decode error")
+        let handler = completionHandler
+        teardown()
+        handler?()
+    }
+
+    /// 释放播放器与临时文件；重复调用安全。
+    private func teardown() {
+        generation += 1
+        progressTask?.cancel()
+        progressTask = nil
+        player?.delegate = nil
         player?.stop()
         player = nil
+        completionHandler = nil
         isPlaying = false
-        if deactivateSession {
-            self.deactivateSession()
+        currentTime = 0
+        progress = 0
+        duration = 0
+        cleanupTemporaryFile()
+        resumeWaiters()
+    }
+
+    private func waitUntilFinished() async {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                if isPlaying {
+                    waiters.append(continuation)
+                } else {
+                    continuation.resume()
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.stop()
+            }
         }
     }
 
-    private func activatePlaybackSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            // 播放阶段用 .playback + .spokenAudio：不走听筒、静音键不会静音；
-            // A2DP 让蓝牙输出保持好音质（与录音阶段的 HFP 区分，见 audio.md §3）。
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP])
-            try session.setActive(true)
-        } catch {
-            throw AudioError.sessionFailed
+    private func resumeWaiters() {
+        guard !waiters.isEmpty else { return }
+        let pending = waiters
+        waiters.removeAll()
+        for continuation in pending {
+            continuation.resume()
         }
     }
 
-    private func deactivateSession() {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    private func cleanupTemporaryFile() {
+        guard let url = temporaryFileURL else { return }
+        temporaryFileURL = nil
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func writeTemporaryFile(data: Data, formatHint: String?) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ec-audio-\(UUID().uuidString).\(Self.fileExtension(for: formatHint))")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private static func fileExtension(for formatHint: String?) -> String {
+        switch formatHint?.lowercased() ?? "" {
+        case "mp3", "mpeg":
+            return "mp3"
+        case "wav", "wave":
+            return "wav"
+        case "m4a", "aac", "mp4":
+            return "m4a"
+        case "caf":
+            return "caf"
+        default:
+            return "m4a"
+        }
+    }
+
+    // MARK: - AVAudioPlayerDelegate
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            self?.finishPlayback()
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: (any Error)?) {
+        Task { @MainActor [weak self] in
+            self?.failPlayback()
+        }
     }
 }

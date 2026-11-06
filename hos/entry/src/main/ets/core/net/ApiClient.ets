@@ -16,7 +16,8 @@ export class ApiRequest {
   method: http.RequestMethod = http.RequestMethod.GET;
   /** 不含 `/api` 前缀，例如 '/auth/me' */
   path: string = '';
-  query: Record<string, string> | null = null;
+  /** 查询参数；用 Map 而不是对象字面量，满足 ArkTS 的 arkts-no-untyped-obj-literals 约束 */
+  query: Map<string, string> | null = null;
   /** 已序列化的 JSON 字符串（不传 Object，避免 ArkTS 动态对象问题） */
   jsonBody: string | null = null;
   form: http.MultiFormData[] | null = null;
@@ -52,7 +53,7 @@ export class ApiClient {
   private static readonly REFRESH_TIMEOUT_MS: number = 15000;
   private static refreshing: Promise<void> | null = null;
 
-  static async getJson(path: string, query: Record<string, string> | null, timeoutMs: number): Promise<ApiRaw> {
+  static async getJson(path: string, query: Map<string, string> | null, timeoutMs: number): Promise<ApiRaw> {
     const req = new ApiRequest();
     req.method = http.RequestMethod.GET;
     req.path = path;
@@ -85,12 +86,55 @@ export class ApiClient {
   }
 
   static async postMultipart(path: string, form: http.MultiFormData[], timeoutMs: number): Promise<ApiRaw> {
+    return ApiClient.postMultipartWithQuery(path, null, form, timeoutMs);
+  }
+
+  /** multipart + query（连读 / OCR / 故事上传都需要 query，例如 ?language=zh-CN）。 */
+  static async postMultipartWithQuery(path: string, query: Map<string, string> | null,
+    form: http.MultiFormData[], timeoutMs: number): Promise<ApiRaw> {
     const req = new ApiRequest();
     req.method = http.RequestMethod.POST;
     req.path = path;
+    req.query = query;
     req.form = form;
     req.timeoutMs = timeoutMs;
     // 评测最长约 100s，给 120s；上传 12MB 也不能按 JSON 的 5MB 限制
+    req.maxLimit = 20 * 1024 * 1024;
+    return ApiClient.request(req);
+  }
+
+  /**
+   * PATCH JSON。
+   *
+   * 注意：HarmonyOS `http.RequestMethod` 没有 PATCH 枚举，但底层按字符串下发方法名，
+   * 因此这里用字符串断言（需真机验证；失败时错误码会写明）。设置/头像/成员/建议等
+   * 接口只有 PATCH，见 docs/build-verification.md 的待验证项。
+   */
+  static async patchJson(path: string, body: string, timeoutMs: number): Promise<ApiRaw> {
+    const req = new ApiRequest();
+    req.method = 'PATCH' as http.RequestMethod;
+    req.path = path;
+    req.jsonBody = body;
+    req.timeoutMs = timeoutMs;
+    return ApiClient.request(req);
+  }
+
+  static async deleteJson(path: string, timeoutMs: number): Promise<ApiRaw> {
+    const req = new ApiRequest();
+    req.method = http.RequestMethod.DELETE;
+    req.path = path;
+    req.timeoutMs = timeoutMs;
+    return ApiClient.request(req);
+  }
+
+  /** GET 二进制（录音回放 / 头像图片等）。 */
+  static async getBytes(path: string, query: Map<string, string> | null, timeoutMs: number): Promise<ApiRaw> {
+    const req = new ApiRequest();
+    req.method = http.RequestMethod.GET;
+    req.path = path;
+    req.query = query;
+    req.wantBytes = true;
+    req.timeoutMs = timeoutMs;
     req.maxLimit = 20 * 1024 * 1024;
     return ApiClient.request(req);
   }
@@ -294,17 +338,14 @@ export class ApiClient {
     }
   }
 
-  private static buildUrl(path: string, query: Record<string, string> | null): string {
+  private static buildUrl(path: string, query: Map<string, string> | null): string {
     let url = AppConfig.getBaseUrl() + '/api' + path;
-    if (query !== null) {
-      const keys = Object.keys(query);
-      if (keys.length > 0) {
-        const parts: string[] = [];
-        for (const key of keys) {
-          parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(query[key]));
-        }
-        url = url + '?' + parts.join('&');
-      }
+    if (query !== null && query.size > 0) {
+      const parts: string[] = [];
+      query.forEach((value: string, key: string) => {
+        parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+      });
+      url = url + '?' + parts.join('&');
     }
     return url;
   }

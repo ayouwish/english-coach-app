@@ -1,10 +1,22 @@
 {
-  // 【待确认】与 oh-package.json5 的 modelVersion 保持一致。
-  // 若 DevEco 报 hvigor 版本不匹配：用 DevEco 新建工程生成的 hvigor/ 目录整体覆盖。
-  "modelVersion": "6.0.0",
+  // 与 oh-package.json5 的 modelVersion 保持一致（DevEco Studio 6.1.1 / hvigor 6.24.4）。
+  "modelVersion": "6.1.1",
   "dependencies": {},
-  "execution": {},
-  "logging": {},
-  "debugging": {},
-  "nodeOptions": {}
+  "execution": {
+    // "analyze": "normal"      /* 构建分析模式：[ "normal" | "advanced" | "ultrafine" | false ]，默认 "normal" */
+    // "daemon": true           /* 是否启用守护进程编译，默认 true */
+    // "incremental": true      /* 是否增量编译，默认 true */
+    // "parallel": true         /* 是否并行编译，默认 true */
+    // "typeCheck": false       /* 是否开启类型检查，默认 false */
+  },
+  "logging": {
+    // "level": "info"          /* 日志级别：[ "debug" | "info" | "warn" | "error" ]，默认 "info" */
+  },
+  "debugging": {
+    // "stacktrace": false      /* 关闭堆栈打印，默认 false */
+  },
+  "nodeOptions": {
+    // "maxOldSpaceSize": 8192  /* 守护进程最大堆内存（MB），默认 8192 */
+    // "exposeGC": true          /* 显式触发 GC，默认 true */
+  }
 }

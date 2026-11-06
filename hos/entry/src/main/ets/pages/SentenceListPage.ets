@@ -57,17 +57,6 @@ export struct SentenceListPage {
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
-
-      Text('设置')
-        .fontSize(EcFont.caption)
-        .fontColor($r('app.color.ec_primary'))
-        .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x2, bottom: EcSpace.x2 })
-        .backgroundColor($r('app.color.ec_primary_soft'))
-        .borderRadius(EcRadius.pill)
-        .accessibilityText('打开设置')
-        .onClick(() => {
-          NavigationService.push(Routes.SETTINGS);
-        })
     }
     .width('100%')
     .alignItems(VerticalAlign.Center)

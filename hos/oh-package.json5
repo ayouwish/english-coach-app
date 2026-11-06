@@ -1,9 +1,9 @@
 {
-  // 【待确认】modelVersion 与 DevEco Studio / hvigor 版本对应：
-  // API 20 对应 DevEco Studio 6.0.0，此处取 "6.0.0"。
-  // 若 DevEco 提示 modelVersion 不匹配，用 DevEco 新建工程的同文件覆盖（不要手改魔法值）。
-  "modelVersion": "6.0.0",
+  // 与 DevEco Studio 6.1.1 / hvigor 6.24.4 对齐（本机实测：MattermostHarmony 工程同值）。
+  // 该值必须与 hvigor/hvigor-config.json5 的 modelVersion 一致。
+  "modelVersion": "6.1.1",
   "description": "English Coach · HarmonyOS NEXT client (M0). 运行时零第三方依赖。",
   "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {},
+  "dynamicDependencies": {}
 }

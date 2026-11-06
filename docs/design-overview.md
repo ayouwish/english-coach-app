@@ -173,13 +173,20 @@ refresh 也失败 → 清 token → 跳登录
 ### 5.4 故事模式（核心差异化）
 
 ```
-中文输入（文字 or 🎤 说中文 → /api/asr?language=zh-CN）
-  → POST /api/story/rewrite（按账号 CEFR 改写，A1–C1）
-  → 对照预览（可编辑）→ 保存（kind=story）
-  → 连读（异步评分）→ 鼓励语
+中文输入（文字 or 🎤 说中文 → /api/asr?language=zh-CN；中文默认走智谱 GLM-ASR，长音频自动切段）
+  → 原始录音先落盘：POST /api/story/recordings（失败仍 201，可重试转录，绝不丢原声）
+  → POST /api/story/rewrite（按账号 CEFR 改写，A1–C1；句子数 3–12，默认儿童 5 / 家长 8）
+      · 时态：tense=auto（默认）→ 中文叙事信号（了/过/昨天/那天/被…）→ 一般过去时；
+        习惯/现状 → 现在时；不符会重写一次，仍不符 → warnings:["tense_mismatch"]
+  → 对照预览（可编辑）→ 保存（kind=story，回填 recording_id）
+  → 连读（异步评分）→ 鼓励语 → 汇总页可「再读一遍」
   → 复述：录音 → ASR → POST /api/story/retell（覆盖度，不评发音分）
-  → 插画：POST /api/story/:id/illustrate（智谱，每天一张）
-  → 故事集：按日期分组、连续天数、录音回放、只看我的
+  → 插画（默认关，设置可开自动；手动 POST /api/story/:id/illustrate 约 ¥0.1）
+  → 整段朗读回放：GET /api/story/:id/audio/status → /audio（异步预生成）
+  → 原声回顾：详情「🗣️ 我当时讲的原话」= 中文原文 + 原始录音 + 转录状态（**仅创建者可见**）
+  → 隐私：英文正文家庭可见；中文原文/原声/朗读记录/复述/拼接回放**仅本人**（音频缓存按用户隔离）
+  → 打印：整页练习纸 / A5 卡片（详见 §5.7）
+  → 故事集：按日期分组、连续天数、原声标记、只看我的
 ```
 
 ### 5.5 虚拟形象（M4+，Web 已实现）
@@ -203,6 +210,61 @@ refresh 也失败 → 清 token → 跳登录
 **接口（Web 已实现，契约 v1.11 §19）**：
 - 后端 voice：`POST /v1/image/avatar`、`/v1/image/illustrate` 支持 `character_desc`/`character_style`、`capabilities.image_avatar`
 - Web：`GET/POST/PATCH/DELETE /api/avatar`、`GET /api/avatar/image`；`/api/story/[id]/illustrate` 自动带角色卡
+
+### 5.7 打印（单篇整页 / 单篇卡片 / 多选故事集）
+
+```
+单篇·整页：/story/[id]/print[?zh=1&lines=1]
+  标题（中英）+ 级别 + 日期；英文句子编号 ≥14pt、宽松行距；
+  可选中文翻译（默认关）、可选书写留白线（默认关）；页脚手写 Name/Date
+单篇·卡片：/story/[id]/print?layout=card[&zh=1&lines=1]
+  A5 卡片（148×210mm）居中 + 虚线裁切框 + 标题/级别/日期 + 编号句子 12pt + 姓名/日期栏；
+  工具栏可切换「整页练习纸 / A5 卡片」
+故事集：/story/print?ids=a,b,c[&zh=1&lines=1]
+  封面（标题清单 + 共 N 篇 + 日期 + 姓名/日期栏）→ **封面独占第一页**（break-after: page）
+  → 之后**故事内容连续拼接**（不再每篇强制分页；长故事自然跨页）
+  标题 break-after: avoid；句子/书写线 break-inside: avoid（不劈开）
+入口：故事列表「☑️ 选择」多选（≤30 篇）→「🖨️ 打印故事集」；详情页有整页/卡片两个入口
+样式：白底黑字、隐藏导航与按钮、window.print()（浏览器「另存为 PDF」）
+越权：不属于自己的 story id → 忽略并提示，不泄漏内容；>30 → 截断为 30 并提示
+```
+
+### 5.8 跟读练习：游标与单句进步曲线
+
+```
+游标（按筛选分别记）：
+  scope = level:A2 / focus:th / all
+  GET /api/practice/cursor?scope=   → {position,total,sentence_id,updated_at} 或 null
+  PUT /api/practice/cursor          → 保存位置
+  进入 /practice：position>0 → 横幅「上次练到第 N 句」+ [▶ 继续上次] / [从头开始]
+  每练完一句**自动保存**（提交即存，不等异步评分）
+
+单句历史 + 曲线：
+  GET /api/sentences/:id/attempts?limit=20   （仅本人）
+  结果区「📈 这一句的历史（N 次）」：SVG 折线（≥2 次才画）+ 首末对比「41 → 78（+37）」
+  每次：日期 + 分数（仅家长可见）+ ▶ 回放（最多 10 条）；列表卡片可点「📈 历史」
+  儿童：不显示数字分、只显示鼓励；零 IPA
+```
+
+### 5.8b 点单词显示音标（全页面）
+
+```
+任意英文文本（跟读句子/连读大字句/对话消息/故事全文/诊断错词）→ 按 /[\w'-]+/ 切词
+点击单词 → 下方浮层（PC 自动避让，窄屏底部 sheet）：**think /θɪŋk/ ✕（只显示音标，无发音按钮）**
+  数据：GET /api/words/:word（web LRU 500）→ voice /v1/words/ipa（cmudict 126k 词，离线）
+  未收录 → 404 ipa:null → 「暂无音标」
+  儿童：同样可看音标；设置「单词显示音标」默认开（可关）；**SSR 始终零 IPA**（点击后才经 API 下发）
+```
+
+### 5.9 对话：随机性与自定义场景
+
+```
+场景随机变体：开 session 时随机抽 variation（persona/place/detail/goal/opening_line）
+  → 开场白用变体、turn 把 variation 传给 voice（禁止重复提问、已问 3 个换角度、温度 0.9）
+  → 历史回看用**当时存的那组**（老会话 NULL 走内置开场白兜底）
+自定义场景：POST/PATCH/DELETE /api/chat/scenarios（仅 owner；儿童强制 child；注入词 400）
+  → 与内置场景一起出现在列表（is_custom:true，自定义优先）
+```
 
 ### 5.6 盲测 / 诊断 / 家长面板
 

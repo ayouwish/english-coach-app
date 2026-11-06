@@ -23,10 +23,15 @@ export class CacheService {
     return AppRuntime.cacheDir() + '/audio';
   }
 
+  static printDir(): string {
+    return AppRuntime.cacheDir() + '/print';
+  }
+
   static ensureAll(): void {
     FileUtil.ensureDir(CacheService.recordingsDir());
     FileUtil.ensureDir(CacheService.ttsDir());
     FileUtil.ensureDir(CacheService.audioDir());
+    FileUtil.ensureDir(CacheService.printDir());
   }
 
   static cleanupOnBoot(): void {
