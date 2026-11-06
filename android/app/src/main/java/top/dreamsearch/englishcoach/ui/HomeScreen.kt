@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,11 +31,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.dreamsearch.englishcoach.core.di.AppGraph
 import top.dreamsearch.englishcoach.ui.design.EcColor
 import top.dreamsearch.englishcoach.ui.design.EcFont
 import top.dreamsearch.englishcoach.ui.design.EcSpace
+import top.dreamsearch.englishcoach.ui.nav.Navigator
+import top.dreamsearch.englishcoach.ui.nav.Routes
 import top.dreamsearch.englishcoach.ui.nav.TabNav
 import top.dreamsearch.englishcoach.ui.nav.Tabs
 import top.dreamsearch.englishcoach.ui.page.account.MeTab
@@ -51,7 +58,7 @@ import top.dreamsearch.englishcoach.ui.page.story.StoryHomeTab
  */
 @Composable
 fun HomeScreen(onNavigate: (String) -> Unit) {
-    var currentTab by remember { mutableIntStateOf(Tabs.PRACTICE) }
+    var currentTab by rememberSaveable { mutableIntStateOf(Tabs.PRACTICE) }
     var voiceDegraded by remember { mutableStateOf(false) }
 
     // 启动时探一次 /health：voice 不可用 → 顶部提示"录音先保存，稍后可重试评测"
@@ -59,6 +66,20 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
         runCatching { AppGraph.container.practice.health() }
             .onSuccess { health -> voiceDegraded = health.voice?.reachable == false }
     }
+
+    // 离线队列：有"待重试"的评测录音时顶部提示（离线能力，见 core/offline/PendingUploadQueue）
+    var pendingCount by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                pendingCount = AppGraph.container.pendingUploads.count()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(Unit) { pendingCount = AppGraph.container.pendingUploads.count() }
 
     // 跨页切 Tab
     val pendingTab by TabNav.pending.collectAsStateWithLifecycle()
@@ -87,6 +108,27 @@ fun HomeScreen(onNavigate: (String) -> Unit) {
                     color = EcColor.warnText,
                     modifier = Modifier.weight(1f),
                 )
+            }
+        }
+
+        if (pendingCount > 0) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(EcColor.warnBg)
+                    .clickable { Navigator.navigate(Routes.PENDING_UPLOADS) }
+                    .padding(horizontal = EcSpace.x4, vertical = EcSpace.x2),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(EcSpace.x2),
+            ) {
+                Text("📤", fontSize = EcFont.caption)
+                Text(
+                    text = "有 $pendingCount 条录音还没评分（已保存在本机）· 点这里补评",
+                    fontSize = EcFont.micro,
+                    color = EcColor.warnText,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("›", fontSize = EcFont.body, color = EcColor.warnText)
             }
         }
 

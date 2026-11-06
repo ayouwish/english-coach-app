@@ -1,10 +1,17 @@
 # english-coach-app · 家庭英语教练 · 原生客户端
 
-iOS 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-coach`](../english-coach) 分离**——本仓库只放客户端工程与设计文档。
+iOS、Android 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-coach`](../english-coach) 分离**——本仓库只放客户端工程与设计文档。
 
-> **当前状态（2026-11-03）**
+> **当前状态（2026-11-04）**
 > - 后端：**功能完整、已部署**（家庭 NAS，局域网 HTTPS），接口契约 `v1.17`
 > - iOS：M0 代码骨架已落地（需 macOS/Xcode 编译验证）
+> - **Android：Kotlin + Jetpack Compose 首版工程已落地**（`android/`，minSdk 26 / targetSdk 35），
+>   功能清单见 [`docs/android-feature-list.md`](docs/android-feature-list.md)，工程约定见
+>   [`android/CONTRACT.md`](android/CONTRACT.md) + [`android/ROUND2_CONTRACT.md`](android/ROUND2_CONTRACT.md)，
+>   构建说明见 [`android/README.md`](android/README.md)。
+>   第二轮已补齐鸿蒙端全部功能缺口，并额外实现离线能力（失败录音补评分队列、TTS/回放 LRU、能力开关、
+>   故事本机记录、能力雷达图、全屏结果页）；验收记录见 [`android/QA_ROUND2.md`](android/QA_ROUND2.md)。
+>   本机无 Android SDK，**Compose UI 尚未经过编译器验证**，首次构建需在装有 SDK 的机器上收口。
 > - 鸿蒙：**功能实现完成并真机跑通** —— 跟读卡片流与结果页（子项分/逐词/语调曲线/进步历史）、
 >   连读、对话、故事、诊断、复习、盲测、家长面板、家庭成员、建议箱、虚拟形象、音色、设置；
 >   2026-11-03 DevEco 6.1.1 干净构建通过（BUILD SUCCESSFUL）并安装到 MatePad Pro，
@@ -244,6 +251,25 @@ open EnglishCoach.xcodeproj
 **未验证（第一轮重点）**：编译错误、`@kit.*` 导入名与 API 20 实际导出、AVRecorder 参数是否产出 16k/mono/65k、
 AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `hos/README.md` §0.1 与 §「待确认 API」表。
 
+### 5.1 Android 开发（Windows / macOS 均可）
+
+**要求**：Android Studio（Ladybug 或更新）+ **JDK 17** + **Android SDK 35**。工程不需要 macOS。
+
+```bash
+cd english-coach-app/android
+# Android Studio：Open → 选择 android/ 目录 → Sync
+# 首次会下载 AGP 8.7.3 / Gradle 8.9 / Compose BOM（约 1–2GB）
+# 命令行（本机需先有 Gradle 8.9+ 或让 Studio 生成 wrapper）：
+./gradlew :app:assembleDebug
+```
+
+- 登录页服务器地址填 `https://english.dreamsearch.top`（只填主机名会自动补 `https://`，误填 `/api` 会被去掉）
+- 演示账号：`dad@example.com / Dad12345!`（家长）、`girl@example.com / Girl12345!`（儿童）
+- **主流版本策略**：`minSdk 26`（Android 8.0，覆盖 2017 年后所有主流机）/ `targetSdk 35`（Android 15，
+  满足 Google Play 现行要求）；不写 API 26 以下的兼容分支
+- `android/README.md` 有分层说明、与鸿蒙的功能对齐表、以及本机无 SDK 时的静态校验方式
+  （`android/tools/check_android.py`）
+
 ---
 
 ## 6. API 速查（移动端会用到的全部端点）
@@ -382,6 +408,9 @@ AVPlayer `fd://` 播放、Asset Store 读写、Navigation 路由 —— 详见 `
 **iOS**：`ios/README.md`、`ios/docs/{architecture,audio,screens,design-system,roadmap,open-questions}.md`、`ios/docs/adr/*`
 
 **鸿蒙**：`hos/README.md`、`hos/docs/{architecture,audio,screens,design-system,permissions-and-privacy,roadmap,open-questions}.md`、`hos/docs/adr/*`
+
+**Android**：`android/README.md`（构建/分层/对齐表）、`android/CONTRACT.md`（团队共享契约）、
+`docs/android-feature-list.md`（功能总清单 + 与鸿蒙/文档的偏差）、`android/AUDIT.md`（静态审计记录）
 
 **发布记录**：`docs/release-notes.md`（按日期批次：功能 + commit + 怎么验证）
 

@@ -2,8 +2,11 @@ package top.dreamsearch.englishcoach.core.di
 
 import android.content.Context
 import top.dreamsearch.englishcoach.core.audio.AudioController
+import top.dreamsearch.englishcoach.core.audio.VoicePrefs
 import top.dreamsearch.englishcoach.core.config.AppConfig
+import top.dreamsearch.englishcoach.core.content.CapabilityCache
 import top.dreamsearch.englishcoach.core.net.ApiClient
+import top.dreamsearch.englishcoach.core.offline.PendingUploadQueue
 import top.dreamsearch.englishcoach.core.service.AccountService
 import top.dreamsearch.englishcoach.core.service.AuthService
 import top.dreamsearch.englishcoach.core.service.ChatService
@@ -44,6 +47,15 @@ class AppContainer(context: Context) {
     val account: AccountService by lazy { AccountService(api) }
     val stats: StatsService by lazy { StatsService(api) }
     val dictionary: DictionaryService by lazy { DictionaryService(api) }
+
+    // ---- 能力开关（image/ocr/avatar_presets…，来自 /health 的 features + capabilities）----
+    val capability: CapabilityCache by lazy { CapabilityCache(api) }
+
+    // ---- 账号语音偏好本机镜像（示范音/对话朗读用；设置页 PATCH 后同步）----
+    val voicePrefs: VoicePrefs by lazy { VoicePrefs(prefs) }
+
+    // ---- 离线：TTS/回放 LRU 与"待重试录音队列"----
+    val pendingUploads: PendingUploadQueue by lazy { PendingUploadQueue(appContext, cache) }
 
     // ---- 音频（录音 / 播放 / TTS 缓存）----
     val audio: AudioController by lazy { AudioController(appContext) }

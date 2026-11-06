@@ -69,6 +69,15 @@ fun AppRoot() {
         }
     }
 
+    // 登录成功（含"启动失败→改服务器地址→登录"路径）后必须复位强制登录标记，
+    // 否则 `!loggedIn || forceLogin` 会一直停在登录页（ui-kit 审计发现）。
+    LaunchedEffect(session.loggedIn) {
+        if (session.loggedIn) {
+            forceLogin = false
+            bootError = null
+        }
+    }
+
     EcTheme(isChild = session.isChild) {
         when {
             booting -> BootLoadingView()

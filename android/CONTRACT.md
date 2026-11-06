@@ -441,3 +441,40 @@ Tab 根页（`TabNav` 切换；无返回键）：
 - 交互/文案/分数规则以 `hos/docs/screens.md` + `hos/entry/src/main/ets/pages/*` 实现为准（比文档新）。
 - 视觉以 `docs/design-tokens.md` + `EcColor/EcFont` 为准。
 - 不实现 Web 专属能力（打印页、导出 Markdown 下载可简化为"显示文本 + 复制"）。
+
+---
+
+## 9. 实现后补充（2026-11-04，与上面正文有冲突时以本节为准）
+
+并行开发期间新增/微调了几处约定，最终代码按本节执行：
+
+1. **Tab 根页导航**：`ui/nav/Routes.kt` 新增 `object Navigator { fun navigate(route); fun pop(); fun popTo(route) }`，
+   由 `AppNavHost` 组合时 `bind(NavController)`。契约 §5 中五个 `XxxTab()` 无参签名不变，
+   Tab 内 push 二级页统一 `NavParams.xxx = ...; Navigator.navigate(Routes.XXX)`。
+2. **新增跨页参数**：`NavParams.diagnosisAttemptIds: List<String>?`（连读汇总页写入"这一批" attempt id，
+   诊断页读到后切到 batch scope；为空则回落"最近 20 条已评完非盲测记录"）。
+3. **组件最终 API**：以 `ui/component/` 实际源码为准，与 §4 的差异只有：
+   `PageScaffold(..., scrollable: Boolean = false)`（content 收到的 padding 为 Zero，页面不必再处理）；
+   `AudioController.playFile(file, onComplete)` 的 `onComplete` 只在自然播完时回调（用于"播完自动开录"）。
+   `AudioController` 的错误细分：未授权 `mic_denied`、重复 start `record_failed`、<0.6s `record_too_short`、>12MB `record_too_large`。
+4. **盲测提交用同步接口**：`PracticeService.evaluate(audio, sentenceId, referenceText, durationMs, blindTestId = id)`，
+   **不要**用 `FlowService.submitAsync`（鸿蒙实际实现即同步 `POST /api/attempts`，响应不含分数）。
+5. **限额前置**：`session.exceeded == true` 时页面直接禁用录音/开始（不等 429）。
+6. **故事复述 ASR 语言用 `"en-US"`**（`StoryService` KDoc 与鸿蒙一致）；故事中文讲述录音上限 120s。
+7. **未实现（M1 范围外，已评审）**：打印/PDF、照片生成形象、批量 OCR、独立修改密码页、深色模式、
+   离线缓存/提交队列、故事保存后静默自动插图（改为用户显式点击）。
+8. **有意的 Android 侧差异**：跟读详细结果在页内呈现（无独立全屏路由）；句子切换用"上一句/下一句"按钮；
+   演示账号一键填入同时填邮箱+密码；`SettingsScreen` 用一次"保存设置"PATCH（非逐项自动保存）。
+
+## 10. 验收命令
+
+```bash
+cd english-coach-app/android
+python tools/check_android.py     # 必须输出「静态检查通过 ✅」
+python tools/check_members.py     # 成员级：DTO 命名参数 / Service 方法 / Routes 常量
+```
+
+> **第二轮（2026-11-05）的增补契约见 [`ROUND2_CONTRACT.md`](ROUND2_CONTRACT.md)**：
+> 离线失败录音队列（`core/offline/PendingUploadQueue` + 待补评分页）、能力开关（`core/content/CapabilityCache`）、
+> 语音偏好本机镜像（`core/audio/VoicePrefs`）、`CacheStore` LRU/最近结果、`PracticeService.health(force)`/`audioByUrl`、
+> 页面签名变更（FlowSummary/Parent/Voices）与新路由 `Routes.PENDING_UPLOADS`。与本文件冲突时以 ROUND2 为准。

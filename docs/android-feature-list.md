@@ -3,7 +3,7 @@
 > **用途**：Android（Kotlin / Jetpack Compose）开发与验收的唯一功能清单。
 > **事实来源优先级**：① `hos/entry/src/main/ets/**`（鸿蒙实现，真机已验证，比文档新）→ ② `hos/docs/**` → ③ `docs/**` → ④ `README.md`。
 > **与契约的关系**：页面范围与签名以 [`android/CONTRACT.md`](../android/CONTRACT.md) §5 为准；本文只描述"要做什么行为"。
-> **最后更新**：2026-11-04（对齐鸿蒙 `631c110`，跟读结果详情改为独立全屏页）
+> **最后更新**：2026-11-05（**ROUND2**：用户要求「不要只写 demo，要全部实现」——第一轮 M1 全部页面已落地，本轮补齐雷达图/全屏结果/滑动切句/历史回放、统一 VoicePrefs 与 CapabilityCache、离线失败队列 + 待补评分页、故事分组/持久化/复制全文、账号页缺口；Android 与鸿蒙的取舍见 §4.1，逐项证据见 `android/QA_ROUND2.md`）
 
 ---
 
@@ -54,8 +54,9 @@
 |---|---|---|
 | `README.md` §9 里程碑 | M0「代码已写，待编译/真机验证」 | 已过时：V1 编译通过、V2 装机、V3 全功能真机（`hos/docs/build-verification.md`） |
 | `docs/feature-index.md` | 多个接口"✅ 已实现" | `GET /practice/cursor`、`GET /sentences/:id/attempts`、`GET /tts/voices`、`POST /story/recordings` **线上不存在**（`build-verification.md` L419 实测） |
+| 本文 §2 / `feature-index.md` §10 的「Android 状态」 | 2026-11-04 中途快照，多为「进行中」 | 现已按工作区代码（`android/app/src/main/java/top/dreamsearch/englishcoach/ui/page/**`、`core/**`）校准为**最终状态**：CONTRACT §5 的全部页面已落地；与鸿蒙的行为取舍见 §4.1 |
 | `docs/screens.md` §1 | 首页有用量环 + 四张功能卡 | 实现是 5 Tab，用量为 Tab 头部一行文字 |
-| `docs/feature-index.md` 更新日期 | 2026-11-03 | 本次更新为 2026-11-04（见 §10 Android 实现状态） |
+| `docs/feature-index.md` 更新日期 | 2026-11-03 | 2026-11-04 首版校准；**2026-11-05 ROUND2 再校准**（见 §10 Android 实现状态） |
 
 ---
 
@@ -129,9 +130,14 @@
 
 - [ ] 启动时调 `/health`（5s 超时、无需登录、不参与 401 重试）判断 `voice.reachable`，false → 5 Tab 顶部琥珀条"语音服务暂时不可用：录音会先保存，稍后可在结果页重试评测"（`pages/Index.ets` L81-88、`HomeTabs.ets` L54-68）。
 - [ ] 进程内缓存一次 `voice.capabilities`：`image / ocr / avatar_presets / phoneme_level / prosody / intonation_curve`；**缺省 true**（宁可口子开、服务端 503 给可读提示）（`core/content/CapabilityCache.ets`）。
-- [ ] 用途：`image=false` 藏"给我画一张"并提示"插画服务暂未启用"（`StoryDetailPage.ets` L446-465）；`ocr=false` 藏拍照识别（`FlowPage.ets` L147）；`avatar_presets=false` 形象库提示不可用。
+- [ ] 用途（实测接线，不是全部字段都生效）：
+  - `image=false` → 故事详情/保存后自动画图都跳过，并提示"插画服务暂未启用"（`StoryDetailPage.ets` L65-66、`StoryVM.ets` L648-655）；
+  - `ocr=false` → 连读页藏拍照识别（`FlowVM.checkOcrCapability` L1674-1687 **自己调 `/health`**，不走 CapabilityCache）；
+  - `avatar_presets` → 仅健康页展示，**未用于隐藏形象入口**（`CapabilityCache.ets` L16/33 有字段但无调用方）；
+  - `phoneme_level/prosody/intonation_curve` → 只读取不驱动渲染（见偏差 D-22）。
 - [ ] 服务状态页展示 `features` / `capabilities` / voice 端点清单（`pages/HealthPage.ets`）。
 - [ ] 客户端**不对 `/health` 做高于每 30 秒一次的轮询**（`HealthPage.ets` L314 文案即承诺）。
+- [ ] ✅ **Android ROUND2 统一能力缓存**：`core/content/CapabilityCache.kt`（5 分钟 TTL、并发单飞、失败不抛、缺省 true）为唯一来源；接线：连读 OCR 入口（`FlowViewModel`）、故事插画/自动插图（`StoryRecordViewModel/StoryDetailViewModel`）、「我的」形象入口（`MeViewModel`）、设置页（`SettingsViewModel`）。缺字段一律按「可用」，只做入口显隐、不把页面打成错误态。
 
 ### 1.8 点单词看音标（全页面）
 
@@ -147,7 +153,8 @@
 - [ ] 目录：`filesDir/recordings`（录音）、`cacheDir/tts`（示范音）、`cacheDir/audio`（回放）（`core/service/CacheService.ets` L13-30）。
 - [ ] 启动清理 `.part` 残留；登出清录音 + 音频缓存；**切换账号必须清缓存**（`SessionStore.ets` L88-89）。
 - [ ] 设置页"清除"只清 TTS/回放音频，不动账号数据（`SettingsPage.ets` L389-411）。
-- [ ] ⚠️ **未实现**（文档承诺过的）：语料 JSON 全量离线缓存、TTS LRU 200MB、评测结果缓存 50 条、失败提交队列（`CacheService.ets` L11 明写"M0 不做 LRU 与过期淘汰"；`docs/design-overview.md` §7 为设计目标）。见偏差 D-14。
+- [ ] ⚠️ 鸿蒙（M0）**未实现**：语料 JSON 全量离线缓存、TTS LRU、评测结果缓存、失败提交队列（`CacheService.ets` L11 明写"M0 不做 LRU 与过期淘汰"；`docs/design-overview.md` §7 为设计目标）。见偏差 D-14。
+- [ ] ✅ **Android ROUND2 已落地**（2026-11-05）：①TTS 缓存 **200MB** / 回放缓存 **300MB** LRU（`CacheStore.trimTtsCache/trimAudioCache`，`cleanupOnBoot` 调用）；②最近评测结果缓存 50 条（`readRecentResult/writeRecentResult/clearRecentResults`）；③失败录音**待补评分队列** `core/offline/PendingUploadQueue.kt`（索引 `queue.json` + 录音文件，串行重试成功即删）；④新增「待补评分」页 `ui/page/offline/PendingUploadsScreen.kt` + `Routes.PENDING_UPLOADS`，首页顶部横幅 / 「我的」卡片进入。语料全量 JSON 缓存仍未做（留 M2）。
 
 ### 1.10 权限与隐私
 
@@ -164,12 +171,35 @@
 - [ ] 返回行为：跟读已提交可直接返回；录音中返回要确认；连读进行中确认"还有 N 句没读"；盲测进行中确认；故事生成中允许返回（`docs/screens.md` §14）。
 - [ ] 所有页面中文文案、emoji 与鸿蒙一致（🌱⭐💪🎤🔊📈🌙 等）。
 
+### 1.12 Android 落地状态（2026-11-05 ROUND2 快照）
+
+> 证据：`android/app/src/main/java/top/dreamsearch/englishcoach/core/**` 与 `ui/**`（括号内为关键文件）。
+> 图例：**✅ 已实现** · **🚧 部分实现（写清缺什么）** · **⏭️ 延后**。
+
+| 全局能力 | Android 状态 | 代码出处 / 说明 |
+|---|---|---|
+| 认证 / 单飞刷新 / 401 重放 / 吊销 | ✅ 已实现 | `core/net/ApiClient.kt`（401 单飞 + 重放一次、refresh 网络失败不清 token）、`core/service/AuthService.kt` |
+| Token / 记住密码加密存储 | ✅ 已实现 | `core/session/TokenStore.kt`、`CredentialStore.kt`（`EncryptedSharedPreferences`；不可用时不落明文并提示） |
+| 会话 / 儿童判定 / 两套错误文案 | ✅ 已实现 | `core/session/SessionStore.kt`、`core/error/UiError.kt`、`ui/design/EcTheme.kt`（`LocalIsChild`） |
+| 启动三态 / 登录门禁 | ✅ 已实现 | `ui/AppRoot.kt`（loading / 全屏错误+重试+改服务器地址 / 登录页；自动登录也在这一层，见 A-06/A-07） |
+| 录音（m4a/16k/mono/64kbps）与播放互斥 | ✅ 已实现 | `core/audio/AudioController.kt`（录音前停播放、录音中禁播放、0.6s / 12MB 本地拦截） |
+| TTS 先落盘再播放 / 播放互斥 | ✅ 已实现 | `core/audio/AudioController.playBytes/playFile`、各页面 VM 先写 `CacheStore.ttsFile/audioFile` |
+| 示范音语速/音色偏好 | ✅ 已实现（ROUND2） | `core/audio/VoicePrefs.kt`（账号偏好本机镜像，儿童强制 slow + 内置 Ana 童声）：跟读/连读示范音、连读「听鼓励」、对话朗读、设置/音色页保存后同步统一走 `voicePrefs.resolve(isChild)`（`PracticeViewModel.kt:364`、`FlowViewModel.kt:1212`、`FlowSummaryViewModel.kt:216`、`VoicesViewModel.kt:76/168`、`SettingsViewModel.kt:151-153/209`） |
+| 内置 9 音色 | ✅ 已实现 | `core/audio/Voices.kt` |
+| 今日用量 + 前置额度禁用 | ✅ 已实现 | `PracticeViewModel.limitReached`、`FlowViewModel.exceeded`、`ChatSessionViewModel.sessionExceeded`、`BlindTestScreen`/`StoryRecord`/`StoryReview` 的 `exceeded` 前置禁用（比鸿蒙更严，D-12） |
+| 能力开关（image / ocr / avatar_presets） | ✅ 已实现（ROUND2） | 统一 `core/content/CapabilityCache.kt`（5 分钟 TTL、并发单飞、失败不抛、缺省 true）；接线：连读 OCR 入口、故事插画/自动插图、设置页自动插图开关、「我的」/设置页形象入口（`avatar_presets=false` 置灰 + 「当前服务端未开启」）。形象页仅能经这两个入口进入 |
+| 点单词看音标 | ✅ 已实现 | `ui/component/WordText.kt` + `core/service/DictionaryService.kt`（进程内 LRU、儿童不显示下划线/IPA） |
+| 缓存与离线 | ✅ 已实现（ROUND2） | `CacheStore`：TTS 200MB / 回放 300MB LRU（启动 trim）、最近评测结果 50 条、`pendingUploadsDir`；`core/offline/PendingUploadQueue.kt` 失败录音队列 + `ui/page/offline/PendingUploadsScreen.kt` 待补评分页（列表/试听/单条删/全部重试/空态）；首页横幅 +「我的」入口。语料全量 JSON 缓存仍 ⏭️ |
+| 权限与隐私 | ✅ 已实现（+1 普通权限） | `AndroidManifest.xml`：`INTERNET`、`ACCESS_NETWORK_STATE`（额外，普通权限，A-13）、`RECORD_AUDIO`；拍照用 `ActivityResultContracts.GetContent()`，无 CAMERA/存储权限；隐私文案如实 |
+| 打印 / 导出文件下载 | 打印/下载 ⏭️（平台限制）、复制 ✅ | 移动端不做打印/文件下载：建议箱导出 = 弹层 Markdown + 一键复制；**故事详情「复制全文」ROUND2 已补**（标题 + 英文全文 + 中文对照，`StoryDetailScreen.kt:264-300`） |
+
 ---
 
 ## 2. 页面详细清单
 
 > 每页固定结构：路由/入口 → 目标用户 → 功能点（勾选式）→ 依赖接口 → 状态 → 儿童差异 → Android 首版状态。
-> Android 状态口径：**✅ 实现** = CONTRACT §5 已列且首版必做；**🚧 部分** = 首版做但范围缩减/依赖线上降级；**⏭️ 延后** = 首版不做。
+> Android 状态口径：**✅ 实现** = 已在工作区代码落地且行为与鸿蒙一致（差异见 §4.1）；**🚧 部分** = 已实现主体但范围缩减/依赖线上降级/行为不同；**⏭️ 延后** = 首版不做。
+> **快照时间：2026-11-05（ROUND2）** —— 下列「Android 首版（最终）」行以代码为准；功能点勾选框描述的是**跨端行为基线**（含鸿蒙事实），不代表 Android 逐条都做了。
 
 ### 2.0 应用壳与「我的」Tab（补充，非 16 页之一）
 
@@ -189,7 +219,7 @@
 - **依赖接口**：`GET /auth/me`、`GET /health`
 - **状态**：启动 loading / 启动 error（可重试）/ 登录页；我的页无 empty
 - **儿童 vs 成人**：同一壳；儿童隐藏家长三个入口
-- **Android 首版**：✅（`ui/AppRoot.kt`、`ui/HomeScreen.kt`、`MeScreen.kt` 已在契约内）
+- **Android 首版（最终）**：✅（`ui/AppRoot.kt` 启动三态含「错误可重试 / 改服务器地址」；`ui/HomeScreen.kt` 5 Tab + `voice.reachable=false` 降级琥珀条 + **「有 N 条录音还没评分」待补评分横幅**（ROUND2，点进 `Routes.PENDING_UPLOADS`）；`ui/page/account/MeScreen.kt` 入口按角色分流 + **待补评分卡片 / 形象入口按 `avatar_presets` 置灰**；`ui/nav/AppNavHost.kt` 接全 20 条二级路由（含 `Routes.SENTENCES`、`Routes.PENDING_UPLOADS`））。故事→连读跨 Tab 用 `NavParams.flowMaterialId` + `TabNav.go(Tabs.FLOW)` 替代鸿蒙的 AppStorage `tab_index`。
 
 ### 2.1 登录
 
@@ -213,7 +243,7 @@
 - **依赖接口**：`POST /auth/token`、`GET /auth/me`、`GET /health`
 - **状态**：loading（按钮内 + "正在检查服务器…"）/ error（表单上方 `ErrorBanner`，保留输入）/ 无 empty / 存储降级提示
 - **儿童 vs 成人**：同一页；儿童走"演示账号"由家长代填
-- **Android 首版**：✅（`LoginScreen.kt`；注意 Android 用 `EncryptedSharedPreferences` 等价实现记住密码）
+- **Android 首版（最终）**：✅（`ui/page/auth/LoginScreen.kt` + `LoginViewModel.kt`）。与鸿蒙的取舍：①演示账号一次填入**邮箱 + 密码**（A-07）；②冷启动自动登录统一放在 `AppRoot`（`session.loginWithSaved()`），`LoginViewModel` 只回填表单、避免同一次启动登录两次；③**记住密码默认关**（`AppConfig.rememberPassword` 默认 `false`），但登录页副文案仍写「默认开」⚠️ 待统一（A-06）；④安全存储不可用 → 不落明文 + 黄字提示（保留）。
 
 ### 2.2 跟读练习（Tab 0）
 
@@ -259,8 +289,8 @@
 - **依赖接口**：`GET /sentences?level=&focus=`、`GET /attempts?limit=`、`POST /tts`、`POST /attempts`（multipart，可带 `blind_test_id`）、`POST /attempts/:id/retry`、`GET /audio/:id`、`POST /warmup`（静默预热后 6 句）、`GET /blind-tests`、`GET /words/:word`
 - **状态**：列表 loading（"正在取句子…"）/ error+重试 / empty+换等级 / 额度 429（错误文案）/ degraded / 无语音
 - **儿童 vs 成人**：焦点音素、子项术语、逐词、音素、语调、详细结果入口（成人）/ 不显示低分数字、鼓励语优先、按钮更大
-- **Android 首版**：✅ 主体；🚧 结果详情页（CONTRACT 未给 `PRACTICE_RESULT` 路由，需 Lead 决定：新增路由 or 页内底部 sheet）
-- **附**：`ResumeBanner`/`PRACTICE_RESULT`/`PracticeResultStore` 均为跨页/跨 Tab 传参，Android 用 `NavParams`（契约 §2.7）替代鸿蒙的静态类 + AppStorage 版本号
+- **Android 首版（最终）**：✅ 主体（`ui/page/practice/PracticeScreen.kt` + `PracticeViewModel.kt`：等级 chips、本地游标 + 继续上次/从头开始、听示范/跟我读（**走 `voicePrefs.resolve`**，ROUND2）、60s 自动停、进度文案、degraded「重试评测」、无语音提示、429+`exceeded` 前置禁用、句子列表入口）。**ROUND2 补全**：①结果区**能力雷达 `EcRadarChart`**（成人；`PracticeScreen.kt:894`）；②**全屏结果 overlay**（页内覆盖、可关闭/重试评测/下一句、BackHandler，`:738`）；③**单句历史逐条回放**（`PracticeService.audioByUrl` → `AudioController.playBytes`，VM `:441`）；④**左右滑动切句 `HorizontalPager`**（保留上一句/下一句按钮，`:437`）；⑤网络/5xx 提交失败自动 `pendingUploads.enqueue(...)` + 「已保存到本机，稍后可补评分」提示（VM `:640-659`）。盲测仍独立 `BLIND_TEST` 一页闭环（A-02）。
+- **附**：`ResumeBanner`/`PRACTICE_RESULT`/`PracticeResultStore` 均为跨页/跨 Tab 传参，Android 用 `NavParams`（契约 §2.7）替代鸿蒙的静态类 + AppStorage 版本号；结果详情不是独立页，所以没有 `PRACTICE_RESULT` 路由，也没有 `PracticeResultStore`（`PracticeModels.kt` 里用 `PracticeResultUi` 页内模型承接）。
 
 ### 2.3 连读模式（Tab 1）
 
@@ -305,7 +335,7 @@
 - **依赖接口**：`GET /sentences`、`GET /materials?kind=page`、`GET /materials/:id`、`POST /materials`、`PATCH/DELETE /materials/:id`、`POST /ocr`、`POST /attempts/async`、`GET /attempts/status`、`POST /tts`、`GET /diagnosis?scope=batch`
 - **状态**：setup loading/empty/error；running 单句失败不影响其它句；summary 空（无分数时"这一批没有拿到分数…读得开心最重要"）
 - **儿童 vs 成人**：措辞"正在听…"而非"评分中"、无数字分、无音素明细（连读详情本来就不含音素/语调图，见 `FlowPage.ets` L1029）
-- **Android 首版**：✅（Tab + 汇总页都在 CONTRACT §5）
+- **Android 首版（最终）**：✅ 主体（`ui/page/flow/FlowScreen.kt` + `FlowViewModel.kt` + `FlowSummaryScreen.kt` + `FlowSummaryViewModel.kt`：三来源、5/10/15、随机、OCR 单张（**改用统一 `CapabilityCache`**：`FlowViewModel.kt:1355-1361`；`ocr=false` 时入口禁用+黄字说明，`FlowScreen.kt:224-233`）、切句可编辑、书页保存、async 提交 + 1200ms 轮询、单句重录、六档鼓励语确定性哈希 + 中英播放（**播放走 `voicePrefs.resolve`**，`FlowViewModel.kt:1212`、`FlowSummaryViewModel.kt:216`）、再读一遍/再读一段、批次诊断、故事→连读直接开跑）。**ROUND2 补全**：①汇总页「📝 复述这个故事」仅在本轮来自**故事材料**时显示（`FlowSummaryScreen.kt:129-132`；id 来自 `NavParams.flowMaterialId` 且校验 `material.kind=story`，`FlowViewModel.kt:791-823`）；②异步提交网络/5xx 失败 → `pendingUploads.enqueue(..., mode="flow")`，该句标 `pending-offline`、不算失败，汇总页显示「待补评分 N 条 →」（`FlowViewModel.kt:1024-1066`、`FlowSummaryScreen.kt:120-121/398-412`）。
 
 ### 2.4 对话训练（Tab 2 + 4 个二级页）
 
@@ -353,7 +383,7 @@
 - **依赖接口**：`GET/POST /chat/scenarios`、`PATCH/DELETE /chat/scenarios/:id`、`POST /chat/sessions`、`GET /chat/sessions`、`GET /chat/sessions/:id`、`GET /chat/sessions/:id/messages`、`POST /asr`、`POST /chat/sessions/:id/turn`、`POST /chat/sessions/:id/end`、`GET /chat/sessions/:id/audio/status`、`GET /chat/sessions/:id/audio?force=`、`POST /tts`、`GET /api/audio/:id`
 - **状态**：场景 loading/error/empty；会话首条"正在准备场景…"；turn 失败可重试；TTS 失败文字照常 + "再读一遍"；回放 building/failed
 - **儿童 vs 成人**：场景只显示 child 受众；建议 3 条也可能不给；纠错更温和；不显示分数/IPA；无"再看小朋友的场景"
-- **Android 首版**：✅ 全部 5 个页面（CONTRACT §5 已列 `CHAT_SESSION/HISTORY/DETAIL/CUSTOM`）
+- **Android 首版（最终）**：✅ 全部 5 个页面（`ChatScenariosScreen.kt`、`ChatSessionScreen.kt`、`ChatHistoryScreen.kt`、`ChatDetailScreen.kt`、`ChatCustomScreen.kt`；三步链路、4 次 pron 轮询、结束确认、整段回放 2s×30、429/`exceeded` 双保险、自定义场景 CRUD 均实现）。与鸿蒙的一处行为差：**建议回复 chips 点击只朗读提示句、不发送也不自动开录**（`ChatSessionScreen.kt` L358-370；鸿蒙是「设为提示句 + 立刻开录」，见 A-14）。
 
 ### 2.5 故事模式（Tab 3 + 3 个二级页）
 
@@ -397,7 +427,7 @@
 - **依赖接口**：`GET /materials?kind=story&limit=&offset=`、`GET /materials/:id`、`GET /materials/:id/image`、`POST /materials`、`PATCH/DELETE /materials/:id`、`POST /asr?language=zh-CN|en-US`、`POST /story/rewrite`、`POST /story/retell`、`POST /story/:id/illustrate?force=`、`GET /story/:id/audio/status`、`GET /story/:id/audio?force=`、`POST /tts`
 - **状态**：列表 loading/error/empty；详情加载失败可重试；插画/朗读失败互不影响阅读；复述失败保留录音
 - **儿童 vs 成人**：无改名/删除入口、无低分/百分比、文案口语化、大按钮
-- **Android 首版**：✅ 主体（3 Tab/3 二级页都在契约）；🚧 原声回放 + 复述记录持久化（线上无接口，见 D-08/D-09）
+- **Android 首版（最终）**：✅ 4 个页面（`StoryHomeScreen.kt`、`StoryRecordScreen.kt`、`StoryDetailScreen.kt`、`StoryReviewScreen.kt`；`StoryRuntime.kt` 本机持久化 + 刷新 tick）。**ROUND2 补全**：①列表按「**今天 / 昨天 / 更早**」分组（sticky header）+ 顶部「🔥 连续讲故事 N 天」chip（`StoryHomeViewModel.kt:156/185`、`StoryHomeScreen.kt:89/121-125`）；②保存成功后按 `auto_illustrate` **自动插图**（默认关；`image=false` 时提示不扣费，失败可重试，`StoryRecordViewModel.kt:440`）；③保存成功可**直接「查看故事」**跳详情（`StoryRecordScreen.kt:417`）；④详情**「📋 复制全文」**（标题+英文+可选中文对照，`StoryDetailScreen.kt:264-300`、`StoryDetailViewModel.kt:556`）；⑤`StoryRuntime` 原声/复述记录**落盘持久化**（`CacheStore` JSON + 原声复制到缓存目录；杀进程后可回看，文件失效只隐藏回放），详情/复述页读写闭环（`StoryRuntime.kt:97-152`、`StoryRecordViewModel.kt:423`、`StoryDetailViewModel.kt:126/161`、`StoryReviewViewModel.kt:276`）；⑥整段朗读 **building 超约 30s 给「🔄 重新生成」**（`StoryDetailViewModel.kt:249-257/390-413`、`StoryDetailScreen.kt:575-589`）。原声仍如实标注「本机保存」，不承诺跨设备。
 
 ### 2.6 盲测（`BLIND_TEST`）
 
@@ -415,7 +445,7 @@
   - [ ] 儿童：全程不显示分数；结束后只说"完成啦/下次再来"
 - **依赖接口**：`POST /blind-tests`、`GET /blind-tests`、`POST /blind-tests/:id/finish`、`POST /attempts`（带 `blind_test_id`）
 - **状态**：loading（开始按钮）/ error（含 409 进行中）/ empty / pending>0 说明
-- **Android 首版**：✅
+- **Android 首版（最终）**：✅ 但为**一页闭环**（A-02）：Intro → Running（本页直接录音 → `PracticeService.evaluate(..., blindTestId)` 同步提交 → 2s 轮询只更新 `scored/pending` 计数）→ Finish/周报，全部在 `ui/page/stats/BlindTestScreen.kt` + `BlindTestViewModel.kt`；鸿蒙是「盲测页只做批次/周报，录音在跟读页盲测模式」。防作弊不变：Running 零分数、无「重试评测」、`pending>0` 如实提示；儿童 Finish 不显示低分数字；额外加了 `session.exceeded` 前置禁用。
 
 ### 2.7 发音诊断（`DIAGNOSIS`）
 
@@ -431,7 +461,7 @@
   - [ ] 儿童：无 IPA、无对比音素、低分不显示数字、口型/例词保留
 - **依赖接口**：`GET /diagnosis?scope=recent&days=7`、`GET /diagnosis?scope=all`、`GET /sentences?focus=`
 - **状态**：loading（摘要骨架）/ error+重试 / empty（样本不足）
-- **Android 首版**：✅
+- **Android 首版（最终）**：✅（`ui/page/stats/DiagnosisScreen.kt` + `DiagnosisViewModel.kt`：recent / all / attempt / batch 四个 scope；`batch` 优先消费连读汇总写入的 `NavParams.diagnosisAttemptIds`（≤20，读完即清空），**没有入参时回落到「最近 20 条已评完的非盲测记录」**（`DiagnosisViewModel.kt` L156-199）；「练这 N 句」写 `NavParams.practiceFocus` 切跟读；样本不足/儿童 child 文案/对比音素去重均实现）。
 
 ### 2.8 错音本（`REVIEW`）
 
@@ -447,7 +477,7 @@
   - [ ] 儿童：无 IPA、无低分数字、文案温和
 - **依赖接口**：`GET /review`、`POST /review`
 - **状态**：loading / error+重试 / empty
-- **Android 首版**：✅
+- **Android 首版（最终）**：✅（`ui/page/stats/ReviewScreen.kt` + `ReviewViewModel.kt`：卡片/4 档评分（儿童 4 个口语按钮）、评分成功本地移除并提示下次复习时间、评分中防重复、儿童无 IPA/无低分数字、空态引导回跟读）。
 
 ### 2.9 家长面板（`PARENT`，仅家长）
 
@@ -465,7 +495,7 @@
 - **依赖接口**：`GET /parent/summary`（snake_case）
 - **状态**：loading（骨架）/ error+重试 / empty（无孩子 → "先添加一个孩子"）/ forbidden
 - **儿童 vs 成人**：儿童不可见；深链进入即 403 页
-- **Android 首版**：✅
+- **Android 首版（最终）**：✅（`ui/page/account/ParentScreen.kt` + `ParentViewModel.kt`：403 停留页不跳登录、全家汇总、每孩子今日剩余、成员卡（今日/周/累计 + 近 14 天趋势 + 盲测周环比 current/delta/series + 高频错音错词）、无数据空态、刷新、家庭成员/建议箱入口）。**ROUND2 补入口**：顶部「📈 盲测周报」→ `onOpenBlindTest()` → `Routes.BLIND_TEST`（`ParentScreen.kt:71/88/452`、`AppNavHost.kt:146`；家长可直接跟进孩子盲测报告）。
 
 ### 2.10 家庭成员（`FAMILY`，仅家长）
 
@@ -481,7 +511,7 @@
   - [ ] 空态："还没有其他成员，点右上角「＋ 添加成员」建一个吧。"
 - **依赖接口**：`GET/POST /family/members`、`PATCH /family/members/:id`、`POST /family/members/:id/password`
 - **状态**：loading / error / empty / 表单内联错误
-- **Android 首版**：✅（含"修改密码"能力，见 2.16）
+- **Android 首版（最终）**：✅（`ui/page/account/FamilyScreen.kt` + `FamilyViewModel.kt`：列表/新建/编辑（昵称·等级·时长·自由对话，不能改角色）/重置密码（无旧密码，**≥8 位**，提示旧密码失效且旧设备可能仍登录）/409 登录名占用/空态；**无删除成员**——服务端没有该接口，与鸿蒙一致）。
 
 ### 2.11 建议箱（`SUGGESTIONS`）
 
@@ -496,7 +526,7 @@
   - [ ] 儿童只看提交区（不加载列表、不显示筛选/导出）
 - **依赖接口**：`POST /suggestions`、`GET /suggestions?status=&limit=&offset=`、`PATCH /suggestions/:id`、`GET /suggestions/export?format=md`
 - **状态**：提交 loading / error；列表 loading / error / empty；导出 loading
-- **Android 首版**：✅（导出用"显示 + 复制"；文件下载 ⏭️）
+- **Android 首版（最终）**：✅（`ui/page/account/SuggestionsScreen.kt` + `SuggestionsViewModel.kt`：成人 5 类 / 儿童 3 类、正文长度按服务端 `max_length`、失败保留正文、家长筛选（全部/未读/已读/已解决）+ 标记已读/已解决、**导出改为弹层展示 Markdown + 一键复制（不下载文件、不分享）**、儿童只提交区）。文件下载 ⏭️。
 
 ### 2.12 虚拟形象（`AVATAR`）
 
@@ -508,11 +538,11 @@
   - [ ] 第 1 步选风格（`styles[]`），第 2 步选角色（`presets.characters[]`）；点一下立即生效 `POST /avatar {preset_id, style}`，提示"点一下立即生效，不需要等待生成。"
   - [ ] "按我的性别显示"开关：默认按 `settings.gender` 过滤角色，可切"显示全部"（`AvatarPage.ets` L253-263）
   - [ ] **不做照片上传**：照片生成形象已按隐私策略关闭（`403 policy_disabled`），页面不提供入口（`AccountService.ets` L30、`MediaService.ets` L120-126）
-  - [ ] 占位提示"预览图（未生成真实插画）：当前展示的是占位图…"；`capabilities.avatar_presets=false` 时提示不可用
+  - [ ] 占位提示"预览图（未生成真实插画）：当前展示的是占位图…"；`capabilities.avatar_presets` 目前只在健康页展示，**没有用来隐藏本入口**（见 D-22）
   - [ ] 隐私说明"不用上传照片，选一个就好 / 只影响插画形象"
 - **依赖接口**：`GET /avatar`、`GET /avatar/presets`、`POST /avatar`、`PATCH /avatar`、`DELETE /avatar`
 - **状态**：loading / error+重试 / empty（该分类无形象）
-- **Android 首版**：✅
+- **Android 首版（最终）**：✅（`ui/page/account/AvatarScreen.kt` + `AvatarViewModel.kt`：5 风格 → 12 角色两步、`POST /avatar {preset_id, style}` 点一下立即生效、按性别筛选/显示全部开关、角色卡描述可编辑（`PATCH /avatar`）、清空形象（`DELETE /avatar`）、**无照片上传入口**（服务端 403 `policy_disabled` 兜底）；形象图只接受 `/avatars/...` 预置静态路径）。**ROUND2**：`CapabilityCache.avatarPresets=false` 时页面显示「形象库暂不可用（capabilities.avatar_presets=false）」+ 重试，不发 `GET /avatar/presets`（`AvatarViewModel.kt:81-101`、`AvatarScreen.kt:92/145-161`）；「我的」/设置页入口同步置灰。
 
 ### 2.13 音色（`VOICES`）
 
@@ -527,7 +557,7 @@
   - [ ] 底部 `⚙️ 去设置页调整语速与其它偏好`
 - **依赖接口**：`GET /settings`、`PATCH /settings`、`POST /tts`
 - **状态**：loading / error+重试 / 试听失败内联
-- **Android 首版**：✅（内置常量放 `core/audio/Voices.kt`）
+- **Android 首版（最终）**：✅（`ui/page/account/VoicesScreen.kt` + `VoicesViewModel.kt`：9 个内置常量来自 `core/audio/Voices.kt`，分英语/中文两组 + 「默认音色（provider 决定）」；试听 `POST /tts` mp3 可再点停止；`使用` → `PATCH /settings {tts_voice}`，空 = null；保存后立即 `voicePrefs.syncFromAccount(...)` 写回本机镜像，跟读/连读示范音与对话朗读无需重启即生效）。**ROUND2 补入口**：页面底部「⚙️ 去设置页调整语速与其它偏好」→ `onOpenSettings()` → `Routes.SETTINGS`（`VoicesScreen.kt:57/79/183`、`AppNavHost.kt:162-166`）。
 
 ### 2.14 设置（`SETTINGS`）
 
@@ -552,7 +582,7 @@
 - **依赖接口**：`GET /settings`、`PATCH /settings`、`GET /health`、`POST /auth/revoke`
 - **状态**：loading / error+重试 / 保存失败保留输入 / PATCH 不支持提示
 - **儿童 vs 成人**：儿童没有时长/自由话题；其余文案口语化、按钮更大
-- **Android 首版**：✅（`SettingsScreen.kt`）
+- **Android 首版（最终）**：✅（`ui/page/account/SettingsScreen.kt` + `SettingsViewModel.kt`：昵称/性别/故事句数 3–12 或默认/纠正强度/音色入口/语速/点词音标/自动插画（按 `image` 能力禁用）；**仅家长**的每日时长 + 自由话题（儿童不渲染、PATCH 不带）；服务器地址校验/检查/保存；清音频缓存；凭证存储说明；退出登录二次确认。**Android 额外**：设置页内「修改本人密码」弹层（A-08）。**ROUND2**：①PATCH 成功后 `voicePrefs.syncFromAccount(ttsVoice, ttsRate)` 写回本机镜像，示范音立即用新偏好（`SettingsViewModel.kt:151-153/209`）；②「我的形象」入口按 `capability.avatarPresets` 置灰 + 「当前服务端未开启」（`SettingsViewModel.kt:77/237-267`、`SettingsScreen.kt:462-469`）；③自动插画开关按 `image` 能力禁用；④展示当前生效音色/语速（`voicePrefs.resolve`）。注：跟读页**没有**右上「设置」入口（Android 统一从「我的 → 设置」进；§2.14 路由/入口行描述的是鸿蒙）。
 
 ### 2.15 服务状态（`HEALTH`）
 
@@ -568,7 +598,7 @@
   - [ ] 兜底说明"客户端不对 /api/health 做超过每 30 秒一次的轮询；voice 探测有 3 秒超时 + 15 秒缓存。"
 - **依赖接口**：`GET /health`（含 `?force=1`）
 - **状态**：loading / error+重试 / 字段缺失提示
-- **Android 首版**：✅
+- **Android 首版（最终）**：✅（`ui/page/account/HealthScreen.kt` + `HealthViewModel.kt`）：**ROUND2 已接全字段 + 强制刷新**：`PracticeService.health(force)` 与 `StatsService.healthFull(force)` 并行且各自兜底（`HealthViewModel.kt:97-140`），顶部「强制刷新」/「刷新」均传 `force=true`（`:162`、`HealthScreen.kt:68/128`）；新增「构建特性（web features）」区块（`HealthScreen.kt:213-245`，缺失/失败有兜底文案）；数据库 / voice.reachable|mode|capabilities / 字段缺失兜底 / 不轮询说明保留。无 `?force=1` 的旧缺口已关闭（A-09）。
 
 ### 2.16 修改密码（无独立页面）
 
@@ -582,7 +612,7 @@
   - [ ] 儿童：无入口（家长代改）；`POST /auth/password`（本人改密，需旧密码）**后端未实现**
 - **依赖接口**：`POST /family/members/:id/password`；`POST /auth/password`（⏭️ 待后端）
 - **状态**：按钮 loading / 400 内联错误 / 无 empty
-- **Android 首版**：✅（并入 `FamilyScreen.kt`）；独立页与自助改密 ⏭️ 延后
+- **Android 首版（最终）**：✅ 家长给成员重置并入 `FamilyScreen.kt`（同鸿蒙）；**Android 额外**在设置页提供「修改本人密码」弹层（`SettingsViewModel.savePassword`：8–128 位、两次一致、无旧密码校验、儿童禁用、提示其他设备可能仍登录）——复用的仍是 `POST /family/members/:id/password`（A-08）；独立 `change_password?memberId=` 页面与 `POST /auth/password` 自助改密 ⏭️（后端未实现）。
 
 ---
 
@@ -702,13 +732,13 @@
 | D-05 | "可选记住邮箱（默认关）；**绝不记住密码**"（`docs/screens.md` §2 L116） | **默认记住密码**（开关默认开），密码存系统安全存储；冷启动可静默登录；主动退出后本次进程不再自动登录（`build-verification.md` L192-199；`LoginVM.ets` L36-99） | Android 用 `EncryptedSharedPreferences`；必须保留"存储不可用→不落明文+黄字提示" |
 | D-06 | 盲测提交用 `POST /attempts/async` 带 `blind_test_id`（`docs/screens.md` §7、`docs/feature-index.md` §7） | 用**同步** `POST /attempts` 带 `blind_test_id`；响应只有 `{attempt_id, blind, progress}` 无分数；提交后 400ms 自动下一句，2000ms 轮询 `GET /blind-tests` 只看计数（`PracticeService.ets` L127-170、`PracticeVM.ets` L449-479、L207-249） | 照同步接口；**绝不渲染盲测分数**，结束后才看 `finish` |
 | D-07 | 对话发音分"每 2s 轮询 3–5 次"（`docs/screens.md` §5.2 L337） | 固定 **4 次**，延迟 700/1100/1500/1900ms；失败静默不报错（`ChatVM.ets` L559-607） | Android 可照抄 4 次；不要弹错 |
-| D-08 | 故事"先落盘再转录"、原声回顾可回放（`docs/design-overview.md` §5.4、`README.md` §6.4） | `POST /story/recordings` 线上 404；录音只临时保存，**关 App 即失效**，详情页明确告知"线上暂时没有保存故事原始录音的接口"（`StoryService.ets` L25-28、`StoryDetailPage.ets` L561-585） | 原声回放只能在本次会话内做；不要承诺持久化 |
-| D-09 | 故事详情显示"复述记录"（`docs/screens.md` §6.3） | 复述结果只写进程内 `StoryRuntime`（重启丢失），无服务端接口（`StoryVM.ets` L36-70、`StoryDetailPage.ets` L658） | 同 D-08：内存态展示，或 M2 再补本地持久化 |
+| D-08 | 故事"先落盘再转录"、原声回顾可回放（`docs/design-overview.md` §5.4、`README.md` §6.4） | `POST /story/recordings` 线上 404；录音只临时保存，**关 App 即失效**，详情页明确告知"线上暂时没有保存故事原始录音的接口"（`StoryService.ets` L25-28、`StoryDetailPage.ets` L561-585） | **Android ROUND2 改为本机持久化**：`StoryRuntime` 把录音复制到缓存目录 + JSON 存路径/`source_zh`（杀进程后可回看；文件失效只隐藏回放并保留文字）；不承诺跨设备 |
+| D-09 | 故事详情显示"复述记录"（`docs/screens.md` §6.3） | 复述结果只写进程内 `StoryRuntime`（重启丢失），无服务端接口（`StoryVM.ets` L36-70、`StoryDetailPage.ets` L658） | **Android ROUND2 改为本机持久化**：`StoryRuntime.addRetell` 落 `CacheStore` JSON（只留最近一次），详情页杀进程后可回显；仍不承诺跨设备 |
 | D-10 | `GET /tts/voices` ✅（`docs/feature-index.md` §6） | 线上 404；内置 9 个音色常量（5 英 4 中）（`MediaService.ets` L30-53、`build-verification.md` L419） | Android 同样写常量（CONTRACT §4.1 `Voices.kt`） |
 | D-11 | 修改密码是独立页 `change_password?memberId=`（`docs/screens.md` §12、`architecture.md` §4.2） | 无独立路由/页面，能力放在家庭成员页行内"重置密码"（`FamilyPage.ets` L312-338） | 并入家庭成员页；独立页 ⏭️ |
 | D-12 | 额度用尽 `session.exceeded` 时**主动**禁用录音并提示（`android/CONTRACT.md` §6.4、`docs/screens.md` §3 状态） | 只在**收到 429 后**才禁用/提示（对话 `quotaExceeded`、连读 `limitReached`）；跟读/故事无前置禁用（`ChatVM.ets` L932-940、`FlowVM.ets` L963-968） | Android **按契约做前置禁用**（更严格，属改进而非照抄） |
 | D-13 | 对话"建议回复 chips 点击**只朗读**，不发文本"（`docs/screens.md` §5.2 约束） | 点击 = 设为提示句 + **立刻开始录音**，不朗读；页面提示"提示句只给你参考，发出去的是你说的录音"（`ChatVM.useSuggestion` L985-988、`ChatSessionPage.ets` L532-556） | 照实现做（"照着说"体验更好） |
-| D-14 | 离线缓存：语料全量、TTS LRU 200MB、结果缓存 50 条、失败提交队列（`docs/design-overview.md` §7） | **均未实现**：只做目录、启动清 `.part`、登出清缓存；代码注释明写"M0 不做 LRU 与过期淘汰"（`CacheService.ets` L11） | 首版不做；M2 再补（Android 用 Room/DataStore 更自然） |
+| D-14 | 离线缓存：语料全量、TTS LRU 200MB、结果缓存 50 条、失败提交队列（`docs/design-overview.md` §7） | 鸿蒙**均未实现**：只做目录、启动清 `.part`、登出清缓存；代码注释明写"M0 不做 LRU 与过期淘汰"（`CacheService.ets` L11） | **Android ROUND2 已实现** TTS/回放 LRU + 最近结果 50 条 + 失败录音队列 + 待补评分页（A-15）；语料全量 JSON 缓存仍 ⏭️ |
 | D-15 | 打印 / 导出 Markdown 下载（`docs/design-overview.md` §5.7、`README.md` §6.4） | Web 专属；移动端用"复制全文 / 一键复制 Markdown"（`StoryDetailPage.ets` L275-279、`SuggestionsPage.ets` L248-261） | ⏭️ 不做打印；复制必须做 |
 | D-16 | 复述是语音流程（`docs/screens.md` §6.3） | 复述页额外支持**打字复述**（`StoryReviewPage.ets` L101-166、`StoryVM.ets` L1296-1303） | 照实现做（无麦/静音环境的兜底） |
 | D-17 | 语料"600 句 A1–B2"（`docs/screens.md` §3） | 真机实测 A2 列表为 **200 句**（"跟读 1/200"，`build-verification.md` L276）；各等级条数文档未写死 | **待确认**：Android 不要在前端硬编码总数 |
@@ -716,54 +746,89 @@
 | D-19 | 点词音标浮层为底部 sheet/浮层避让（`docs/screens-matrix.md` §9、`design-overview.md` §5.8b） | 改为**系统 AlertDialog**（跨机型最稳），标题=单词、正文=`/ipa/`、可带"其它读音"（`WordText.ets` L10-16、`build-verification.md` L559c98a） | Android 用 Compose Dialog 即可，语义一致 |
 | D-20 | 连读轮询"1–2s"（`design-overview.md` §5.2） | 固定 **1200ms**；自动下一句延迟 400ms；盲测轮询 2000ms；故事/对话整段回放 2000ms×30（`FlowVM.ets` L1064、L987，`StoryVM.ets` L1020-1030，`ChatVM.ets` L819-833） | Android 照抄这些间隔，避免压垮 NAS |
 | D-21 | 服务器地址 release 只读、debug 可改（`docs/screens.md` §11） | 所有构建都能改（登录页 + 设置页）（`LoginVM.ets` L149-157、`SettingsPage.ets` L336-387） | 照实现（家庭自部署场景需要） |
-| D-22 | 健康检查能力开关应按 `phoneme_level/prosody/intonation_curve` 自适应渲染（`design-overview.md` §5.1） | `CapabilityCache` 读了这三个字段，但页面实际只把 `image/ocr/avatar_presets` 用于藏入口；音素/语调主要靠"字段缺失兜底显示"（`CapabilityCache.ets` L14-37） | Android 首版同鸿蒙；M2 再做粒度自适应 |
+| D-22 | 健康检查能力开关应按 `phoneme_level/prosody/intonation_curve` 自适应渲染（`design-overview.md` §5.1） | 鸿蒙只接线了 `image`（故事插画）与 `ocr`；`avatar_presets` 仅在健康页展示；`phoneme_level/prosody/intonation_curve` 读了但未驱动渲染（`CapabilityCache.ets` L14-37、`FlowVM.ets` L1674-1687） | **Android ROUND2 已统一 `CapabilityCache` 并接线 image/ocr/avatar_presets**；音素级/语调粒度的自适应仍 ⏭️（A-16） |
 | D-23 | 「我的」应有"修改密码"入口（`docs/screens.md` §11） | 设置页没有修改密码项；只在家庭成员页重置（`SettingsPage.ets`、`FamilyPage.ets`） | 照实现 |
 | D-24 | 首页 Tab 数/入口由角色决定（`architecture.md` §4.3） | `MePage` 用 `role==='parent' && !isChild` 判断（两者都看），比文档更严（`MePage.ets` L130） | 照实现 |
 | D-25 | 文档说 M0「待编译/待真机」（`README.md` §9） | 已编译 + 装机 + 全功能真机（`build-verification.md` V1/V2/V3） | 不要把 README §9 当验收基线 |
 | D-26 | 批量 OCR 多选图片逐张识别（`docs/screens.md` §4 setup） | 只支持**单张**（`maxSelectNumber=1`）（`FlowVM.ets` L626-633） | 首版单张；多张 ⏭️ |
+
+### 4.1 Android 实现选择（Android vs 鸿蒙，2026-11-04 最终快照）
+
+> 下表**不是**"文档 vs 鸿蒙"，而是**本轮 Android 落地时有意做的取舍**（含少数仍待统一的实现/文案不一致）。
+> 验收 Android 时以本节为准，不要拿鸿蒙逐条对照挑差异；每条都给代码出处。
+
+| # | 鸿蒙实现（出处） | Android 实现（代码出处） | 影响 / 说明 |
+|---|---|---|---|
+| A-01 | 跟读结果详情是独立全屏页 `PracticeResultPage`，含能力多边形雷达（`build-verification.md` L331-346） | **ROUND2 已补齐等价能力**：页内结果 + **全屏结果 overlay**（不新增路由；关闭/重试评测/下一句/BackHandler，`PracticeScreen.kt:738-849`）+ **`EcRadarChart` 能力雷达**（`:894`，儿童隐藏）+ **单句历史逐条回放**（`PracticeService.audioByUrl`，`:441-468`）+ **左右滑动切句 `HorizontalPager`**（保留上下句按钮，`:437`） | 仍不新增 `PRACTICE_RESULT` 路由（CONTRACT §5 未列）；全屏以 overlay 达成同等体验，验收按此 |
+| A-02 | 盲测在跟读页的「盲测模式」里录音，`BlindTestPage` 只做批次/周报（`docs/screens.md` §7） | **一页闭环**：`BlindTestScreen` 内 Intro → Running（本页录音 → `PracticeService.evaluate(..., blindTestId)` 同步提交 → 2s 计数轮询）→ Finish/周报（`ui/page/stats/BlindTestScreen.kt` L53-67、`BlindTestViewModel.kt` L26-47） | 防作弊规则不变：Running 零分数、无「重试评测」、`pending>0` 如实提示；另加 `session.exceeded` 前置禁用 |
+| A-03 | 故事保存后按 `auto_illustrate` **静默画一张**，然后跳详情（`StoryVM.ets` L618-663） | **ROUND2 已对齐**：保存成功后按 `auto_illustrate`（默认关）自动插图，`image=false` 时提示不扣费、失败可重试；成功卡新增「查看故事」→ 写 `NavParams.storyMaterialId` 后 `Navigator.navigate(Routes.STORY_DETAIL)`（`StoryRecordViewModel.kt:440`、`StoryRecordScreen.kt:417/428`） | 与鸿蒙一致；自动插图仅在账号显式开启时发生，不静默扣费 |
+| A-04 | 故事详情有「复制全文」；建议箱导出显示 Markdown + 复制；Web 另有打印（`StoryDetailPage.ets` L275-279、`SuggestionsPage.ets` L248-287） | **ROUND2 已补「📋 复制全文」**：标题 + 英文全文 +（开了中文对照时）中文原文，写系统剪贴板并 Toast「已复制全文」（`StoryDetailScreen.kt:264-300`、`StoryDetailViewModel.kt:556`）；建议箱导出仍是弹层 + 一键复制 | 打印/导出文件下载属平台限制 ⏭️；复制能力已闭环 |
+| A-05 | 手写静态服务 + 自研组件；图片下载后转 `PixelMap` | **不引入 Hilt/Retrofit/Coil/Room**：手写 `AppGraph` + `ViewModelProvider.Factory`、OkHttp、`RemoteImage` 自带内存 LRU + 磁盘缓存（`core/di/AppGraph.kt`、`core/net/ApiClient.kt`、`ui/component/RemoteImage.kt`） | 与 CONTRACT §7「只用现有依赖，不新增」一致 |
+| A-06 | 登录页「记住密码」**默认开**（D-05、`LoginVM.ets` L124-150） | `AppConfig.rememberPassword` 默认 **false**（新装默认关，`core/config/AppConfig.kt` L60-63）；但登录页副文案仍写「默认开」⚠️（`ui/page/auth/LoginScreen.kt` L190-193） | **代码与文案不一致，待统一**；功能本身可用（加密存储、退出不自动登录都保留） |
+| A-07 | 演示账号按钮**只填邮箱**，不猜密码（`LoginVM.ets` L126-129） | 演示账号一次填入**邮箱 + 密码**（`AppConfig.demoAccounts` + `LoginViewModel.fillDemo`） | 家庭种子账号，少一步输入；登录仍走正常 `POST /auth/token` |
+| A-08 | 本人改密无独立页，只有家长在家庭成员页给别人重置（D-11/D-23） | 设置页新增「修改本人密码」弹层：`POST /family/members/:id/password`，8–128 位、无旧密码、儿童禁用（`SettingsViewModel.kt` L322-390）；家庭成员页仍可给他人重置 | 复用现有接口，未依赖未上线的 `POST /auth/password` |
+| A-09 | 服务状态页有「强制刷新」`GET /health?force=1`（`HealthPage.ets` L314 附近） | **ROUND2 已接**：`PracticeService.health(force)` + `StatsService.healthFull(force)` 并行、各自兜底；「强制刷新」传 `force=true`，并渲染 web features 区块（`HealthViewModel.kt:97-165`、`HealthScreen.kt:68/128/213-245`） | 旧缺口关闭 |
+| A-10 | 跟读卡片流是 `Swiper(vertical)` 上下滑换句（`PracticePage.ets` L1380-1406） | **ROUND2 已做左右滑动**：`HorizontalPager`（`PracticeScreen.kt:437`，落定 → `vm.onPageSettled`），同时**保留「‹ 上一句 / 下一句 ›」按钮**与句子列表入口；录音/提交中禁滑 | 换句行为等价（末尾仍提示「这一组读完啦」）；滑动方向改为左右（Android 习惯） |
+| A-11 | 示范音语速/音色读账号偏好（儿童固定 slow，成人 `tts_rate`，音色 `tts_voice`）（`PracticeVM.ets` L342-351） | **ROUND2 已对齐**：新增 `core/audio/VoicePrefs.kt` 本机镜像，跟读/连读示范音、连读「听鼓励」、对话朗读、设置/音色页保存后的同步统一走 `voicePrefs.resolve(isChild)`（儿童强 slow + 内置 Ana 童声；成人读账号偏好） | 旧「练习侧未接偏好」缺口关闭；设置页 PATCH 后同步见 §2.14 |
+| A-12 | `SentenceListPage` 已弃用、未接线（改为卡片滑动） | 保留并接线 `Routes.SENTENCES`：跟读页入口 → `SentenceListScreen.kt`（高亮本地游标当前句、点句切回跟读） | 契约 §5 列了该页，Android 按契约保留 |
+| A-13 | 权限只声明 `INTERNET + MICROPHONE`，拍照走系统相册选择器（`permissions-and-privacy.md` §1） | `AndroidManifest.xml` 额外声明 `ACCESS_NETWORK_STATE`（普通权限、非运行时）；仍无 CAMERA/存储权限，拍照用 `ActivityResultContracts.GetContent()`（`FlowScreen.kt` L101） | **代码里目前没有任何 ConnectivityManager/网络状态判断引用**，属多声明，可安全移除；移除后与文档一致 |
+| A-14 | 对话「建议回复」chip 点击 = 设为提示句 + **立刻开始录音**，不朗读（D-13、`ChatVM.useSuggestion`） | 点击**只朗读提示句**，不发送、也不自动开录；页面文案「可以这样回（点一下只朗读，不会发送）」 | 与 D-13 的鸿蒙行为相反，但与 `docs/screens.md` §5.2 的原始约束一致；属产品取舍，后续要定一版 |
+| A-15 | 鸿蒙 M0 明确不做离线队列 / TTS LRU / 结果缓存（D-14） | **ROUND2 Android 超出鸿蒙实现**：`core/offline/PendingUploadQueue.kt` 失败录音队列 + `ui/page/offline/PendingUploadsScreen.kt` 待补评分页（列表/试听/删除/全部重试/空态）；`CacheStore` TTS 200MB + 回放 300MB LRU、最近评测结果 50 条；跟读/连读网络/5xx 失败自动入队并提示 | 队列索引放 `filesDir/pending_uploads`（系统清缓存不丢待补录音）；4xx 业务错误不入队 |
+| A-16 | 鸿蒙各页各自调 `/health` 判断能力，无统一缓存（D-22） | **ROUND2 Android 统一**：`core/content/CapabilityCache.kt`（5 分钟 TTL、并发单飞、失败不抛、缺省 true）；`ocr` 驱动连读入口、`image` 驱动插画/自动插图、`avatar_presets` 驱动「我的」/设置页形象入口置灰；`VoicePrefs` 统一语音偏好 | 能力开关只做入口显隐，不把页面打成错误态；旧 D-22 的 Android 侧已收敛 |
 
 ---
 
 ## 5. Android 端实现范围与里程碑
 
 > 依据 `android/CONTRACT.md` §5 的页面清单 + 本文 §4 的偏差修正。原则：**先照抄行为，不追求"更聪明"**。
+> **2026-11-05 ROUND2 校准**：M1 全部页面 + ROUND2 补齐项（雷达/全屏 overlay/滑动切句/历史回放/VoicePrefs/离线队列/待补评分页/故事分组与持久化/账号页缺口）均已在工作区落地；本节的"必须带的细节"按**实际实现**改写，Android 与鸿蒙的取舍见 §4.1。
 
 ### 5.1 M1（首版必须，= CONTRACT §5 全量页面）
 
-**基础设施（已完成/在途）**：ApiClient（单飞刷新）、TokenStore/CredentialStore、SessionStore、ErrorMapper 两套文案、DesignTokens/EcTheme（`LocalIsChild`）、AudioController + `Voices` 9 常量、CacheStore、Routes/NavParams/AppNavHost、组件库（EcButton/PageScaffold/ErrorBanner/EmptyState/ScoreViews/WordText/Charts/RecordButton/RemoteImage）。
+**基础设施（已完成）**：ApiClient（单飞刷新）、TokenStore/CredentialStore、SessionStore、ErrorMapper 两套文案、DesignTokens/EcTheme（`LocalIsChild`）、AudioController + `Voices` 9 常量 + **`VoicePrefs` 语音偏好镜像（ROUND2）**、CacheStore（含 **TTS/回放 LRU、最近结果缓存**，ROUND2）、**`CapabilityCache` 统一能力开关（ROUND2）**、**`PendingUploadQueue` 失败录音队列（ROUND2）**、Routes/NavParams/AppNavHost/Navigator、组件库（EcButton/PageScaffold/ErrorBanner/EmptyState/ScoreViews/WordText/Charts（含 **`EcRadarChart`**）/RecordButton/RemoteImage）。
 
-| 里程碑块 | 页面 | 必须带的细节 |
+| 里程碑块 | 页面 | 必须带的细节（2026-11-05 ROUND2 实际实现） |
 |---|---|---|
-| A 登录 | `LoginScreen` | baseUrl 校验/健康检查/记住密码（加密）/自动登录两步/存储降级提示/演示账号只填邮箱 |
-| B 跟读 | `PracticeTab` + 结果详情 | 等级 chips、上下滑卡、游标横幅（AppPrefs）、听示范/跟我读、60s 自动停、进度文案、degraded 重试、单句历史、无语音提示、`📈历史` |
-| C 连读 | `FlowTab` + `FlowSummaryScreen` | 三来源、5/10/15、随机、OCR 单张、切句可编辑、async 1200ms 轮询、重录单句、六档鼓励语+中英播放、再读一遍 |
-| D 对话 | `ChatScenariosTab`/`CHAT_SESSION`/`HISTORY`/`DETAIL`/`CUSTOM` | 纯语音三步、建议 chip=提示句、pron 4 次轮询、结束确认、整段回放 2s×30、429 横幅、自定义场景 CRUD |
-| E 故事 | `StoryHomeTab`/`RECORD`/`DETAIL`/`REVIEW` | 中文 ASR 追加、难度/句数、tense 警告、保存后跳详情、插画能力开关+空态 no_audio、复制全文、复述（语音+打字）、原声仅内存 |
-| F 报告 | `DIAGNOSIS`/`REVIEW`/`BLIND_TEST` | 诊断 recent/all、错音本 4 档评分本地移除、盲测全程无分数 + finish 报告 |
-| G 账号 | `PARENT`/`FAMILY`/`SUGGESTIONS`/`AVATAR`/`VOICES`/`SETTINGS`/`HEALTH` | 家长 403 页、成员 CRUD + 重置密码、建议 5/3 分类 + 导出复制、形象性别筛选、9 音色 + 试听、设置全项 + 儿童不带家长字段、健康页字段缺失兜底 |
-| H 壳 | `AppRoot`/`HomeScreen`/`MeScreen` | 启动三态、5 Tab、故事→连读跨 Tab、降级琥珀条、退出清缓存 |
+| A 登录 | `LoginScreen` | baseUrl 校验 + 明文风险提示 / 健康检查 / 记住密码（加密，**默认关**，A-06）/ 冷启动自动登录（`AppRoot`）/ 存储降级提示 / 演示账号**填邮箱+密码**（A-07） |
+| B 跟读 | `PracticeTab`（**页内结果 + 全屏 overlay**） | 等级 chips、**左右滑 `HorizontalPager` + 上一句/下一句**、游标横幅（AppPrefs）、听示范/跟我读（**`VoicePrefs`**）、60s 自动停、进度文案、degraded 重试评测、**单句历史逐条回放（`audioByUrl`）**、无语音提示、`📈历史`、**能力雷达 `EcRadarChart`**、**全屏结果 overlay**、**失败入队待补评分** |
+| C 连读 | `FlowTab` + `FlowSummaryScreen` | 三来源、5/10/15、随机、OCR 单张（**`CapabilityCache`**）、切句可编辑、书页保存、async 1200ms 轮询、重录单句、六档鼓励语（确定性哈希）+ 中英播放（**`VoicePrefs`**）、再读一遍/再读一段、批次诊断、故事→连读（`NavParams.flowMaterialId`）；**汇总页「📝 复述这个故事」入口（故事来源时）**；**异步失败入队 + 「待补评分 N 条」** |
+| D 对话 | `ChatScenariosTab`/`CHAT_SESSION`/`HISTORY`/`DETAIL`/`CUSTOM` | 纯语音三步、建议 chip=**只朗读提示句**（A-14；与鸿蒙 D-13 相反）、pron 4 次轮询、结束确认、整段回放 2s×30、429/`exceeded` 横幅、自定义场景 CRUD |
+| E 故事 | `StoryHomeTab`/`RECORD`/`DETAIL`/`REVIEW` | 中文 ASR 追加、难度/句数、tense 警告、**列表今天/昨天/更早分组 + 连续天数**、**保存后自动插图（auto_illustrate）+ 可跳详情**、插画能力开关 + 空态 no_audio、复述（语音+打字）、**原声/复述记录本机持久化**、**详情「复制全文」** |
+| F 报告 | `DIAGNOSIS`/`REVIEW`/`BLIND_TEST` | 诊断 recent/all/attempt/batch（batch 优先 NavParams 批次 id）、错音本 4 档评分本地移除、**盲测独立页一页闭环**（Intro→Running→Finish）、Running 全程无分数 + finish 周报/环比 |
+| G 账号 | `PARENT`/`FAMILY`/`SUGGESTIONS`/`AVATAR`/`VOICES`/`SETTINGS`/`HEALTH` | 家长 403 页 + **盲测周报入口**、成员 CRUD + 重置密码（+设置页本人改密 A-08）、建议 5/3 分类 + 导出弹层复制、形象性别筛选 + **`avatar_presets` 入口置灰**、9 音色 + 试听 + **「去设置」**、设置全项 + 儿童不带家长字段 + **保存后同步 `VoicePrefs`**、健康页 **`force` 强制刷新 + features** |
+| H 壳 | `AppRoot`/`HomeScreen`/`MeScreen` | 启动三态（错误可重试/改服务器地址）、5 Tab、故事→连读跨 Tab（`NavParams`+`TabNav`）、降级琥珀条、**待补评分横幅**、「我的」待补评分卡片、退出清缓存 |
 
-**M1 明确不做**：打印页、照片生成形象、批量 OCR、多设备推送、离线写队列、深色模式、平板双栏、无障碍字号极限档（CONTRACT §0 只要求手机竖屏为主）。
+**ROUND2 已关闭的 M1 遗留**（原 §5.2 清单）：能力雷达、全屏结果页、历史逐条回放、滑动切句、练习侧 `VoicePrefs`、TTS/回放 LRU、失败录音队列 + 待补评分页、故事分组/连续天数、auto_illustrate、保存跳详情、复制全文、故事原声/复述持久化、汇总页复述入口、家长盲测入口、音色去设置、健康页 force、能力开关统一（D-22 Android 侧）、`avatar_presets` 形象入口。
+
+**M1 明确不做**：打印页、照片生成形象、批量 OCR、多设备推送、深色模式、平板双栏、无障碍字号极限档（CONTRACT §0 只要求手机竖屏为主）；另加：独立修改密码页（能力并入设置页弹层）、独立的 `PRACTICE_RESULT` 路由（用全屏 overlay 替代，A-01）。
 
 ### 5.2 M2（后续）
 
-1. 离线能力：语料 JSON 缓存（Room/DataStore）、TTS LRU、失败提交队列 + 幂等重试（D-14）。
-2. 故事原声与复述记录的**本地持久化**（D-08/D-09），并在 UI 明确"仅本机"。
-3. 打印替代方案打磨：故事集多选 → 分享/生成 PDF（若产品需要，需后端无依赖，纯客户端）。
-4. 能力开关粒度自适应（音素级/语调曲线/韵律）按 `capabilities` 渲染（D-22）。
-5. 平板适配（`widthIn` 约束、双栏）、深色模式、无障碍（大字号/对比度/朗读）。
-6. 前置额度禁用（D-12）与"今日剩余时长"更醒目的展示。
-7. 自助改密 `POST /auth/password` + 注销全部设备（依赖后端，⏭️）。
+> **2026-11-05 ROUND2 更新**：原第 1/2/4/8/9/10 项中的大部分已在本轮落地（TTS/回放 LRU、失败录音队列 + 待补评分页、故事原声/复述持久化、故事复制全文、汇总页复述入口、能力开关统一缓存、练习侧 `VoicePrefs`、健康页 `force`、跟读雷达/全屏 overlay/滑动切句/历史回放、家长盲测入口、音色去设置、待补评分入口）。以下仅剩真正未做的：
+
+1. **语料 JSON 全量离线缓存**（Room/DataStore；当前只有 TTS/回放 LRU 与最近结果缓存 50 条）。
+2. **打印替代方案打磨**：故事集多选 → 分享/生成 PDF（若产品需要；纯客户端，不依赖后端）。
+3. **能力开关粒度自适应**：`phoneme_level / prosody / intonation_curve` 驱动渲染（D-22 的"粒度"部分；入口级开关已统一，见 §1.12）。
+4. **平板适配**（`widthIn` 约束、双栏）、**深色模式**、无障碍（大字号/对比度/朗读）。
+5. **自助改密 `POST /auth/password` + 注销全部设备**（依赖后端，⏭️）。
+6. **统一「记住密码」默认值与登录页文案**（A-06：`AppConfig` 默认关 ↔ 页面写"默认开"）；评估是否移除多余的 `ACCESS_NETWORK_STATE`（A-13）。
+7. **账号偏好在多设备/长时间后的刷新**：设置页保存已同步 `VoicePrefs`；若家长在 Web 改了 `tts_rate/tts_voice`，App 需下次 `GET /settings` 才同步（可加登录后/回前台刷新）。
+8. **批量 OCR 多选图片**（服务端/产品当前单张，D-26）。
+9. **故事集打印/导出**（平台限制，见 A-15、§1.9）。
 
 ### 5.3 验收前置条件
 
 - [ ] 有一个可登录的家庭账号（线上 `dad@example.com` 可能被 `BOOTSTRAP_*` 改密，`build-verification.md` L426-428）。
 - [ ] Android 端 PATCH 无鸿蒙的枚举缺失问题（OkHttp 原生支持），但仍要处理 405/501 → "该设置暂不可用"。
 - [ ] 服务端 `PROVIDER_MODE=hybrid` 时录音会出网，隐私文案必须如实。
+- [ ] 验收 Android 时以 §2「Android 首版（最终）」+ §4.1「Android 实现选择」为准；与鸿蒙不同的取舍**不算缺陷**，但 A-06（记住密码默认值与文案）仍待统一，需单独记录。
 
 ---
 
 ## 6. 验收清单（页面级）
+
+> 本清单是**跨端行为基线**（以鸿蒙为准）；Android 与鸿蒙的取舍见 §4.1，Android 实际状态见 §2 各页「Android 首版（最终）」。
+> **ROUND2 后仍会被 Android 取舍影响的条目**：§6.2「自动登录」、§6.3「盲测模式」（独立页一页闭环，A-02/§2.6）、§6.5「建议 chip 只朗读」（A-14）、§6.9「修改密码页」（并入设置页弹层）。其余原差异（结果详情、复制全文、force 刷新、滑动切句、音色偏好、离线）已在本轮补齐——验收 Android 时按 §4.1 的 A-01~A-16 执行。
 
 ### 6.1 全局
 
