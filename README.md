@@ -81,6 +81,7 @@ iOS、Android 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-c
 |---|---|
 | **登录** | Web 用 Cookie；**移动端用 Bearer Token**（`/api/auth/token` + refresh 轮换 + revoke，双模式并存） |
 | **多账号** | 家长可创建成员（角色/CEFR 水平/每日时长/密码），每个账号独立数据与偏好 |
+| **多家庭** | 每个家庭完全隔离（数据/统计/成本）；朋友可自助「创建家庭」；家长生成**一次性邀请码**（每家庭 ≤3 家长）；`ALLOW_SELF_SIGNUP` 可关闭自助注册 |
 | **偏好** | `auto_illustrate`（默认关）、`gender`、`tts_voice`、`story_sentences`、每日时长、自由聊开关 |
 
 ### 1.3 AI 能力（全在服务端）
@@ -202,6 +203,10 @@ docker compose exec -T web node -e 'const D=require("better-sqlite3");new D("/da
 | `DIALOGUE_TEMPERATURE` | `0.9` | 仅对话 |
 | `VOICE_MAX_AUDIO_SECONDS` | `120` | 建议故事场景调到 `300` |
 | `AUTH_ACCESS_TTL_S` / `AUTH_REFRESH_TTL_S` | `3600` / `2592000` | Token 有效期 |
+| `ALLOW_SELF_SIGNUP` | `1` | 是否允许自助创建家庭；`0` 时只能凭邀请码加入 |
+| `COST_LLM_INPUT_CNY_PER_1M` / `_OUTPUT_` | `1.0` / `2.0` | 成本核算单价（元/百万 token）|
+| `COST_IMAGE_CNY_PER_IMAGE` | `0.1` | 每张插画成本（元）|
+| `COST_TTS_CNY_PER_1K_CHARS` / `COST_ASR_CNY_PER_MINUTE` | `0.02` / `0.006` | TTS/ASR 单价 |
 
 一次性操作（可选）：生成 60 张真实预置卡通图（约 ¥6）
 ```bash
@@ -283,6 +288,15 @@ cd english-coach-app/android
 | `GET /api/auth/me` | 当前用户（role/cefrLevel/ageBand/avatar） |
 | `GET/PATCH /api/settings` | `auto_illustrate` / `gender` / `tts_voice` / `story_sentences` 等偏好 |
 | `GET/POST /api/family/members`、`PATCH /[id]`、`POST /[id]/password` | 家庭成员（仅家长） |
+
+### 6.1b 多家庭 / 注册 / 成本
+| 端点 | 用途 |
+|---|---|
+| `POST /api/auth/register` | 公开注册：无码=创建家庭；带 `invite_code`=加入家庭（受 `ALLOW_SELF_SIGNUP` 控制创建家庭）|
+| `GET /api/family/invite` · `POST /api/family/invite/rotate` | 家长查看/重置**一次性**邀请码（家庭 ≤3 家长）|
+| `GET /api/cost/summary?month=YYYY-MM` | 仅家长、仅本家庭：LLM/图片/TTS/ASR 成本汇总（成员/按天/单价）|
+
+**隔离**：跨家庭访问材料/打印/成员/建议/汇总一律 404；故事英文正文仅同一家庭可见，原文/录音/朗读仍仅本人。
 
 ### 6.2 跟读 / 连读
 | 端点 | 用途 |

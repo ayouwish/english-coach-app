@@ -20,6 +20,7 @@
 | 改密码（家长重置，含自己） | `POST /api/family/members/:id/password` | ✅ | `screens-matrix.md` §1 |
 | 改密码（自助，需旧密码） | `POST /api/auth/password` | 📋 可选增强 | `screens-matrix.md` §1 |
 | 多账号/家庭成员 | `GET/POST /api/family/members`、`PATCH` | ✅ | `screens-matrix.md` §1 |
+| **多家庭（注册/邀请）** | `POST /api/auth/register`、`GET /api/family/invite`、`POST .../rotate`（一次性、家长 ≤3、`ALLOW_SELF_SIGNUP`）| ✅ | README §6.1b、`screens-matrix.md` §1 |
 | 账号偏好 | `GET/PATCH /api/settings` | ✅ | README §6.1、§3.3（`auto_illustrate`/`gender`/`tts_voice`/`story_sentences`）|
 
 ## 2. 跟读练习
@@ -107,6 +108,7 @@
 | 功能 | 接口 / 页面 | 状态 | 文档 |
 |---|---|---|---|
 | 家长汇总 | `GET /api/parent/summary` | ✅ | README §6.6 |
+| **家庭成本台账** | `GET /api/cost/summary?month=`、`/parent` 成本卡（LLM/图片/TTS/ASR，按家庭）| ✅ | README §6.1b、§3.3 |
 | 提建议 / 导出 | `POST /api/suggestions`、`GET /api/suggestions`、`/export` | ✅ | 同上 |
 | 部署自查 | `GET /api/health`（features）、`GET /v1/health`（capabilities） | ✅ | README §2.4、§3 |
 | 清理某账号测试数据 | `web/scripts/cleanup-user-data.mjs` | ✅ | `english-coach/docs/deployment.md` §6.5 |

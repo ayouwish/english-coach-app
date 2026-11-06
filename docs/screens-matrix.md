@@ -6,12 +6,14 @@
 
 | 页面 | 接口 | 说明 | 儿童差异 |
 |---|---|---|---|
-| 登录 | `POST /api/auth/token`（Bearer）、`GET /api/auth/me` | 邮箱+密码 → access(1h)+refresh(30d)；网络层单飞刷新；退出调 `/api/auth/revoke` | 用**演示账号快捷按钮**（只填邮箱，不猜密码）|
+| 登录 | `POST /api/auth/token`（Bearer）、`GET /api/auth/me` | 邮箱+密码 → access(1h)+refresh(30d)；网络层单飞刷新；退出调 `/api/auth/revoke`；页面有「创建家庭 / 邀请码加入」入口 | 用**演示账号快捷按钮**（只填邮箱，不猜密码）|
+| **注册 / 加入家庭** | `POST /api/auth/register` | 两种模式：「🆕 创建家庭」（受 `ALLOW_SELF_SIGNUP` 控制）与「🔑 用邀请码加入」；注册即登录 | 儿童不开放自助注册 |
 | 退出 | `POST /api/auth/revoke`（+ 清本地 token） | 吊销 refresh；清 Keychain/Asset Store 与缓存 | — |
 | 改密码：家长重置 | `POST /api/family/members/:id/password`（**含自己**）| **已可用**：`/parent` → 家庭成员 → 「重置密码」，不需要旧密码 | 儿童页面无此入口（家长代改）|
 | 改密码：自助修改（可选增强）| `POST /api/auth/password`（**待实现**）| 需当前密码；改后当前会话保持、其他会话失效；不阻塞其他功能 | 文案口语化 |
 | 我的偏好 | `GET/PATCH /api/settings` | `auto_illustrate`（默认关）/`gender`/`tts_voice`/`story_sentences`/每日时长/自由聊 | 同左（儿童页口语化）|
-| 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码 | 儿童不可见 |
+| 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码；**仅本家庭**（跨家庭 404）| 儿童不可见 |
+| **家庭邀请码 🔒** | `GET /api/family/invite`、`POST .../rotate` | 一次性邀请码（用后失效）；每家庭家长 ≤3；面板显示「家长账号 N/3」 | 儿童不可见 |
 
 ## 2. 跟读练习
 
@@ -82,6 +84,15 @@
 
 ---
 
+### 5.2 插画总开关（成本控制）
+
+`users.auto_illustrate` = **插画功能总开关**（默认关）：
+- 关：保存不自动画；故事详情**无生成按钮**（显示「插画功能已关闭 + 去设置」）；API 403 `policy_disabled`
+- 开：手动可画 + 保存后自动画
+- 图片服务未配置：按钮 disabled + 提示
+
+---
+
 ## 6. 盲测 / 诊断 / 复习
 
 | 页面 | 接口 | 要点 | 儿童差异 |
@@ -95,7 +106,8 @@
 
 | 页面 | 接口 | 要点 |
 |---|---|---|
-| 家长汇总 🔒 | `GET /api/parent/summary` | 使用时长、趋势、掌握度 |
+| 家长汇总 🔒 | `GET /api/parent/summary` | 使用时长、趋势、掌握度（**仅本家庭**）|
+| **家庭成本 🔒** | `GET /api/cost/summary?month=` | 「💰 本月成本」：总金额 + LLM/图片/TTS/ASR 分项 + 成员明细 + 近 7 天；单价可配置 |
 | 提建议 | `POST /api/suggestions`（所有人）；`GET /api/suggestions` 🔒 | 家长集中查看 + 导出 Markdown |
 | 设置 | `GET/PATCH /api/settings` | **卡通插画自动生成开关（默认关）**、**性别**、**音色（9 种+试听）**、**故事句子数（3–12 / 角色默认）**、**单词显示音标（成人开/儿童关）**、语速、每日时长、免费聊开关 |
 | 健康检查 | `GET /api/health` | 显示「服务降级」提示（`voice.capabilities`、`degraded`）|
