@@ -267,8 +267,38 @@ export struct StoryDetailPage {
     this.getUIContext().getPromptAction().showToast({ message: ok ? '已复制英文全文' : '复制失败，请重试' });
   }
 
-  /** 打印这个故事：生成 PDF 后调起系统打印（中文原文仅创建者本人会带上）。 */
-  private async printStory(): Promise<void> {
+  /** 打印入口：先选版式（A4 整页 / A5 卡片），再生成 PDF 调系统打印。 */
+  private choosePrintLayout(): void {
+    if (this.printBusy) {
+      return;
+    }
+    this.getUIContext().showAlertDialog({
+      title: '打印这个故事',
+      message: 'A4 整页适合装订成册；A5 卡片带裁切框和姓名/日期栏，适合孩子拿在手里读。',
+      buttons: [
+        {
+          value: 'A4 整页',
+          action: () => {
+            void this.doPrint('full');
+          }
+        },
+        {
+          value: 'A5 卡片',
+          action: () => {
+            void this.doPrint('card');
+          }
+        },
+        {
+          value: '取消',
+          action: () => {
+          }
+        }
+      ]
+    });
+  }
+
+  /** 生成指定版式的 PDF 后调起系统打印（中文原文仅创建者本人会带上）。 */
+  private async doPrint(layout: string): Promise<void> {
     if (this.printBusy || this.vm.textEn.trim().length === 0) {
       return;
     }
@@ -284,6 +314,7 @@ export struct StoryDetailPage {
       opts.level = this.vm.level;
       opts.textEn = this.vm.textEn;
       opts.sourceZh = this.vm.canSeeSource() ? this.vm.sourceZh : '';
+      opts.layout = layout;
       const result = await StoryPrintService.buildPdf(opts);
       pdfPath = result.pdfPath;
       pageCount = result.pageCount;
@@ -384,7 +415,7 @@ export struct StoryDetailPage {
           .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
           .accessibilityText('打印故事')
           .onClick(() => {
-            void this.printStory();
+            this.choosePrintLayout();
           })
       }
       .width('100%')
