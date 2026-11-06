@@ -97,7 +97,7 @@
 
 | 页面 | 接口 | 要点 | 儿童差异 |
 |---|---|---|---|
-| 盲测 | `POST /api/blind-tests`、`POST /api/attempts/async`（带 blind_test_id）、`POST /api/blind-tests/:id/finish` | 异步、不显示分数 | — |
+| 盲测 | `POST /api/blind-tests`、`POST /api/attempts/async`（带 blind_test_id）、`POST /api/blind-tests/:id/finish`、**`DELETE /api/blind-tests/:id`**（取消）| 异步、不显示分数；**取消后该轮作废**（in_progress 消失、不进周报、下次为全新一轮）；周报「进行中」卡片有「取消这轮盲测」（二次确认）| 「不想测了就取消～」|
 | 盲测周报 | `GET /api/blind-tests` | 只统计已评分，显示待评分条数 | 分数仅家长 |
 | 发音诊断 | `GET /api/diagnosis` | 最弱音素、掌握度、建议 | 不显示 IPA |
 | 错音本 | `GET /api/review` | SRS 卡片 | — |

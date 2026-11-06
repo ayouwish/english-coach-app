@@ -102,6 +102,7 @@
 | 对子去重（a→b / b→a 合并） | 同上（`contrasts` 已去重） | ✅ | 同上 |
 | 错音本（SRS） | `GET /api/review` | ✅ | README §6.5 |
 | 盲测（异步） | `POST /api/blind-tests`、`/api/attempts/async`、`POST /:id/finish` | ✅ | README §6.5 |
+| **盲测取消（软取消）** | `DELETE /api/blind-tests/:id`（三态；幂等；他人 404；已结束 409）| ✅ | `screens-matrix.md` §6 |
 
 ## 8. 家长 / 运维
 
