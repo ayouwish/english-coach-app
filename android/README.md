@@ -7,6 +7,7 @@
 - **架构**：单 Activity + Compose + ViewModel/StateFlow + 手写 DI（无 Hilt、无 Fragment、无 Retrofit/Coil）。
 - **规模**：115 个 Kotlin 文件 / 约 31.8k 行 / 27 个页面（5 个一级 Tab + 22 个二级页）。
 - **功能清单（验收依据）**：[`../docs/android-feature-list.md`](../docs/android-feature-list.md)
+- **2026-11 新能力对齐清单（多家庭/成本/插画总开关/盲测取消等）** → [`../docs/new-features-2026-11.md`](../docs/new-features-2026-11.md)
 - **团队共享契约**：[`CONTRACT.md`](CONTRACT.md) + [`ROUND2_CONTRACT.md`](ROUND2_CONTRACT.md)
 - **质量记录**：[`AUDIT.md`](AUDIT.md)（静态审计）、[`SMOKE_COMPILE.md`](SMOKE_COMPILE.md)（逻辑层冒烟编译）、
   [`QA_ROUND2.md`](QA_ROUND2.md)（第二轮逐项验收）

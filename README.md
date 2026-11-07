@@ -41,6 +41,8 @@ iOS、Android 与 HarmonyOS（鸿蒙）客户端。**与后端仓库 [`english-c
 
 **发布记录（按批次回溯 + 验收步骤）** → [`docs/release-notes.md`](docs/release-notes.md)
 
+**新能力对齐清单（客户端逐项落地）** → [`docs/new-features-2026-11.md`](docs/new-features-2026-11.md)
+
 ---
 
 ## 0. 怎么用这份 README
