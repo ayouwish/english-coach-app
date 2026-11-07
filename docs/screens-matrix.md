@@ -10,7 +10,7 @@
 | **注册 / 加入家庭** | `POST /api/auth/register` | 两种模式：「🆕 创建家庭」（受 `ALLOW_SELF_SIGNUP` 控制）与「🔑 用邀请码加入」；注册即登录 | 儿童不开放自助注册 |
 | 退出 | `POST /api/auth/revoke`（+ 清本地 token） | 吊销 refresh；清 Keychain/Asset Store 与缓存 | — |
 | 改密码：家长重置 | `POST /api/family/members/:id/password`（**含自己**）| **已可用**：`/parent` → 家庭成员 → 「重置密码」，不需要旧密码 | 儿童页面无此入口（家长代改）|
-| 改密码：自助修改（可选增强）| `POST /api/auth/password`（**待实现**）| 需当前密码；改后当前会话保持、其他会话失效；不阻塞其他功能 | 文案口语化 |
+| 改密码：自助修改 | `POST /api/auth/password` | 需当前密码（错→401）；新密码≥8（否则 400）、新旧相同→400；成功后**当前会话保留、其他会话失效**；`/settings` 有表单 | 文案「改成新的秘密口令」 |
 | 我的偏好 | `GET/PATCH /api/settings` | `auto_illustrate`（默认关）/`gender`/`tts_voice`/`story_sentences`/每日时长/自由聊 | 同左（儿童页口语化）|
 | 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码；**仅本家庭**（跨家庭 404）| 儿童不可见 |
 | **家庭邀请码 🔒** | `GET /api/family/invite`、`POST .../rotate` | 一次性邀请码（用后失效）；每家庭家长 ≤3；面板显示「家长账号 N/3」 | 儿童不可见 |
