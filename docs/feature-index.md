@@ -20,7 +20,7 @@
 | 改密码（家长重置，含自己） | `POST /api/family/members/:id/password` | ✅ | `screens-matrix.md` §1 |
 | 改密码（自助，需旧密码） | `POST /api/auth/password` | ✅ | `screens-matrix.md` §1 |
 | 多账号/家庭成员 | `GET/POST /api/family/members`、`PATCH` | ✅ | `screens-matrix.md` §1 |
-| **多家庭（注册/邀请）** | `POST /api/auth/register`、`GET /api/family/invite`、`POST .../rotate`（一次性、家长 ≤3、`ALLOW_SELF_SIGNUP`）| ✅ | README §6.1b、`screens-matrix.md` §1 |
+| **多家庭（邀请制）** | `POST /api/auth/register`（`invite_code` 加入 / `new_family_code` 建新家庭）；`GET/POST /api/family/family-invites`（管理员名额制）| ✅ | README §6.1b、`screens-matrix.md` §1 |
 | 账号偏好 | `GET/PATCH /api/settings` | ✅ | README §6.1、§3.3（`auto_illustrate`/`gender`/`tts_voice`/`story_sentences`）|
 
 ## 2. 跟读练习

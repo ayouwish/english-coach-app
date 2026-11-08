@@ -12,9 +12,9 @@
 
 | 能力 | 接口 / 页面 | Web | 客户端要求 |
 |---|---|---|---|
-| 自助创建家庭 | `POST /api/auth/register`（无邀请码） | ✅ | 注册页「创建家庭」：家庭名 + 姓名 + 邮箱 + 密码；成功即登录 |
+| **受邀创建新家庭（名额制）** | `POST /api/auth/register`（`new_family_code`） | ✅ | 注册页「🏠 受邀创建新家庭」：邀请码 + 家庭名 + 姓名 + 邮箱 + 密码；**公开注册默认关闭** |
 | 邀请码加入家庭 | `POST /api/auth/register`（`invite_code`） | ✅ | 「用邀请码加入」模式；码错误/已用 → 可读提示 |
-| 注册开关 | `GET /api/health.features.self_signup` | ✅ | `false` 时隐藏「创建家庭」，只保留「邀请码加入」 |
+| 注册开关 | `GET /api/health.features.self_signup` | ✅ | **默认 false**（邀请制）；管理员家庭可生成「新家庭邀请码」（默认 100 名额） |
 | 家庭邀请码（家长） | `GET /api/family/invite`、`POST /api/family/invite/rotate` | ✅ | 家长面板显示码 + 「家长账号 N/3」；**一次性**（用后失效）；满 3 禁用重置 |
 | **家庭隔离** | 所有材料/打印/成员/汇总/建议接口 | ✅ | 无需特殊处理：跨家庭后端已 404；客户端按 404 显示"找不到" |
 
