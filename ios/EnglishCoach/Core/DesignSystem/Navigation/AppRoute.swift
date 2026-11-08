@@ -40,6 +40,8 @@ enum AppRoute: Hashable {
     case storyDetail(materialId: String)
     /// 故事复述（sentences 为待复述的原文句子）。
     case storyReview(materialId: String, sentences: [String])
+    /// 连读一篇故事（复用连读运行态，读完进汇总）。
+    case flowStory(materialId: String)
 
     /// 盲测。
     case blindTest

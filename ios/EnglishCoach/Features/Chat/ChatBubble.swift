@@ -81,12 +81,22 @@ enum ChatBubbleFactory {
         // 服务端在“创建会话”响应里可能不给消息 id（见 `ChatMessageDTO.id` 注释）；
         // 没有服务端 id 时用本地临时 id 渲染，`serverID` 留空表示无法参与 pron 轮询匹配。
         let serverID = dto.id ?? ""
+        let text = dto.text ?? ""
+        var textZh = dto.textZh ?? ""
+        // 开场白服务端常不给 text_zh（随机变体开场白 + opening-zh 只覆盖少数固定句），
+        // 用内置场景的英文原文兜底翻译，保证第一句也有中文。
+        // 能按原文命中内置开场白时，优先用本地译文（服务端对“变体开场白”可能给的是
+        // 固定开场白的译文，会张冠李戴）；未命中才保留服务端 text_zh。
+        if dto.role == ChatSpeaker.assistant.rawValue,
+           let translated = ChatOpeningTranslations.zh(for: text) {
+            textZh = translated
+        }
         var bubble = ChatBubble(
             id: serverID.isEmpty ? "message-\(UUID().uuidString)" : serverID,
             speaker: dto.role == ChatSpeaker.user.rawValue ? .user : .assistant,
             serverID: serverID,
-            text: dto.text ?? "",
-            textZh: dto.textZh ?? "",
+            text: text,
+            textZh: textZh,
             unsafeFiltered: dto.flag == "unsafe_filtered",
             audioURL: dto.audioUrl ?? ""
         )

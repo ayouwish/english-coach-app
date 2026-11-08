@@ -22,7 +22,7 @@ struct ChatDetailView: View {
         ZStack {
             Tokens.Colors.canvas.ignoresSafeArea()
             if let store {
-                ChatDetailContent(store: store)
+                ChatDetailContent(store: store, audio: audio)
             } else {
                 LoadingBlock(text: "正在取对话记录…")
             }
@@ -52,6 +52,7 @@ struct ChatDetailView: View {
 
 private struct ChatDetailContent: View {
     let store: ChatSessionStore
+    let audio: AudioCoordinator
 
     @Environment(\.roleCapabilities) private var caps
 
@@ -123,7 +124,7 @@ private struct ChatDetailContent: View {
     private var timeline: some View {
         LazyVStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
             ForEach(store.bubbles) { bubble in
-                ChatBubbleView(bubble: bubble, isChild: store.isChild) {
+                ChatBubbleView(bubble: bubble, audio: audio, isChild: store.isChild) {
                     Task { await store.play(bubble.id) }
                 }
             }

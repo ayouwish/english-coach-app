@@ -527,6 +527,7 @@ enum AppRoute: Hashable {
     case storyRecord
     case storyDetail(materialId: String)
     case storyReview(materialId: String, sentences: [String])
+    case flowStory(materialId: String) // 连读一篇故事（复用连读运行态，读完进汇总）
     case blindTest
     case diagnosis
     case review

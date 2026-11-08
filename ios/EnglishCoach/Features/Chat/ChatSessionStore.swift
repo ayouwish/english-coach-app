@@ -369,7 +369,6 @@ final class ChatSessionStore {
     private func apply(turn: ChatTurnDTO, bubbleID: String) {
         if let index = bubbles.firstIndex(where: { $0.id == bubbleID }) {
             bubbles[index].serverID = turn.userMessageId ?? ""
-            ChatBubbleFactory.applyCorrection(turn.correction, to: &bubbles[index])
             bubbles[index].pronPending = true
         }
         let reply = (turn.reply ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -382,6 +381,14 @@ final class ChatSessionStore {
                     unsafeFiltered: turn.flag == "unsafe_filtered"
                 )
             )
+            // web 把「更自然」纠正放在助手回复的气泡里（服务端也把 correction 存在 assistant 消息上）。
+            if let correction = turn.correction, let index = bubbles.indices.last {
+                ChatBubbleFactory.applyCorrection(correction, to: &bubbles[index])
+            }
+        } else if let correction = turn.correction,
+                  let index = bubbles.firstIndex(where: { $0.id == bubbleID }) {
+            // 没有回复文本的极端情况：仍挂在用户气泡上，至少不丢提示。
+            ChatBubbleFactory.applyCorrection(correction, to: &bubbles[index])
         }
         turnCount = turn.turnIndex ?? (turnCount + 1)
         suggestedReplies = Array((turn.suggestedReplies ?? []).prefix(4))

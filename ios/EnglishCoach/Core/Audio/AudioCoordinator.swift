@@ -37,10 +37,17 @@ final class AudioCoordinator {
     /// 系统回收音频焦点时本门面会主动停止录音/播放，页面据此切换引导文案。
     private(set) var interruptionReason: String?
 
+    /// 当前播放进度（0...1）、已播时长与总时长（聊天气泡的播放器条要用）。
+    /// 由 `progressMirrorTask` 每 100ms 从 `AudioPlayer` 同步过来。
+    private(set) var playbackProgress: Double = 0
+    private(set) var playbackCurrentTime: TimeInterval = 0
+    private(set) var playbackDuration: TimeInterval = 0
+
     @ObservationIgnored private let sessionController: AudioSessionController
     @ObservationIgnored private let recorder: VoiceRecorder
     @ObservationIgnored private let player: AudioPlayer
     @ObservationIgnored private var eventTask: Task<Void, Never>?
+    @ObservationIgnored private var progressMirrorTask: Task<Void, Never>?
 
     init(
         sessionController: AudioSessionController? = nil,
@@ -163,6 +170,7 @@ final class AudioCoordinator {
             try player.play(data: data, formatHint: formatHint) { [weak self] in
                 self?.handlePlaybackCompleted()
             }
+            startProgressMirror()
         } catch {
             mode = .idle
             await sessionController.deactivate()
@@ -182,6 +190,7 @@ final class AudioCoordinator {
             try player.play(fileURL: fileURL) { [weak self] in
                 self?.handlePlaybackCompleted()
             }
+            startProgressMirror()
         } catch {
             mode = .idle
             await sessionController.deactivate()
@@ -191,6 +200,7 @@ final class AudioCoordinator {
 
     func stopPlayback() async {
         player.stop()
+        resetPlaybackProgress()
         guard mode == .playing else { return }
         mode = .idle
         level = 0
@@ -201,15 +211,45 @@ final class AudioCoordinator {
     func stopAll() async {
         recorder.cancel()
         player.stop()
+        resetPlaybackProgress()
         mode = .idle
         level = 0
         await sessionController.deactivate()
+    }
+
+    // MARK: - 播放进度
+
+    /// 起播后把 `AudioPlayer` 的 progress/currentTime/duration 镜像成可观察状态，
+    /// 供聊天气泡的播放器条实时刷新；停止/结束时清零。
+    private func startProgressMirror() {
+        progressMirrorTask?.cancel()
+        playbackProgress = player.progress
+        playbackCurrentTime = player.currentTime
+        playbackDuration = player.duration
+        progressMirrorTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.mode == .playing else { return }
+                self.playbackProgress = self.player.progress
+                self.playbackCurrentTime = self.player.currentTime
+                self.playbackDuration = self.player.duration
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+    }
+
+    private func resetPlaybackProgress() {
+        progressMirrorTask?.cancel()
+        progressMirrorTask = nil
+        playbackProgress = 0
+        playbackCurrentTime = 0
+        playbackDuration = 0
     }
 
     // MARK: - 系统事件
 
     private func handlePlaybackCompleted() {
         guard mode == .playing else { return }
+        resetPlaybackProgress()
         mode = .idle
         level = 0
         Task { @MainActor [weak self] in
@@ -247,6 +287,7 @@ final class AudioCoordinator {
             recorder.cancel()
         }
         player.stop()
+        resetPlaybackProgress()
         mode = .idle
         level = 0
         await sessionController.deactivate()

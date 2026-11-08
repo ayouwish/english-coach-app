@@ -63,13 +63,7 @@ private struct ChatScenariosContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s16) {
-                header
-                if let usage = store.usageText {
-                    Text(usage)
-                        .font(AppFont.caption(caps))
-                        .foregroundStyle(Tokens.Colors.textSecondary)
-                }
-                settingsCard
+                heroCard
                 if let failure = store.failure {
                     ErrorBanner(
                         message: failure.body ?? failure.title,
@@ -89,64 +83,71 @@ private struct ChatScenariosContent: View {
         .refreshable { await store.reload() }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
+    /// 对齐 web：一张 hero 卡里放标题/用量 + 大号「自动朗读」按钮 + 语速胶囊。
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
             HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.s12) {
                 Text(store.isChild ? "💬 和我聊聊天吧！" : "💬 对话训练")
                     .font(AppFont.titleLarge(caps))
                     .foregroundStyle(Tokens.Colors.textPrimary)
                 Spacer(minLength: 0)
-                AppButton(title: "🕘 历史", kind: .ghost) {
-                    onOpenHistory()
+                Button(action: onOpenHistory) {
+                    Text("🕘 历史")
+                        .font(AppFont.caption(caps).weight(.semibold))
+                        .foregroundStyle(Tokens.Colors.primary)
+                        .padding(.horizontal, Tokens.Spacing.s12)
+                        .frame(minHeight: caps.minTapTarget)
+                        .background(Capsule(style: .continuous).fill(Tokens.Colors.surfaceMuted))
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel(Text("打开对话历史"))
             }
+
             Text(store.audienceHint)
                 .font(AppFont.caption(caps))
                 .foregroundStyle(Tokens.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
 
-    private var settingsCard: some View {
-        VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
-            HStack(spacing: Tokens.Spacing.s12) {
-                VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
-                    Text("🔊 自动朗读")
-                        .font(AppFont.bodyEmphasis(caps))
-                        .foregroundStyle(Tokens.Colors.textPrimary)
-                    Text(store.autoRead ? "开着：回复后自动读一遍" : "关着：点气泡上的 ▶ 才读")
-                        .font(AppFont.caption(caps))
-                        .foregroundStyle(Tokens.Colors.textSecondary)
-                }
-                Spacer(minLength: 0)
-                Toggle(
-                    "",
-                    isOn: Binding(
-                        get: { store.autoRead },
-                        set: { store.setAutoRead($0) }
-                    )
-                )
-                .labelsHidden()
-                .accessibilityLabel(Text("自动朗读"))
+            if let usage = store.usageText {
+                Text(usage)
+                    .font(AppFont.caption(caps))
+                    .foregroundStyle(Tokens.Colors.textSecondary)
             }
-            HStack(spacing: Tokens.Spacing.s12) {
-                Text("语速")
+
+            Button {
+                store.setAutoRead(!store.autoRead)
+            } label: {
+                HStack(spacing: Tokens.Spacing.s8) {
+                    Image(systemName: store.autoRead ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    Text("自动朗读：\(store.autoRead ? "开" : "关")")
+                    Spacer(minLength: 0)
+                }
+                .font(AppFont.bodyEmphasis(caps))
+                .foregroundStyle(store.autoRead ? Tokens.Colors.onPrimary : Tokens.Colors.primary)
+                .padding(.horizontal, Tokens.Spacing.s16)
+                .frame(maxWidth: .infinity, minHeight: caps.minTapTarget, alignment: .leading)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(store.autoRead ? Tokens.Colors.primary : Tokens.Colors.surfaceMuted)
+                )
+            }
+            .buttonStyle(PressScaleButtonStyle())
+            .accessibilityLabel(Text(store.autoRead ? "关闭自动朗读" : "打开自动朗读"))
+
+            Text(store.autoRead
+                 ? "每条回复会自动读出来；点气泡上的 ▶ 也可以再听一遍。"
+                 : "关着：点气泡上的 ▶ 才读。")
+                .font(AppFont.caption(caps))
+                .foregroundStyle(Tokens.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: Tokens.Spacing.s8) {
+                Text("朗读语速：")
                     .font(AppFont.bodyEmphasis(caps))
                     .foregroundStyle(Tokens.Colors.textPrimary)
-                Picker(
-                    "语速",
-                    selection: Binding(
-                        get: { store.rateText },
-                        set: { store.setRateText($0) }
-                    )
-                ) {
-                    Text("🐢 慢速").tag(TTSRate.slow.rawValue)
-                    Text("🐇 正常").tag(TTSRate.normal.rawValue)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .accessibilityLabel(Text("语速"))
+                ratePill(title: "🐢 慢速", value: TTSRate.slow.rawValue)
+                ratePill(title: "🐇 正常", value: TTSRate.normal.rawValue)
+                Spacer(minLength: 0)
             }
         }
         .padding(Tokens.Spacing.s16)
@@ -157,8 +158,26 @@ private struct ChatScenariosContent: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
-                .stroke(Tokens.Colors.borderSubtle, lineWidth: 1)
+                .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
         )
+    }
+
+    private func ratePill(title: String, value: String) -> some View {
+        Button {
+            store.setRateText(value)
+        } label: {
+            Text(title)
+                .font(AppFont.caption(caps).weight(.semibold))
+                .foregroundStyle(store.rateText == value ? Tokens.Colors.onPrimary : Tokens.Colors.primary)
+                .padding(.horizontal, Tokens.Spacing.s16)
+                .frame(minHeight: caps.minTapTarget)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(store.rateText == value ? Tokens.Colors.primary : Tokens.Colors.surfaceMuted)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("语速 \(title)"))
     }
 
     @ViewBuilder
@@ -255,13 +274,24 @@ private struct ChatScenariosContent: View {
     private func scenarioSection(title: String, items: [ChatScenarioDTO]) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
             SectionHeader(title: title)
-            ForEach(items, id: \.id) { scenario in
-                ChatScenarioCard(
-                    scenario: scenario,
-                    isChild: store.isChild,
-                    isStarting: store.startingScenarioID == scenario.id,
-                    onStart: { onStart(scenario) }
-                )
+            // 对齐 web：两列紧凑场景卡，整卡可点开始。
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: Tokens.Spacing.s8),
+                    GridItem(.flexible(), spacing: Tokens.Spacing.s8)
+                ],
+                alignment: .leading,
+                spacing: Tokens.Spacing.s8
+            ) {
+                ForEach(items, id: \.id) { scenario in
+                    ChatScenarioCard(
+                        scenario: scenario,
+                        isChild: store.isChild,
+                        isStarting: store.startingScenarioID == scenario.id,
+                        onStart: { onStart(scenario) },
+                        compact: true
+                    )
+                }
             }
         }
     }

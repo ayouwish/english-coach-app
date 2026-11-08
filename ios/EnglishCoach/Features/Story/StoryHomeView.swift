@@ -13,6 +13,8 @@ struct StoryHomeView: View {
     @Environment(\.roleCapabilities) private var caps
 
     @State private var store: StoryHomeStore?
+    /// 内嵌的创作区状态（对齐 web：故事首页同时是创作页）。
+    @State private var createStore: StoryRecordStore?
 
     init(services: AppServices, audio: AudioCoordinator) {
         self.services = services
@@ -22,7 +24,14 @@ struct StoryHomeView: View {
     var body: some View {
         Group {
             if let store = self.store {
-                StoryHomeContent(store: store, services: services, onOpen: open, onNew: newStory)
+                StoryHomeContent(
+                    store: store,
+                    services: services,
+                    creationStore: createStore,
+                    onOpen: open,
+                    onRead: { materialId in router.push(.flowStory(materialId: materialId)) },
+                    onCreated: handleCreated
+                )
                     .onChange(of: store.savedTick) { _, _ in
                         Task { await store.reload() }
                     }
@@ -33,19 +42,14 @@ struct StoryHomeView: View {
         .background(Tokens.Colors.canvas.ignoresSafeArea())
         .navigationTitle(session.isChild ? "我的故事书" : "我的故事")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: newStory) {
-                    Label(session.isChild ? "讲故事" : "新建", systemImage: "plus")
-                        .labelStyle(.iconOnly)
-                        .frame(minWidth: caps.minTapTarget, minHeight: caps.minTapTarget)
-                }
-                .accessibilityLabel(Text(session.isChild ? "讲一个故事" : "新建故事"))
-            }
-        }
         .task {
             if store == nil {
                 store = StoryHomeStore(services: services, session: session)
+            }
+            if createStore == nil {
+                let created = StoryRecordStore(services: services, audio: audio, session: session)
+                createStore = created
+                await created.loadIfNeeded()
             }
             await store?.loadIfNeeded()
         }
@@ -55,10 +59,11 @@ struct StoryHomeView: View {
         router.push(.storyDetail(materialId: materialId))
     }
 
-    private func newStory() {
-        // 连点/慢响应时避免把同一个页面压栈多次。
-        guard router.top != .storyRecord else { return }
-        router.push(.storyRecord)
+    /// 内嵌创作区保存成功后：刷新故事集并打开详情（web 保存后直接进入阅读）。
+    private func handleCreated(_ materialId: String) {
+        createStore?.resetAfterSave()
+        Task { await store?.reload() }
+        router.push(.storyDetail(materialId: materialId))
     }
 }
 
@@ -67,8 +72,10 @@ struct StoryHomeView: View {
 private struct StoryHomeContent: View {
     let store: StoryHomeStore
     let services: AppServices
+    let creationStore: StoryRecordStore?
     let onOpen: (String) -> Void
-    let onNew: () -> Void
+    let onRead: (String) -> Void
+    let onCreated: (String) -> Void
 
     @Environment(\.roleCapabilities) private var caps
 
@@ -76,12 +83,11 @@ private struct StoryHomeContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s24) {
                 introCard
-                // 显式的新建入口：不依赖导航栏「+」（iPad 分屏/紧凑宽度下工具栏按钮容易看不见）。
-                AppButton(
-                    title: caps.isChild ? "🎤 我要讲故事" : "✨ 讲一个故事",
-                    kind: .primary,
-                    action: onNew
-                )
+                // 对齐 web：创作区直接内嵌在故事首页顶部（写完/生成后下面就是故事集）。
+                if let creationStore {
+                    StoryCreateSection(store: creationStore, services: services, onSaved: onCreated)
+                }
+                SectionHeader(title: "📚 我的故事集", subtitle: "\(store.total) 篇")
                 filterRow
                 switch store.phase {
                 case .loading:
@@ -196,14 +202,7 @@ private struct StoryHomeContent: View {
             ForEach(store.groups) { group in
                 VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
                     SectionHeader(title: group.label, subtitle: "\(group.items.count) 篇")
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: Tokens.Spacing.s12),
-                            GridItem(.flexible(), spacing: Tokens.Spacing.s12)
-                        ],
-                        alignment: .leading,
-                        spacing: Tokens.Spacing.s12
-                    ) {
+                    LazyVStack(spacing: Tokens.Spacing.s8) {
                         ForEach(group.items) { item in
                             card(item)
                         }
@@ -213,58 +212,67 @@ private struct StoryHomeContent: View {
         }
     }
 
+    /// 对齐 web「我的故事集」：一列行式卡片（缩略图 + 标题/元信息 + ▶ 读这篇）。
     private func card(_ item: StoryCardItem) -> some View {
-        Button {
-            onOpen(item.id)
-        } label: {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
-                StoryRemoteImageView(
-                    materialId: item.id,
-                    version: item.imageVersion,
-                    services: services,
-                    height: 104,
-                    cornerRadius: Tokens.Radius.medium,
-                    placeholderIcon: item.hasImage ? "photo" : "book.closed"
-                )
-                Text(item.title)
-                    .font(AppFont.body(caps))
-                    .foregroundStyle(Tokens.Colors.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                HStack(spacing: Tokens.Spacing.s4) {
-                    if !item.level.isEmpty {
-                        PillTag(text: item.level, tone: .primary)
+        HStack(spacing: Tokens.Spacing.s12) {
+            Button {
+                onOpen(item.id)
+            } label: {
+                HStack(spacing: Tokens.Spacing.s12) {
+                    StoryRemoteImageView(
+                        materialId: item.id,
+                        version: item.imageVersion,
+                        services: services,
+                        height: 64,
+                        cornerRadius: Tokens.Radius.medium,
+                        placeholderIcon: item.hasImage ? "photo" : "book.closed"
+                    )
+                    .frame(width: 64, height: 64)
+                    .clipped()
+
+                    VStack(alignment: .leading, spacing: Tokens.Spacing.s4) {
+                        Text(item.title)
+                            .font(AppFont.bodyEmphasis(caps))
+                            .foregroundStyle(Tokens.Colors.textPrimary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Text(metaLine(item))
+                            .font(AppFont.micro(caps))
+                            .foregroundStyle(Tokens.Colors.textSecondary)
+                            .lineLimit(1)
                     }
-                    Text("\(item.sentenceCount) 句")
-                        .font(AppFont.micro(caps))
-                        .foregroundStyle(Tokens.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                HStack(spacing: Tokens.Spacing.s4) {
-                    Text(item.authorName.isEmpty ? StoryDates.subtitle(for: item) : item.authorName)
-                        .font(AppFont.micro(caps))
-                        .foregroundStyle(Tokens.Colors.textTertiary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text(StoryDates.subtitle(for: item))
-                        .font(AppFont.micro(caps))
-                        .foregroundStyle(Tokens.Colors.textTertiary)
-                }
+                .contentShape(Rectangle())
             }
-            .padding(Tokens.Spacing.s8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
-                    .fill(Tokens.Colors.surfaceCard)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
-                    .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
-            )
-            .shadow(color: Tokens.Shadow.cardPrimary, radius: Tokens.Elevation.cardRadius, x: 0, y: Tokens.Elevation.cardY)
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(item.title)，\(metaLine(item))"))
+
+            AppButton(title: "▶ 读这篇", kind: .ghost) {
+                onRead(item.id)
+            }
+            .frame(width: 116)
+            .accessibilityLabel(Text("连读《\(item.title)》"))
         }
-        .buttonStyle(PressScaleButtonStyle())
-        .accessibilityLabel(Text("\(item.title)，\(item.sentenceCount) 句，\(StoryDates.subtitle(for: item))"))
+        .padding(Tokens.Spacing.s12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                .fill(Tokens.Colors.surfaceCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func metaLine(_ item: StoryCardItem) -> String {
+        var parts: [String] = []
+        parts.append("\(item.sentenceCount) 句")
+        if !item.level.isEmpty { parts.append(item.level) }
+        parts.append(StoryDates.subtitle(for: item))
+        if !item.authorName.isEmpty { parts.append(item.authorName) }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: 状态
@@ -293,15 +301,14 @@ private struct StoryHomeContent: View {
     }
 
     private var emptyState: some View {
-        let action: () -> Void = store.onlyMine ? { store.setOnlyMine(false) } : onNew
-        return EmptyStateView(
+        EmptyStateView(
             icon: "book.closed",
             title: store.onlyMine ? "你还没有讲过故事" : "还没有故事",
             message: store.onlyMine
                 ? "讲讲今天发生的事，存下来就是你的第一本英文故事书。"
-                : "讲讲今天发生的事，存下来就是家庭共享的英文故事书。",
-            actionTitle: store.onlyMine ? "看全家故事" : "讲一个故事",
-            action: action
+                : "在上面写一段中文故事，点「变英文故事」，保存后就会出现在这里。",
+            actionTitle: store.onlyMine ? "看全家故事" : nil,
+            action: store.onlyMine ? { store.setOnlyMine(false) } : nil
         )
     }
 

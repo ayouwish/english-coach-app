@@ -137,12 +137,19 @@ struct StoryService: Sendable {
     // MARK: - 改写 / 复述
 
     /// `POST story/rewrite`（中文 → 分级英文）。`tense` 取 `auto` / `past` / `present`，空串按 `auto`。
-    func rewrite(textZh: String, level: String, maxSentences: Int, tense: String) async throws -> StoryRewriteDTO {
+    func rewrite(
+        textZh: String,
+        level: String,
+        maxSentences: Int,
+        tense: String,
+        useWeakPhonemes: Bool = false
+    ) async throws -> StoryRewriteDTO {
         let body = StoryRewriteBody(
             textZh: textZh,
             level: level,
             maxSentences: maxSentences,
-            useWeakPhonemes: false,
+            // 服务端在 true 时会自动挑最近最弱的 1–2 个音素写进故事；false 则不掺入。
+            useWeakPhonemes: useWeakPhonemes,
             tense: Self.optional(tense) ?? "auto"
         )
         let data = try ECJSON.encode(body, path: "story/rewrite")

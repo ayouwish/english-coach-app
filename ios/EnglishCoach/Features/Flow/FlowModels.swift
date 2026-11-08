@@ -9,9 +9,10 @@ enum FlowPhase: Equatable {
     case summary
 }
 
-/// 连读来源（HOS 还有「我的书页 / 拍照识别」，iOS 归故事域，连读只保留语料与自定义输入）。
+/// 连读来源（对齐 web：从语料选 / 我的书页 / 自己输入）。
 enum FlowSource: Int, CaseIterable, Identifiable, Equatable {
     case corpus
+    case materials
     case custom
 
     var id: Int { rawValue }
@@ -19,6 +20,7 @@ enum FlowSource: Int, CaseIterable, Identifiable, Equatable {
     var title: String {
         switch self {
         case .corpus: return "从语料选"
+        case .materials: return "我的书页"
         case .custom: return "自己输入"
         }
     }

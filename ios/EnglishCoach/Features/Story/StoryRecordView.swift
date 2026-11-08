@@ -3,8 +3,8 @@ import UIKit
 
 /// 讲故事（契约 §3.15.1 冻结签名：`(services: AppServices, audio: AudioCoordinator)`）。
 ///
-/// 一页完成：拍照/相册识别（OCR）或手动输入中文 → 录音转写（ASR）→ 改写成分级英文
-/// → 逐句校对 → 保存（可选自动插画）→ 跳详情。
+/// 一页完成：中文输入 / 录音转写（ASR）→ 改写成分级英文 → 逐句校对 → 保存 → 跳详情。
+/// `StoryCreateSection` 同时被故事首页内嵌（对齐 web：创作 + 故事集同页）。
 struct StoryRecordView: View {
     private let services: AppServices
     private let audio: AudioCoordinator
@@ -23,7 +23,12 @@ struct StoryRecordView: View {
     var body: some View {
         Group {
             if let store = self.store {
-                StoryRecordContent(store: store, services: services, onSaved: handleSaved)
+                ScrollView {
+                    StoryCreateSection(store: store, services: services, onSaved: handleSaved)
+                        .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                        .padding(.vertical, Tokens.Spacing.s16)
+                }
+                .scrollDismissesKeyboard(.interactively)
             } else {
                 LoadingBlock(text: "准备中…")
             }
@@ -52,49 +57,26 @@ struct StoryRecordView: View {
 
 // MARK: - 内容
 
-private struct StoryRecordContent: View {
+/// 故事创作区（可独立成页 `.storyRecord`，也可内嵌到故事首页）。
+struct StoryCreateSection: View {
     @Bindable var store: StoryRecordStore
     let services: AppServices
     let onSaved: (String) -> Void
 
     @Environment(\.roleCapabilities) private var caps
-    @Environment(\.openURL) private var openURL
-
-    @State private var showCamera = false
-    @State private var cameraDenied = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.s20) {
-                intro
-                // 故事优先：先写/讲中文故事，拍照识图只是补充入口（不再像连读页那样把「拍书页」放最上面）。
-                editorSection
-                sourceSection
-                recordSection
-                optionsSection
-                actionSection
-                messages
-                if store.hasResult {
-                    resultSection
-                }
-                footerHint
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s20) {
+            intro
+            editorSection
+            recordSection
+            optionsSection
+            actionSection
+            messages
+            if store.hasResult {
+                resultSection
             }
-            .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
-            .padding(.vertical, Tokens.Spacing.s16)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(
-                onImage: { image in
-                    showCamera = false
-                    Task { await store.recognizePickedImage(image) }
-                },
-                onCancel: {
-                    showCamera = false
-                    cameraDenied = true
-                }
-            )
-            .ignoresSafeArea()
+            footerHint
         }
         .onChange(of: store.notice) { _, newValue in
             guard !newValue.isEmpty else { return }
@@ -117,42 +99,6 @@ private struct StoryRecordContent: View {
                 .foregroundStyle(Tokens.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    // MARK: 来源（拍照/相册/手动）
-
-    private var sourceSection: some View {
-        VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
-            SectionHeader(title: "也可以拍照/相册", subtitle: "识别书页文字，自动填到上面的中文框")
-            if cameraDenied {
-                PermissionCard(
-                    title: "需要相机权限",
-                    message: "拍书页需要相机权限。也可以在「设置」里打开，或直接从相册选择、手动输入中文。",
-                    primaryTitle: "去设置",
-                    primaryAction: openSettings,
-                    secondaryTitle: "知道了",
-                    secondaryAction: { cameraDenied = false }
-                )
-            }
-            HStack(spacing: Tokens.Spacing.s8) {
-                AppButton(title: "拍照", icon: "camera.fill", kind: .ghost) {
-                    cameraDenied = false
-                    showCamera = true
-                }
-                AppButton(title: "手动输入", icon: "keyboard", kind: .ghost) {
-                    store.clearMessages()
-                }
-            }
-            PhotoLibraryPicker { image in
-                Task { await store.recognizePickedImage(image) }
-            }
-            if !store.ocrCapable {
-                Text("当前服务器暂不支持拍照识别，请直接手动输入中文。")
-                    .font(AppFont.micro(caps))
-                    .foregroundStyle(Tokens.Colors.warningText)
-            }
-        }
-        .cardStyle(padding: Tokens.Spacing.s12)
     }
 
     // MARK: 中文输入
@@ -406,6 +352,19 @@ private struct StoryRecordContent: View {
                     }
                 }
             }
+            Toggle(isOn: $store.useWeakPhonemes) {
+                VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
+                    Text("把最近薄弱的音练进故事里")
+                        .font(AppFont.body(caps))
+                        .foregroundStyle(Tokens.Colors.textPrimary)
+                    Text("会根据你的发音诊断自动挑 1–2 个弱音，写进这个故事。")
+                        .font(AppFont.micro(caps))
+                        .foregroundStyle(Tokens.Colors.textTertiary)
+                }
+            }
+            .tint(Tokens.Colors.primary)
+            .frame(minHeight: caps.minTapTarget)
+
             if store.imageCapable {
                 Toggle(isOn: $store.autoIllustrate) {
                     VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
@@ -438,8 +397,4 @@ private struct StoryRecordContent: View {
             .multilineTextAlignment(.center)
     }
 
-    private func openSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        openURL(url)
-    }
 }

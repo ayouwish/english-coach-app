@@ -7,6 +7,8 @@ struct ChatScenarioCard: View {
     let isStarting: Bool
     var onStart: () -> Void
     var onEdit: (() -> Void)? = nil
+    /// 紧凑网格卡（对齐 web 的两列场景卡）：整卡可点，只留标题/级别/场景说明。
+    var compact: Bool = false
 
     @Environment(\.roleCapabilities) private var caps
 
@@ -27,6 +29,58 @@ struct ChatScenarioCard: View {
     }
 
     var body: some View {
+        if compact {
+            compactBody
+        } else {
+            fullBody
+        }
+    }
+
+    private var compactBody: some View {
+        Button(action: onStart) {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.s4) {
+                HStack(spacing: Tokens.Spacing.s4) {
+                    Text(isChild ? "🎈 " : "")
+                        .font(AppFont.micro(caps))
+                    Text(englishTitle)
+                        .font(AppFont.bodyEmphasis(caps))
+                        .foregroundStyle(Tokens.Colors.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    if isStarting {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                if !chineseTitle.isEmpty {
+                    Text(chineseTitle)
+                        .font(AppFont.micro(caps))
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+                Text(compactMetaLine)
+                    .font(AppFont.micro(caps))
+                    .foregroundStyle(Tokens.Colors.textTertiary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(Tokens.Spacing.s12)
+            .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                    .fill(Tokens.Colors.surfaceCard)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                    .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .disabled(isStarting)
+        .accessibilityLabel(Text("\(displayTitle)，\(compactMetaLine)"))
+    }
+
+    private var fullBody: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
             HStack(alignment: .top, spacing: Tokens.Spacing.s12) {
                 Text(Self.emoji(for: scenario))
@@ -93,6 +147,25 @@ struct ChatScenarioCard: View {
             RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
                 .stroke(Tokens.Colors.borderSubtle, lineWidth: 1)
         )
+    }
+
+    private var englishTitle: String {
+        let en = (scenario.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return en.isEmpty ? displayTitle : en
+    }
+
+    private var chineseTitle: String {
+        (scenario.titleZh ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var compactMetaLine: String {
+        var parts: [String] = []
+        let level = (scenario.level ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !level.isEmpty { parts.append(level.uppercased()) }
+        if let minAge = scenario.minAge, minAge > 0, !isChild { parts.append("\(minAge)+ 岁") }
+        let setting = (scenario.settingZh ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !setting.isEmpty { parts.append(setting) }
+        return parts.joined(separator: " · ")
     }
 
     private var chips: [String] {

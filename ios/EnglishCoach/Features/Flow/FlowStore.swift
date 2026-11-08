@@ -99,6 +99,12 @@ final class FlowStore {
     private(set) var customInput = ""
     private(set) var customSentences: [String] = []
     private(set) var setupError: String?
+    /// 「我的书页」：故事材料列表（web 的 /flow 同款来源）。
+    private(set) var flowMaterials: [StoryMaterialDTO] = []
+    private(set) var materialsLoading = false
+    private(set) var materialsError: UIMessage?
+    /// 本次连读来自哪篇故事（提交时带 material_id，服务端回放/统计用）。
+    private var runMaterialId = ""
 
     // MARK: - running
 
@@ -299,6 +305,61 @@ final class FlowStore {
         if newSource == .corpus, corpusPhase == .idle {
             Task { await loadCorpus() }
         }
+        if newSource == .materials, flowMaterials.isEmpty {
+            Task { await loadMaterials() }
+        }
+    }
+
+    // MARK: - setup：我的书页
+
+    func loadMaterials(force: Bool = false) async {
+        guard !materialsLoading else { return }
+        if !force, !flowMaterials.isEmpty { return }
+        materialsLoading = true
+        materialsError = nil
+        do {
+            flowMaterials = try await services.story.materials(limit: 50, offset: 0)
+        } catch {
+            materialsError = ErrorMapper.message(for: error, isChild: isChild)
+        }
+        materialsLoading = false
+    }
+
+    /// 点「读这篇」：拉详情 → 切句 → 直接开始连读。
+    func startMaterial(_ material: StoryMaterialDTO) async {
+        guard !materialsLoading else { return }
+        setupError = nil
+        do {
+            let detail = try await services.story.materialDetail(id: material.id)
+            startStoryRead(materialId: material.id, text: detail.text ?? "")
+        } catch {
+            setupError = ErrorMapper.message(for: error, isChild: isChild).body
+                ?? ErrorMapper.message(for: error, isChild: isChild).title
+        }
+    }
+
+    /// 故事详情「连读这篇」/ setup 书页入口共用：直接把故事正文切成句子开始读。
+    func startStoryRead(materialId: String, text: String) {
+        let pieces = FlowText.splitSentences(text)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !pieces.isEmpty else {
+            setupError = "这篇故事还没有可读的句子"
+            return
+        }
+        runMaterialId = materialId
+        beginRun(pieces.map { FlowRunSentence(text: $0, sentenceId: "", source: "material") })
+    }
+
+    /// 详情页深链：先取正文再开始。
+    func loadForStoryRead(materialId: String) async {
+        do {
+            let detail = try await services.story.materialDetail(id: materialId)
+            startStoryRead(materialId: materialId, text: detail.text ?? "")
+        } catch {
+            setupError = ErrorMapper.message(for: error, isChild: isChild).body
+                ?? ErrorMapper.message(for: error, isChild: isChild).title
+        }
     }
 
     func setCount(_ newCount: Int) {
@@ -381,6 +442,7 @@ final class FlowStore {
             return
         }
         let sentences = preview.map { FlowRunSentence(text: $0.text, sentenceId: $0.id, source: "corpus") }
+        runMaterialId = ""
         beginRun(sentences)
     }
 
@@ -393,6 +455,7 @@ final class FlowStore {
             setupError = isChild ? "先写几句话吧" : "先输入一段文本，再点「切句」"
             return
         }
+        runMaterialId = ""
         beginRun(texts.map { FlowRunSentence(text: $0, sentenceId: "", source: "custom") })
     }
 
@@ -637,7 +700,7 @@ final class FlowStore {
                 referenceText: item.text,
                 sentenceId: item.sentenceId,
                 source: item.source,
-                materialId: nil,
+                materialId: runMaterialId.isEmpty ? nil : runMaterialId,
                 durationMs: recorded.durationMs
             )
             guard token == runToken else { return }

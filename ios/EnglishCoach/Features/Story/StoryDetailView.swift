@@ -18,6 +18,18 @@ struct StoryDetailView: View {
     @State private var showRename = false
     @State private var showDelete = false
     @State private var showExport = false
+    @State private var showPrint = false
+    @State private var printLayout: StoryPrintLayout = .fullPage
+    @State private var printChinese = false
+    @State private var printLines = false
+    @State private var isPrinting = false
+    @State private var printError = ""
+    @State private var pendingPrintData: Data?
+    @State private var pendingPrintJob = ""
+    @State private var pendingShareData: Data?
+    @State private var pendingShareName = ""
+    @State private var printFailureMessage = ""
+    @State private var showPrintFailure = false
     @State private var renameText = ""
 
     init(materialId: String, services: AppServices, audio: AudioCoordinator) {
@@ -55,6 +67,14 @@ struct StoryDetailView: View {
                     }
                     .sheet(isPresented: $showExport) {
                         exportSheet(store)
+                    }
+                    .sheet(isPresented: $showPrint, onDismiss: handlePrintSheetDismiss) {
+                        printSheet(store)
+                    }
+                    .alert("打印面板打不开", isPresented: $showPrintFailure) {
+                        Button("好", role: .cancel) {}
+                    } message: {
+                        Text(printFailureMessage)
                     }
                     .onDisappear {
                         Task { await store.stopAllAudio() }
@@ -375,8 +395,15 @@ struct StoryDetailView: View {
 
     private func retellSection(_ store: StoryDetailStore) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
-            AppButton(title: "复述这个故事", icon: "mic.fill", kind: .primary) {
+            AppButton(title: "▶ 连读这篇", icon: "link", kind: .primary) {
+                router.push(.flowStory(materialId: materialId))
+            }
+            AppButton(title: "复述这个故事", icon: "mic.fill", kind: .ghost) {
                 router.push(.storyReview(materialId: materialId, sentences: store.sentences.map(\.en)))
+            }
+            AppButton(title: "🖨️ 打印这篇", icon: "printer", kind: .ghost) {
+                printError = ""
+                showPrint = true
             }
             Text("不看屏幕，用 2–3 句话把故事讲一遍 🙂")
                 .font(AppFont.caption(caps))
@@ -471,9 +498,15 @@ struct StoryDetailView: View {
                 Label("复制全文", systemImage: "doc.on.doc")
             }
             Button {
+                printError = ""
+                showPrint = true
+            } label: {
+                Label("🖨️ 打印故事", systemImage: "printer")
+            }
+            Button {
                 showExport = true
             } label: {
-                Label("导出 / 打印", systemImage: "square.and.arrow.up")
+                Label("导出 / 复制全文", systemImage: "square.and.arrow.up")
             }
             Divider()
             Button(role: .destructive) {
@@ -518,10 +551,171 @@ struct StoryDetailView: View {
         }
     }
 
+    /// 打印：选版式（A4 整页 / A5 卡片）→ 本地生成 PDF → 系统打印面板；也可导出 PDF 分享。
+    private func printSheet(_ store: StoryDetailStore) -> some View {
+        BottomSheetContainer(
+            title: "打印故事",
+            subtitle: "生成 PDF 后打开系统打印；也可以导出 PDF 用「文件」App 打印",
+            isScrollable: false
+        ) {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.s16) {
+                HStack(spacing: Tokens.Spacing.s8) {
+                    ForEach(StoryPrintLayout.allCases) { layout in
+                        Button {
+                            printLayout = layout
+                        } label: {
+                            VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
+                                Text(layout.title)
+                                    .font(AppFont.bodyEmphasis(caps))
+                                    .foregroundStyle(printLayout == layout ? Tokens.Colors.onPrimary : Tokens.Colors.textPrimary)
+                                Text(layout.subtitle)
+                                    .font(AppFont.micro(caps))
+                                    .foregroundStyle(printLayout == layout ? Tokens.Colors.onPrimary.opacity(0.85) : Tokens.Colors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(Tokens.Spacing.s12)
+                            .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+                            .background(
+                                RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+                                    .fill(printLayout == layout ? Tokens.Colors.primary : Tokens.Colors.surfaceSunken)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+                                    .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("打印版式 \(layout.title)"))
+                    }
+                }
+
+                Toggle(isOn: $printChinese) {
+                    VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
+                        Text("显示中文原文")
+                            .font(AppFont.body(caps))
+                            .foregroundStyle(Tokens.Colors.textPrimary)
+                        Text(store.sourceZh.isEmpty ? "这篇故事没有中文原文" : "把你的中文讲述也印在纸上（仅创建者可见）")
+                            .font(AppFont.micro(caps))
+                            .foregroundStyle(Tokens.Colors.textTertiary)
+                    }
+                }
+                .tint(Tokens.Colors.primary)
+                .disabled(store.sourceZh.isEmpty)
+                .frame(minHeight: caps.minTapTarget)
+
+                Toggle(isOn: $printLines) {
+                    VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
+                        Text("加书写留白行")
+                            .font(AppFont.body(caps))
+                            .foregroundStyle(Tokens.Colors.textPrimary)
+                        Text("每句英文下面留一条横线，方便手写跟读")
+                            .font(AppFont.micro(caps))
+                            .foregroundStyle(Tokens.Colors.textTertiary)
+                    }
+                }
+                .tint(Tokens.Colors.primary)
+                .frame(minHeight: caps.minTapTarget)
+
+                if !printError.isEmpty {
+                    InlineErrorView(message: printError)
+                }
+
+                AppButton(title: "🖨️ 打印", kind: .primary, isLoading: isPrinting) {
+                    runPrint(store)
+                }
+                AppButton(title: "导出 PDF", icon: "square.and.arrow.up", kind: .ghost) {
+                    exportPDF(store)
+                }
+            }
+            .padding(.horizontal, Tokens.Spacing.s16)
+            .padding(.vertical, Tokens.Spacing.s12)
+        }
+    }
+
+    private func printOptions(_ store: StoryDetailStore) -> StoryPrintOptions {
+        StoryPrintOptions(
+            title: store.title,
+            level: store.level,
+            dateText: store.createdAtText,
+            authorName: store.authorName,
+            sentences: store.sentences.map(\.en),
+            sourceZh: store.sourceZh,
+            includeChinese: printChinese && !store.sourceZh.isEmpty,
+            includeWritingLines: printLines,
+            layout: printLayout
+        )
+    }
+
+    private func runPrint(_ store: StoryDetailStore) {
+        printError = ""
+        let options = printOptions(store)
+        Task { @MainActor in
+            guard let data = StoryPrintService.makePDF(options) else {
+                printError = "这个故事还没有可打印的句子"
+                return
+            }
+            // 先关掉选项 sheet，等它真正离场后（onDismiss）再弹系统打印面板。
+            pendingPrintData = data
+            pendingPrintJob = store.title
+            showPrint = false
+        }
+    }
+
+    private func exportPDF(_ store: StoryDetailStore) {
+        printError = ""
+        let options = printOptions(store)
+        Task { @MainActor in
+            guard let data = StoryPrintService.makePDF(options) else {
+                printError = "这个故事还没有可打印的句子"
+                return
+            }
+            let suffix = printLayout == .card ? "card" : "full"
+            pendingShareData = data
+            pendingShareName = "story-\(materialId)-\(suffix).pdf"
+            showPrint = false
+        }
+    }
+
+    /// 打印 / 分享选项 sheet 完全关掉之后再弹系统面板。
+    private func handlePrintSheetDismiss() {
+        if let data = pendingPrintData {
+            pendingPrintData = nil
+            let job = pendingPrintJob
+            pendingPrintJob = ""
+            Task { @MainActor in
+                let ok = await StoryPrintService.presentPrintPanel(data: data, jobName: job)
+                if !ok {
+                    // 打印面板没弹出来：退回系统分享面板（里面也有「打印」），至少不静默。
+                    let shared = await StoryPrintService.sharePDF(
+                        data: data,
+                        fileName: "story-\(materialId)-print.pdf"
+                    )
+                    if !shared {
+                        printFailureMessage = "系统打印面板没有打开。请改用「导出 PDF」，在「文件」App 里打印。"
+                        showPrintFailure = true
+                    }
+                }
+            }
+            return
+        }
+        if let data = pendingShareData {
+            pendingShareData = nil
+            let name = pendingShareName
+            pendingShareName = ""
+            Task { @MainActor in
+                let ok = await StoryPrintService.sharePDF(data: data, fileName: name)
+                if !ok {
+                    printFailureMessage = "分享面板没有打开，请稍后重试。"
+                    showPrintFailure = true
+                }
+            }
+        }
+    }
+
     private func exportSheet(_ store: StoryDetailStore) -> some View {
         BottomSheetContainer(
-            title: "导出 / 打印",
-            subtitle: "手机端先复制全文，再粘贴到备忘录/邮件里打印",
+            title: "导出 / 复制全文",
+            subtitle: "复制全文；打印或导出 PDF 请用菜单里的「🖨️ 打印故事」",
             isScrollable: false
         ) {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {

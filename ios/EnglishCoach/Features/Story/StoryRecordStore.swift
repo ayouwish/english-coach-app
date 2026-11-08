@@ -25,6 +25,8 @@ final class StoryRecordStore {
     var maxSentences: Int = 5
     /// 保存后是否自动生成插画（初值来自账号偏好 `auto_illustrate`，可在本页临时改）。
     var autoIllustrate: Bool = false
+    /// 是否让服务端把最近最弱的音素练进故事（web 默认勾选；task-50）。
+    var useWeakPhonemes: Bool = true
 
     // MARK: 状态
 
@@ -256,7 +258,8 @@ final class StoryRecordStore {
                 textZh: text,
                 level: level,
                 maxSentences: maxSentences,
-                tense: "auto"
+                tense: "auto",
+                useWeakPhonemes: useWeakPhonemes
             )
             apply(rewrite: dto)
             originalTextZh = text
@@ -390,6 +393,21 @@ final class StoryRecordStore {
     }
 
     // MARK: - 清理
+
+    /// 保存成功后清空创作区（故事首页内嵌时用；独立页保存后会跳走）。
+    func resetAfterSave() {
+        textZh = ""
+        originalTextZh = ""
+        title = ""
+        hasResult = false
+        sentences = []
+        readabilityText = ""
+        unknownWordsText = ""
+        warningText = ""
+        weakPhonemes = []
+        recordedAudio = nil
+        clearMessages()
+    }
 
     func clearInlineError() {
         inlineError = ""

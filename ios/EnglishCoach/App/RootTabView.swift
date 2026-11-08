@@ -132,6 +132,9 @@ struct RootTabView: View {
                 audio: audio
             )
 
+        case .flowStory(let materialId):
+            StoryFlowReadView(materialId: materialId, services: services, audio: audio)
+
         case .blindTest:
             BlindTestView(services: services, audio: audio)
 

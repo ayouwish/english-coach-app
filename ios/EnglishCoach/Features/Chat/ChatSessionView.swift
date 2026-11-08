@@ -161,6 +161,19 @@ private struct ChatSessionContent: View {
                 Text(store.isEnded ? "回放与文字记录都会保留" : "不限轮数，想聊多久都可以")
                     .font(AppFont.caption(caps))
                     .foregroundStyle(Tokens.Colors.textSecondary)
+                Spacer(minLength: 0)
+                if store.canEnd {
+                    Button(store.isEnding ? "结束中…" : "结束对话") {
+                        onRequestEnd()
+                    }
+                    .font(AppFont.caption(caps).weight(.semibold))
+                    .foregroundStyle(Tokens.Colors.dangerText)
+                    .padding(.horizontal, Tokens.Spacing.s12)
+                    .frame(minHeight: caps.minTapTarget)
+                    .background(Capsule(style: .continuous).fill(Tokens.Colors.surfaceMuted))
+                    .disabled(store.isEnding)
+                    .accessibilityLabel(Text("结束这次对话"))
+                }
             }
             if !store.subtitle.isEmpty {
                 Text(store.subtitle)
@@ -169,6 +182,16 @@ private struct ChatSessionContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(Tokens.Spacing.s12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                .fill(Tokens.Colors.surfaceCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+        )
     }
 
     @ViewBuilder
@@ -194,7 +217,7 @@ private struct ChatSessionContent: View {
         } else {
             LazyVStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
                 ForEach(store.bubbles) { bubble in
-                    ChatBubbleView(bubble: bubble, isChild: store.isChild) {
+                    ChatBubbleView(bubble: bubble, audio: audio, isChild: store.isChild) {
                         Task { await store.play(bubble.id) }
                     }
                 }
@@ -209,24 +232,32 @@ private struct ChatSessionContent: View {
                 Text("可以这样回：")
                     .font(AppFont.caption(caps))
                     .foregroundStyle(Tokens.Colors.textSecondary)
-                ForEach(store.suggestedReplies, id: \.self) { suggestion in
-                    Button {
-                        store.useSuggestion(suggestion)
-                    } label: {
-                        Text(suggestion)
-                            .font(AppFont.body(caps))
-                            .foregroundStyle(Tokens.Colors.primary)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(Tokens.Spacing.s12)
-                            .background(
-                                RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
-                                    .fill(Tokens.Colors.surfaceMuted)
-                            )
+                // 对齐 web：提示句是**自动换行的小胶囊**，不是整行输入框。
+                SuggestionChipFlow(spacing: Tokens.Spacing.s8) {
+                    ForEach(store.suggestedReplies, id: \.self) { suggestion in
+                        Button {
+                            store.useSuggestion(suggestion)
+                        } label: {
+                            Text(suggestion)
+                                .font(AppFont.caption(caps))
+                                .foregroundStyle(Tokens.Colors.primary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, Tokens.Spacing.s12)
+                                .padding(.vertical, Tokens.Spacing.s8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+                                        .fill(Tokens.Colors.surfaceCard)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+                                        .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("照着说：\(suggestion)"))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text("照着说：\(suggestion)"))
                 }
             }
         }
@@ -316,7 +347,14 @@ private struct ChatSessionContent: View {
     }
 
     private var micBar: some View {
-        VStack(spacing: Tokens.Spacing.s8) {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
+            Text("🎤 说英语（开口练习）")
+                .font(AppFont.bodyEmphasis(caps))
+                .foregroundStyle(Tokens.Colors.textPrimary)
+            Text("点下面的按钮开始录音，说完再点一次停止；不需要打字，练的就是开口说。")
+                .font(AppFont.micro(caps))
+                .foregroundStyle(Tokens.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             if store.isBusy || store.isPreparing {
                 HStack(spacing: Tokens.Spacing.s8) {
                     ProgressView()
@@ -336,6 +374,7 @@ private struct ChatSessionContent: View {
             ) {
                 Task { await store.toggleMic() }
             }
+            .frame(maxWidth: .infinity)
             if store.isRecording {
                 AppButton(title: "✖️ 不要了", kind: .text) {
                     Task { await store.cancelRecording() }
@@ -343,6 +382,16 @@ private struct ChatSessionContent: View {
                 .accessibilityLabel(Text("取消这次录音"))
             }
         }
+        .padding(Tokens.Spacing.s12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                .fill(Tokens.Colors.surfaceCard)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
+                .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+        )
     }
 
     private var endedBar: some View {
@@ -362,6 +411,53 @@ private struct ChatSessionContent: View {
             onExit()
         case .retry, .none:
             Task { await store.retry() }
+        }
+    }
+}
+
+
+// MARK: - 提示句自动换行布局
+
+/// 让「可以这样回」的提示句像 web 一样按内容换行排列（`flex-wrap` 语义）。
+private struct SuggestionChipFlow: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth.isFinite ? maxWidth : max(0, x - spacing), height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

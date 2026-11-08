@@ -31,6 +31,8 @@ final class StoryDetailStore {
     private(set) var level = ""
     private(set) var authorName = ""
     private(set) var dateText = ""
+    /// 打印用的绝对日期（`yyyy/M/d`）；`dateText` 是“3 分钟前”这类相对文案。
+    private(set) var createdAtText = ""
     private(set) var sourceZh = ""
     private(set) var showsSourceZh = false
     private(set) var sentences: [StorySentenceItem] = []
@@ -132,6 +134,7 @@ final class StoryDetailStore {
         level = (detail.level ?? "").uppercased()
         authorName = detail.createdByName ?? ""
         dateText = ECJSON.relativeText(from: detail.createdAt)
+        createdAtText = Self.printDate(detail.createdAt)
         sourceZh = (detail.sourceZh ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         showsSourceZh = false
         imagePrompt = (detail.imagePrompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -147,6 +150,14 @@ final class StoryDetailStore {
         if !hasImage {
             imageData = nil
         }
+    }
+
+    private static func printDate(_ raw: String?) -> String {
+        guard let date = ECJSON.date(from: raw) else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy/M/d"
+        return formatter.string(from: date)
     }
 
     // MARK: - 插画

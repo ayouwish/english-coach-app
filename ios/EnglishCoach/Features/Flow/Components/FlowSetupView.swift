@@ -16,6 +16,8 @@ struct FlowSetupView: View {
                     sourceTabs
                     if store.source == .corpus {
                         corpusPanel
+                    } else if store.source == .materials {
+                        materialsPanel
                     } else {
                         customPanel
                     }
@@ -37,6 +39,74 @@ struct FlowSetupView: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
+        .task {
+            if store.source == .materials {
+                await store.loadMaterials()
+            }
+        }
+    }
+
+    // MARK: - 我的书页
+
+    @ViewBuilder
+    private var materialsPanel: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
+            if store.materialsLoading {
+                LoadingBlock(text: "正在取我的书页…")
+            } else if let error = store.materialsError {
+                ErrorBanner(
+                    message: [error.title, error.body].compactMap { $0 }.joined(separator: " "),
+                    onRetry: { Task { await store.loadMaterials(force: true) } }
+                )
+            } else if store.flowMaterials.isEmpty {
+                EmptyStateView(
+                    icon: "book.closed",
+                    title: "还没有书页",
+                    message: "去「故事」页讲一个故事，或用拍书页存一篇，就能在这里逐句连读。",
+                    actionTitle: "刷新",
+                    action: { Task { await store.loadMaterials(force: true) } }
+                )
+            } else {
+                ForEach(store.flowMaterials, id: \.id) { material in
+                    HStack(alignment: .center, spacing: Tokens.Spacing.s8) {
+                        VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
+                            Text(material.title ?? "未命名故事")
+                                .font(AppFont.bodyEmphasis(caps))
+                                .foregroundStyle(Tokens.Colors.textPrimary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Text(materialMeta(material))
+                                .font(AppFont.micro(caps))
+                                .foregroundStyle(Tokens.Colors.textSecondary)
+                        }
+                        Spacer(minLength: 0)
+                        AppButton(title: "读这篇", kind: .tonal) {
+                            Task { await store.startMaterial(material) }
+                        }
+                    }
+                    .padding(Tokens.Spacing.s12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
+                            .fill(Tokens.Colors.surfaceSunken)
+                    )
+                }
+            }
+        }
+    }
+
+    private func materialMeta(_ material: StoryMaterialDTO) -> String {
+        var parts: [String] = []
+        if let count = material.sentenceCount, count > 0 {
+            parts.append("\(count) 句")
+        }
+        if let level = material.level, !level.isEmpty {
+            parts.append(level)
+        }
+        if let name = material.createdByName, !name.isEmpty {
+            parts.append(name)
+        }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - 页头
