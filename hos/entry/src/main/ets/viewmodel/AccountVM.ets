@@ -702,7 +702,9 @@ export class ParentVM {
 
   async init(): Promise<void> {
     await this.load();
-    await this.loadInvite();
+    if (!this.forbidden) {
+      await this.loadInvite();
+    }
   }
 
   /** GET /family/invite —— 邀请码 / 是否已用 / 家长人数与上限。 */
