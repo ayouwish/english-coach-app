@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { ApiClient, ApiRequest } from '../net/ApiClient';
 import { ApiError, ApiErrorCode } from '../net/ApiError';
-import { LoginBodyDto, MeResponseDto, RevokeBodyDto, TokenResponseDto, UsageDto, UserDto } from '../net/Dtos';
+import { LoginBodyDto, MeResponseDto, RegisterBodyDto, RevokeBodyDto, TokenResponseDto, UsageDto, UserDto } from '../net/Dtos';
 import { TokenSession } from '../net/TokenSession';
 
 /** 登录结果：user 来自 `/auth/token`（并尽量用 `/auth/me` 校正），usage 可能为 null。 */
@@ -69,6 +69,36 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.BAD_RESPONSE, raw.status, '登录返回缺少用户信息');
     }
     return result;
+  }
+
+  /**
+   * POST /auth/register（公开）：无邀请码创建家庭，有邀请码加入家庭（共同家长）。
+   * 注册接口只返回单个 token；调用方随后用 /auth/token 登录以拿到 access+refresh 并建立会话。
+   */
+  static async register(displayName: string, email: string, password: string,
+    familyName: string, inviteCode: string): Promise<void> {
+    const code = inviteCode.trim().toUpperCase();
+    let body: RegisterBodyDto;
+    if (code.length > 0) {
+      body = {
+        display_name: displayName.trim(),
+        email: email.trim(),
+        password: password,
+        invite_code: code
+      };
+    } else {
+      body = {
+        display_name: displayName.trim(),
+        email: email.trim(),
+        password: password,
+        family_name: familyName.trim()
+      };
+    }
+    const raw = await ApiClient.postJson('/auth/register', JSON.stringify(body), false,
+      AuthService.LOGIN_TIMEOUT_MS);
+    if (raw.status !== 200 && raw.status !== 201) {
+      throw ApiClient.errorOf(raw);
+    }
   }
 
   /**

@@ -9,6 +9,7 @@ import {
   FamilyMemberDto,
   FamilyMemberListDto,
   FamilyMemberResponseDto,
+  FamilyInviteDto,
   FamilyPatchBodyDto,
   ParentSummaryDto,
   ResetPasswordBodyDto,
@@ -83,6 +84,21 @@ export class AccountService {
     ApiClient.requireOk(raw);
   }
 
+  // ------------------------------------------------------------------ 家庭邀请码（多家庭）
+
+  /** GET /family/invite —— 仅家长；返回邀请码/是否已用/家长人数与上限。 */
+  static async familyInvite(): Promise<FamilyInviteDto> {
+    const raw = await ApiClient.getJson('/family/invite', null, AccountService.SHORT);
+    ApiClient.requireOk(raw);
+    return AccountService.parse<FamilyInviteDto>(raw.text, raw.status, '邀请码返回格式异常');
+  }
+
+  /** POST /family/invite/rotate —— 仅家长；旧码立即失效。 */
+  static async rotateFamilyInvite(): Promise<FamilyInviteDto> {
+    const raw = await ApiClient.postJson('/family/invite/rotate', '{}', true, AccountService.WRITE_TIMEOUT);
+    ApiClient.requireOk(raw);
+    return AccountService.parse<FamilyInviteDto>(raw.text, raw.status, '重置邀请码返回格式异常');
+  }
   // ------------------------------------------------------------------ 家长面板
 
   /** GET /parent/summary —— 仅家长；儿童 403（提示「家长专用」，不跳登录）。 */

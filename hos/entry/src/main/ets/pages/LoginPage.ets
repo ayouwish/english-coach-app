@@ -3,6 +3,8 @@ import { EcButton, EcButtonKind } from '../components/EcButton';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EcFont, EcRadius, EcShadow, EcSpace } from '../design/DesignTokens';
 import { LoginVM } from '../viewmodel/LoginVM';
+import { NavigationService } from '../core/router/NavigationService';
+import { Routes } from '../core/router/Routes';
 
 /**
  * 登录页（根内容，未登录时展示，不能返回）。
@@ -189,6 +191,14 @@ export struct LoginPage {
           }
         })
 
+        EcButton({
+          label: '🆕 注册 / 用邀请码加入家庭',
+          kind: EcButtonKind.GHOST,
+          onTap: () => {
+            NavigationService.push(Routes.REGISTER);
+          }
+        })
+
         Column({ space: EcSpace.x2 }) {
           Text('演示账号（点一下只填邮箱；密码请向家长确认）')
             .fontSize(EcFont.caption)
@@ -211,7 +221,7 @@ export struct LoginPage {
         }
         .width('100%')
 
-        Text('忘记密码？让家长在家长面板重置。账号由家长创建，不提供自助注册。')
+        Text('忘记密码？让家长在家长面板重置。家长可自助注册，或用邀请码加入已有家庭；孩子账号由家长创建。')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
           .width('100%')

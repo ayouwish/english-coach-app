@@ -215,6 +215,11 @@ export interface HealthDbDto {
   error?: string | null;
 }
 
+/** 服务端功能开关（/health.features；多家庭注册开关等）。 */
+export interface HealthFeaturesDto {
+  self_signup?: boolean;
+}
+
 export interface HealthDto {
   status?: string;
   service?: string;
@@ -222,6 +227,15 @@ export interface HealthDto {
   time?: string;
   db?: HealthDbDto;
   voice?: HealthVoiceDto;
+  features?: HealthFeaturesDto;
+}
+
+export interface RegisterBodyDto {
+  display_name: string;
+  email: string;
+  password: string;
+  family_name?: string;
+  invite_code?: string;
 }
 
 export interface LoginBodyDto {

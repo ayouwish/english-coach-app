@@ -12,6 +12,7 @@ import { EmptyState } from '../components/EmptyState';
 import { LoadingBlock } from '../components/LoadingBlock';
 import { EcFont, EcSpace } from '../design/DesignTokens';
 import { LoginPage } from './LoginPage';
+import { RegisterPage } from './RegisterPage';
 import { HomeTabs } from './HomeTabs';
 import { SettingsPage } from './SettingsPage';
 import { FlowSummaryPage } from './FlowSummaryPage';
@@ -112,7 +113,12 @@ struct Index {
       NavDestination() {
         SettingsPage()
       }.title('设置').backgroundColor($r('app.color.ec_bg'))
-    } else if (name === Routes.PRACTICE_RESULT) {
+    } else if (name === Routes.REGISTER) {
+      NavDestination() {
+        RegisterPage()
+      }
+      .hideTitleBar(true)
+      .backgroundColor($r('app.color.ec_bg'))    } else if (name === Routes.PRACTICE_RESULT) {
       NavDestination() {
         PracticeResultPage()
       }.title('跟读结果').backgroundColor($r('app.color.ec_bg'))

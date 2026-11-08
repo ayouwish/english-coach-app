@@ -1,6 +1,8 @@
 /** 路由名常量（docs/architecture.md §4.2）。跨页面跳转只允许用这里的常量。 */
 export class Routes {
   static readonly LOGIN: string = 'login';
+  /** 自助注册 / 用邀请码加入家庭（多家庭） */
+  static readonly REGISTER: string = 'register';
   static readonly SENTENCES: string = 'sentences';
   static readonly PRACTICE: string = 'practice';
   /** 跟读结果详情 / 单句历史（全屏二级页） */

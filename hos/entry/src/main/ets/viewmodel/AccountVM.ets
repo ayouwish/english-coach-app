@@ -690,7 +690,79 @@ export class ParentVM {
   children: ParentChildDto[] = [];
   members: ParentMemberDto[] = [];
 
+  // 家庭邀请码（多家庭；仅家长可见）
+  inviteLoading: boolean = false;
+  inviteRotating: boolean = false;
+  inviteError: string = '';
+  inviteFamilyName: string = '';
+  inviteCode: string = '';
+  inviteUsed: boolean = false;
+  inviteParentsCount: number = 0;
+  inviteParentsLimit: number = 3;
+
   async init(): Promise<void> {
+    await this.load();
+    await this.loadInvite();
+  }
+
+  /** GET /family/invite —— 邀请码 / 是否已用 / 家长人数与上限。 */
+  async loadInvite(): Promise<void> {
+    if (this.inviteLoading) {
+      return;
+    }
+    this.inviteLoading = true;
+    this.inviteError = '';
+    try {
+      const dto = await AccountService.familyInvite();
+      this.inviteFamilyName = dto.family_name === undefined ? '' : dto.family_name;
+      this.inviteCode = dto.invite_code === undefined ? '' : dto.invite_code;
+      this.inviteUsed = dto.invite_used === true;
+      this.inviteParentsCount = dto.parents_count === undefined ? 0 : dto.parents_count;
+      this.inviteParentsLimit = dto.parents_limit === undefined ? 3 : dto.parents_limit;
+    } catch (err) {
+      this.inviteError = SessionStore.toUiError(err as Error, false).message;
+    } finally {
+      this.inviteLoading = false;
+    }
+  }
+
+  /** POST /family/invite/rotate —— 旧码立即失效，生成新的一次性邀请码。 */
+  async rotateInvite(): Promise<boolean> {
+    if (this.inviteRotating) {
+      return false;
+    }
+    this.inviteRotating = true;
+    this.inviteError = '';
+    try {
+      const dto = await AccountService.rotateFamilyInvite();
+      this.inviteFamilyName = dto.family_name === undefined ? this.inviteFamilyName : dto.family_name;
+      this.inviteCode = dto.invite_code === undefined ? '' : dto.invite_code;
+      this.inviteUsed = false;
+      return true;
+    } catch (err) {
+      this.inviteError = SessionStore.toUiError(err as Error, false).message;
+      return false;
+    } finally {
+      this.inviteRotating = false;
+    }
+  }
+
+  inviteAtLimit(): boolean {
+    return this.inviteParentsCount >= this.inviteParentsLimit;
+  }
+
+  inviteStatusText(): string {
+    const count = this.inviteParentsCount.toString() + '/' + this.inviteParentsLimit.toString();
+    if (this.inviteAtLimit()) {
+      return '家长账号 ' + count + ' · 已满，不能再邀请新家长';
+    }
+    if (this.inviteUsed) {
+      return '家长账号 ' + count + ' · 邀请码已被使用（一次性），点「重置」生成新码';
+    }
+    return '家长账号 ' + count + ' · 邀请码可用（一次性，用后失效）';
+  }
+
+  async loadSummaryOnly(): Promise<void> {
     await this.load();
   }
 

@@ -12,6 +12,7 @@ import {
 } from '../core/net/AccountDtos';
 import { NavigationService } from '../core/router/NavigationService';
 import { Routes } from '../core/router/Routes';
+import { ClipboardUtil } from '../core/util/ClipboardUtil';
 import { ParentVM } from '../viewmodel/AccountVM';
 
 /**
@@ -45,6 +46,138 @@ export struct ParentPage {
     }
     const parsed = new Date(iso);
     return (parsed.getMonth() + 1).toString() + '/' + parsed.getDate().toString();
+  }
+
+  private async refreshAll(): Promise<void> {
+    await this.vm.load();
+    await this.vm.loadInvite();
+  }
+
+  private async copyInviteCode(): Promise<void> {
+    if (this.vm.inviteCode.length === 0) {
+      return;
+    }
+    const ok = await ClipboardUtil.copy(this.vm.inviteCode);
+    this.getUIContext().getPromptAction().showToast({
+      message: ok ? '已复制邀请码' : '复制失败，请长按手动复制'
+    });
+  }
+
+  private confirmRotateInvite(): void {
+    if (this.vm.inviteAtLimit() || this.vm.inviteRotating) {
+      return;
+    }
+    this.getUIContext().showAlertDialog({
+      title: '重置邀请码？',
+      message: '重置后旧邀请码立即失效，已经加入的家长不受影响。',
+      buttons: [
+        {
+          value: '重置',
+          action: () => {
+            void this.rotateInvite();
+          }
+        },
+        {
+          value: '取消',
+          action: () => {
+          }
+        }
+      ]
+    });
+  }
+
+  private async rotateInvite(): Promise<void> {
+    const ok = await this.vm.rotateInvite();
+    this.getUIContext().getPromptAction().showToast({
+      message: ok ? '已生成新的邀请码' : (this.vm.inviteError.length > 0 ? this.vm.inviteError : '重置失败')
+    });
+  }
+
+  /** 🏠 家庭邀请码（多家庭；仅家长）：邀请另一位家长加入同一家庭，家庭之间数据隔离。 */
+  @Builder
+  inviteCard() {
+    Column({ space: EcSpace.x2 }) {
+      Row({ space: EcSpace.x2 }) {
+        Text('🏠 家庭邀请码')
+          .fontSize(EcFont.body)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.ec_ink'))
+          .layoutWeight(1)
+        Text(this.vm.inviteLoading ? '读取中…' : '刷新')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .onClick(() => {
+            void this.vm.loadInvite();
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Text('把邀请码发给另一位家长，对方在登录页点「注册 / 用邀请码加入家庭」即可加入同一个家庭；家庭之间互相看不到数据。')
+        .fontSize(EcFont.micro)
+        .fontColor($r('app.color.ec_muted'))
+        .width('100%')
+
+      if (this.vm.inviteError.length > 0) {
+        Text(this.vm.inviteError)
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_bad_text'))
+          .width('100%')
+      }
+
+      Text(this.vm.inviteStatusText())
+        .fontSize(EcFont.caption)
+        .fontColor(this.vm.inviteAtLimit() ? $r('app.color.ec_warn_text') : $r('app.color.ec_muted'))
+        .width('100%')
+
+      Row({ space: EcSpace.x2 }) {
+        Text(this.vm.inviteFamilyName.length > 0 ? this.vm.inviteFamilyName : '我的家庭')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_muted'))
+        Text(this.vm.inviteCode.length > 0 ? this.vm.inviteCode : '—')
+          .fontSize(EcFont.h3)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.ec_primary'))
+          .letterSpacing(3)
+          .backgroundColor($r('app.color.ec_primary_soft'))
+          .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .borderRadius(EcRadius.sm)
+        Blank()
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Row({ space: EcSpace.x2 }) {
+        EcButton({
+          label: '📋 复制邀请码',
+          kind: EcButtonKind.TONAL,
+          btnWidth: '48%',
+          onTap: () => {
+            void this.copyInviteCode();
+          }
+        })
+        EcButton({
+          label: this.vm.inviteAtLimit() ? '家长已满（' + this.vm.inviteParentsLimit.toString() + '/'
+            + this.vm.inviteParentsLimit.toString() + '）'
+            : (this.vm.inviteRotating ? '重置中…' : '♻️ 重置邀请码'),
+          kind: EcButtonKind.GHOST,
+          btnWidth: '48%',
+          loading: this.vm.inviteRotating,
+          onTap: () => {
+            this.confirmRotateInvite();
+          }
+        })
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.SpaceBetween)
+    }
+    .width('100%')
+    .padding(EcSpace.x4)
+    .backgroundColor($r('app.color.ec_surface'))
+    .borderRadius(EcRadius.lg)
+    .shadow(EcShadow.card())
+    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -91,7 +224,7 @@ export struct ParentPage {
           .borderRadius(EcRadius.pill)
           .accessibilityText('刷新家长面板')
           .onClick(() => {
-            void this.vm.load();
+            void this.refreshAll();
           })
       }
       .width('100%')
@@ -320,6 +453,7 @@ export struct ParentPage {
           this.forbiddenView()
         } else {
           this.summaryCard()
+          this.inviteCard()
 
           if (this.vm.hasError) {
             ErrorBanner({

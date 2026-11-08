@@ -386,3 +386,15 @@ export interface AvatarSelectBodyDto {
 export interface AvatarDescBodyDto {
   character_desc: string;
 }
+
+/** GET /family/invite —— 家庭邀请码（仅家长；邀请码一次性 + 家长上限）。 */
+export interface FamilyInviteDto {
+  family_id?: string;
+  family_name?: string;
+  invite_code?: string;
+  invite_used?: boolean;
+  invite_used_by?: string | null;
+  invite_used_at?: string | null;
+  parents_count?: number;
+  parents_limit?: number;
+}
