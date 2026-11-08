@@ -51,6 +51,31 @@ struct SentenceDTO: Codable, Sendable, Identifiable, Hashable {
         case sortOrder
     }
 
+    /// 本地构造（故事详情把「故事句子」当作单句跟读的语料时用）。
+    init(
+        id: String,
+        text: String,
+        translationZh: String? = nil,
+        level: String? = nil,
+        focusPhonemes: [String] = [],
+        tags: [String] = [],
+        source: String? = nil,
+        ownerUserId: String? = nil,
+        mine: Bool? = nil,
+        sortOrder: Int? = nil
+    ) {
+        self.id = id
+        self.text = text
+        self.translationZh = translationZh
+        self.level = level
+        self.focusPhonemes = focusPhonemes
+        self.tags = tags
+        self.source = source
+        self.ownerUserId = ownerUserId
+        self.mine = mine
+        self.sortOrder = sortOrder
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)

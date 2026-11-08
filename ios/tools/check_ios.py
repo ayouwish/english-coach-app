@@ -100,6 +100,8 @@ THIRD_PARTY_MODULES = {
 # --------------------------------------------------------------------------- #
 
 SYSTEM_SYMBOLS = {
+    # 编译条件（`#if DEBUG`），不是类型名
+    "DEBUG",
     # Swift 标准库 / 语言
     "Any", "AnyObject", "Array", "AsyncSequence", "AsyncStream",
     "AsyncThrowingStream", "Bool", "CaseIterable", "Character",
@@ -1498,12 +1500,12 @@ def check_project_yml(models: list[SwiftFile], rep: Report) -> None:
     if strict != "complete":
         rep.error(rel(path), 0, "工程", f"SWIFT_STRICT_CONCURRENCY 应为 complete，实际是 {strict or '缺失'}")
     bundle = setting_value("PRODUCT_BUNDLE_IDENTIFIER") or ""
-    if bundle != "top.dreamsearch.englishcoach":
+    if bundle != "top.dreamsearch.english.coach":
         rep.error(
             rel(path),
             0,
             "工程",
-            f"PRODUCT_BUNDLE_IDENTIFIER 应为 top.dreamsearch.englishcoach，实际是 {bundle or '缺失'}",
+            f"PRODUCT_BUNDLE_IDENTIFIER 应为 top.dreamsearch.english.coach，实际是 {bundle or '缺失'}",
         )
     info_file = setting_value("INFOPLIST_FILE") or ""
     if info_file != "EnglishCoach/Resources/Info.plist":
@@ -1661,13 +1663,26 @@ def validate_info_plist(plist: dict, raw: str, rpath: str, rep: Report) -> None:
             "资源",
             "UISupportedInterfaceOrientations 必须只包含 UIInterfaceOrientationPortrait（仅竖屏）",
         )
+    # iPad 是原生（通用 App）运行：必须支持竖屏 + 左右横屏，横屏才能占满全屏（契约 §5）。
+    ipad_allowed = {
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationPortraitUpsideDown",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight",
+    }
+    ipad_required = {
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight",
+    }
     ipad_orient = plist.get("UISupportedInterfaceOrientations~ipad")
-    if ipad_orient is not None and (not isinstance(ipad_orient, list) or set(map(str, ipad_orient)) != portrait):
+    ipad_set = set(map(str, ipad_orient)) if isinstance(ipad_orient, list) else set()
+    if not ipad_required.issubset(ipad_set) or not ipad_set.issubset(ipad_allowed):
         rep.error(
             rpath,
             _plist_key_line(raw, "UISupportedInterfaceOrientations~ipad"),
             "资源",
-            "iPad 方向也必须只允许竖屏（契约 §5）",
+            "iPad 方向必须包含竖屏 + 左右横屏（只允许这四种），否则横屏无法全屏（契约 §5）",
         )
 
     ats = plist.get("NSAppTransportSecurity")

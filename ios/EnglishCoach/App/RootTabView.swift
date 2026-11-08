@@ -73,6 +73,11 @@ struct RootTabView: View {
                 destination(for: route)
             }
         }
+        // iPad 上 horizontalSizeClass 是 regular，系统会把 TabView 的标签栏挪到**顶部**
+        // （iPadOS 18 起的新样式）。本 App 的布局与交互都是 iPhone 单栏设计（契约 Q8：
+        // iPad 分栏留到 M4），标签栏必须固定在底部，因此整棵主界面强制 compact 宽度：
+        // 系统继续用底部标签栏，页面也保持与 iPhone 一致的排版。
+        .environment(\.horizontalSizeClass, .compact)
         .tint(Tokens.Colors.primary)
     }
 

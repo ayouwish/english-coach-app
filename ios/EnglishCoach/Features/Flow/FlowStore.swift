@@ -3,7 +3,7 @@ import Observation
 import OSLog
 import SwiftUI
 
-private let flowLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "flow")
+private let flowLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "flow")
 
 /// 上传并发闸门：`/attempts/async` 同时最多 2 个在途（契约要求「提交并发 ≤2」）。
 private actor FlowSubmitGate {
@@ -109,6 +109,8 @@ final class FlowStore {
     private(set) var expandedIndex = -1
     private(set) var recording = false
     private(set) var preparing = false
+    private(set) var isPreparingDemo = false
+    private(set) var isPlayingDemo = false
     private(set) var uploadingCount = 0
     private(set) var elapsedMs = 0
     private(set) var allSubmitted = false
@@ -140,6 +142,9 @@ final class FlowStore {
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var recordTimer: Task<Void, Never>?
     @ObservationIgnored private var advanceTask: Task<Void, Never>?
+    /// 示范音（与跟读一致：听示范 / 跟我读）
+    @ObservationIgnored private var demoTask: Task<Void, Never>?
+    @ObservationIgnored private let audioCache = AudioCache()
     @ObservationIgnored private var submissionTasks: [Task<Void, Never>] = []
 
     init(services: AppServices, audio: AudioCoordinator, session: SessionStore) {
@@ -198,6 +203,7 @@ final class FlowStore {
 
     /// 页面不可见 / 切后台：停轮询、停录音、停播放（在途上传允许完成，避免丢记录）。
     func pause() {
+        cancelDemo()
         stopPolling()
         recordTimer?.cancel()
         recordTimer = nil
@@ -441,6 +447,8 @@ final class FlowStore {
             return
         }
         errorMessage = nil
+        isPreparingDemo = false
+        isPlayingDemo = false
         lastFailedAction = .record
         preparing = true
         if audio.permission != .granted {
@@ -460,6 +468,102 @@ final class FlowStore {
             await handle(error)
         }
         preparing = false
+    }
+
+    // MARK: - running：示范音（听示范 / 跟我读）
+
+    /// 播当前句的示范音；`autoRecord == true` 时播完自动开始录音（「跟我读」）。
+    func playDemo(autoRecord: Bool) {
+        guard phase == .running, let item = currentItem, item.status == .unsent,
+              !recording, !preparing else { return }
+        demoTask?.cancel()
+        errorMessage = nil
+        isPreparingDemo = true
+        isPlayingDemo = false
+        demoTask = Task { @MainActor [weak self] in
+            await self?.runDemo(autoRecord: autoRecord)
+        }
+    }
+
+    private func runDemo(autoRecord: Bool) async {
+        guard let item = currentItem else {
+            isPreparingDemo = false
+            return
+        }
+        do {
+            let data = try await demoAudio(for: item.text)
+            try Task.checkCancellation()
+            // 取音频期间用户可能已经点了「开始说」：不要在录音开始后再起播。
+            guard !recording, !preparing else {
+                isPreparingDemo = false
+                return
+            }
+            isPreparingDemo = false
+            isPlayingDemo = true
+            try await audio.play(data: data, formatHint: TTSFormat.wav.rawValue)
+            await waitForDemoPlaybackEnd()
+            isPlayingDemo = false
+            guard autoRecord, !recording, !preparing, !Task.isCancelled else { return }
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await startRecording()
+        } catch is CancellationError {
+            isPreparingDemo = false
+            isPlayingDemo = false
+        } catch {
+            isPreparingDemo = false
+            isPlayingDemo = false
+            await handle(error)
+        }
+    }
+
+    /// 先落 `AudioCache` 再播：命中缓存时不发 `/tts`（与跟读页同一套键）。
+    private func demoAudio(for text: String) async throws -> Data {
+        let voice = session.prefs.voice()
+        let voiceArg = voice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : voice
+        let rate = demoRate
+        let key = AudioCache.ttsKey(
+            text: text,
+            rate: rate.rawValue,
+            voice: voiceArg,
+            format: TTSFormat.wav.rawValue
+        )
+        if let cached = await audioCache.data(for: key) {
+            return cached
+        }
+        let data = try await services.practice.synthesize(
+            text: text,
+            rate: rate,
+            voice: voiceArg,
+            format: .wav
+        )
+        await audioCache.store(data, for: key)
+        return data
+    }
+
+    private var demoRate: TTSRate {
+        guard !isChild else { return .slow }
+        return session.prefs.ttsRate == TTSRate.slow.rawValue ? .slow : .normal
+    }
+
+    private func waitForDemoPlaybackEnd(timeoutMs: Int = 30_000) async {
+        var waited = 0
+        while audio.isPlaying && waited < timeoutMs {
+            if Task.isCancelled {
+                await audio.stopPlayback()
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(80))
+            waited += 80
+        }
+    }
+
+    /// 停掉示范音任务与标志（页面暂停 / 退出运行态 / 切句时调用）。
+    private func cancelDemo() {
+        demoTask?.cancel()
+        demoTask = nil
+        isPreparingDemo = false
+        isPlayingDemo = false
     }
 
     func stopAndSubmit() async {
@@ -671,6 +775,7 @@ final class FlowStore {
     // MARK: - running：状态 / 交互
 
     func nextSentence() {
+        cancelDemo()
         guard let next = nextUnsentIndex(after: currentIndex) else {
             checkAllSettled()
             return
@@ -722,6 +827,7 @@ final class FlowStore {
     }
 
     func retryItem(index: Int) {
+        cancelDemo()
         guard items.indices.contains(index) else { return }
         items[index].resetForRedo()
         currentIndex = index
@@ -767,6 +873,7 @@ final class FlowStore {
     }
 
     func backToSetup() {
+        cancelDemo()
         runToken += 1
         phase = .setup
         items = []

@@ -67,8 +67,9 @@ private struct StoryRecordContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s20) {
                 intro
-                sourceSection
+                // 故事优先：先写/讲中文故事，拍照识图只是补充入口（不再像连读页那样把「拍书页」放最上面）。
                 editorSection
+                sourceSection
                 recordSection
                 optionsSection
                 actionSection
@@ -108,7 +109,7 @@ private struct StoryRecordContent: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s4) {
-            Text(caps.isChild ? "说说今天发生的事，我帮你写成英文故事" : "拍一张书页，或用中文讲讲你的故事")
+            Text(caps.isChild ? "说说今天发生的事，我帮你写成英文故事" : "讲讲今天发生的事，我帮你写成英文故事")
                 .font(AppFont.heading(caps))
                 .foregroundStyle(Tokens.Colors.textPrimary)
             Text("说中文会被转成文字写进下面的框里；录音本身只留在这台设备，不会上传保存。")
@@ -122,7 +123,7 @@ private struct StoryRecordContent: View {
 
     private var sourceSection: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
-            SectionHeader(title: "从哪里开始")
+            SectionHeader(title: "也可以拍照/相册", subtitle: "识别书页文字，自动填到上面的中文框")
             if cameraDenied {
                 PermissionCard(
                     title: "需要相机权限",

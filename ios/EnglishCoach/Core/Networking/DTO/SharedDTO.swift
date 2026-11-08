@@ -60,7 +60,9 @@ struct AccountUserDTO: Decodable, Sendable, Equatable {
 struct UsageDTO: Decodable, Sendable, Equatable {
     let minutes: Double?
     let limitMinutes: Int?
-    let remainingMinutes: Int?
+    /// 服务端按 0.1 分钟取整（`16.5` 这类小数会出现），**不能**声明成 Int，否则整包解码失败
+    /// （表现就是“版本不匹配”）。
+    let remainingMinutes: Double?
     let exceeded: Bool?
     let attemptCount: Int?
     let chatTurnCount: Int?

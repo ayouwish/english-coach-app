@@ -22,7 +22,7 @@ final class AppEnvironment {
 
     @ObservationIgnored private let tokens: TokenStore
     @ObservationIgnored private let httpClient: HTTPClient
-    @ObservationIgnored private let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "app")
+    @ObservationIgnored private let logger = Logger(subsystem: "top.dreamsearch.english.coach", category: "app")
     @ObservationIgnored private var servicesBaseURL: URL?
     @ObservationIgnored private var didBootstrap = false
 

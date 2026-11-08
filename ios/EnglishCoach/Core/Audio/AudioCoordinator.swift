@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import OSLog
 
-private let coordinatorLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "audio")
+private let coordinatorLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "audio")
 
 /// 音频错误（契约 §3.10）。用户可见文案统一由 `ErrorMapper` 生成，这里只表达原因。
 enum AudioError: Error, Equatable, Sendable {
@@ -107,7 +107,7 @@ final class AudioCoordinator {
 
         do {
             try await sessionController.activate(.recording)
-            try recorder.start()
+            try await recorder.start()
         } catch {
             await sessionController.deactivate()
             throw error

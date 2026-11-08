@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 import OSLog
 
-private let recorderLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "audio")
+private let recorderLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "audio")
 
 /// 一次录音的产物（契约 §3.10）：直接携带字节，上传路径不需要再碰临时文件。
 struct RecordedAudio: Sendable, Equatable {
@@ -72,7 +72,22 @@ final class VoiceRecorder {
 
     // MARK: - 开始 / 停止 / 取消
 
-    func start() throws {
+    /// 单次启动尝试的结果（`Result` 的 Failure 必须是 Error，这里用自定义枚举更直白）。
+    private enum StartOutcome {
+        case started(AVAudioRecorder)
+        case failed(String)
+    }
+
+    /// 真机 / 模拟器标记（模拟器没有麦克风输入，录音失败是预期行为）。
+    private static var environmentTag: String {
+        #if targetEnvironment(simulator)
+        return "sim"
+        #else
+        return "device"
+        #endif
+    }
+
+    func start() async throws {
         guard !isRecording else { return }
         guard MicPermission.current() == .granted else {
             throw AudioError.permissionDenied
@@ -82,36 +97,91 @@ final class VoiceRecorder {
             throw AudioError.engine("disk_low")
         }
 
-        let url = CacheLocator.recordingsDir()
-            .appendingPathComponent("\(UUID().uuidString).m4a")
+        // 逐级尝试编码参数：契约配置（16k/65k）失败时，先去掉显式码率（仍 16k），
+        // 再退到 44.1k（服务端会重采样到 16k 评分，不影响结果），避免某些机型/OS 上
+        // AAC 编码器直接拒绝组合、prepareToRecord 返回 false 导致“音频暂时不可用”。
+        var failures: [String] = []
+        for candidate in Self.settingsCandidates() {
+            let url = CacheLocator.recordingsDir()
+                .appendingPathComponent("\(UUID().uuidString).m4a")
 
+            switch await Self.beginRecording(url: url, settings: candidate.settings) {
+            case .started(let newRecorder):
+                recorder = newRecorder
+                fileURL = url
+                startedAt = Date()
+                isRecording = true
+                limitReached = false
+                level = 0
+                peakLevel = 0
+                elapsed = 0
+                peakDb = -160
+                startMetering()
+                startLimitTimer()
+                recorderLogger.debug("recording started via \(candidate.name, privacy: .public)")
+                return
+            case .failed(let detail):
+                try? fileManager.removeItem(at: url)
+                failures.append("\(candidate.name):\(detail)")
+            }
+        }
+
+        let detail = "recorder_start_failed(\(Self.environmentTag) \(failures.joined(separator: " | ")))"
+        recorderLogger.error("\(detail, privacy: .public)")
+        throw AudioError.engine(detail)
+    }
+
+    /// 创建并启动 `AVAudioRecorder`：prepare/record 各重试一次（iOS 27 上会话激活可能异步完成），
+    /// 失败时返回带输入路由/权限/目录的诊断串。
+    @MainActor
+    private static func beginRecording(
+        url: URL,
+        settings: [String: Any]
+    ) async -> StartOutcome {
         let newRecorder: AVAudioRecorder
         do {
-            newRecorder = try AVAudioRecorder(url: url, settings: Self.audioSettings())
+            newRecorder = try AVAudioRecorder(url: url, settings: settings)
         } catch {
-            try? fileManager.removeItem(at: url)
-            recorderLogger.error("create audio recorder failed")
-            throw AudioError.engine("recorder_unavailable")
+            let nsError = error as NSError
+            return .failed("init(\(nsError.domain)#\(nsError.code))")
         }
 
         newRecorder.isMeteringEnabled = true
-        guard newRecorder.prepareToRecord(), newRecorder.record() else {
-            try? fileManager.removeItem(at: url)
-            recorderLogger.error("start audio recorder failed")
-            throw AudioError.engine("recorder_start_failed")
+        var prepared = newRecorder.prepareToRecord()
+        var recording = prepared && newRecorder.record()
+        var attempts = 1
+        while (!prepared || !recording), attempts < 3 {
+            // 路由刚从 A2DP/HFP 切换、或会话激活在系统侧异步完成时，prepare 会立刻失败；
+            // 100ms / 250ms 再试两次。
+            try? await Task.sleep(for: .milliseconds(attempts == 1 ? 100 : 250))
+            prepared = newRecorder.prepareToRecord()
+            recording = prepared && newRecorder.record()
+            attempts += 1
         }
+        guard prepared, recording else {
+            return .failed(Self.startFailureDetail(prepared: prepared, recording: recording))
+        }
+        return .started(newRecorder)
+    }
 
-        recorder = newRecorder
-        fileURL = url
-        startedAt = Date()
-        isRecording = true
-        limitReached = false
-        level = 0
-        peakLevel = 0
-        elapsed = 0
-        peakDb = -160
-        startMetering()
-        startLimitTimer()
+    /// 编码参数候选（顺序即优先级）：契约配置在最前，回退只改码率/采样率，容器与编码不变。
+    static func settingsCandidates() -> [(name: String, settings: [String: Any])] {
+        [
+            ("16k/aac/65k", audioSettings()),
+            ("16k/aac/auto", [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 16_000,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            ]),
+            ("44.1k/aac/64k", [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 44_100,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 64_000,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            ]),
+        ]
     }
 
     /// 停止录音并返回 `RecordedAudio`。
@@ -240,6 +310,29 @@ final class VoiceRecorder {
     private static func normalizedLevel(_ db: Float) -> Double {
         let clamped = max(levelFloorDb, min(0, db))
         return Double((clamped - levelFloorDb) / -levelFloorDb)
+    }
+
+    /// 录音启动失败时的诊断串：把权限、输入路由、会话配置、缓存目录、剩余空间一次带出来。
+    /// 只写日志 / DEBUG 文案，不含用户数据。
+    private static func startFailureDetail(prepared: Bool, recording: Bool) -> String {
+        let session = AVAudioSession.sharedInstance()
+        let inputs = session.currentRoute.inputs.map(\.portType.rawValue).joined(separator: ",")
+        let available = (session.availableInputs ?? []).map(\.portType.rawValue).joined(separator: ",")
+        let permission = AVAudioApplication.shared.recordPermission
+        let directory = CacheLocator.recordingsDir()
+        let dirOK = FileManager.default.fileExists(atPath: directory.path)
+        let freeBytes = (try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage
+        let freeMB = freeBytes.map { $0 / 1_048_576 } ?? -1
+        #if targetEnvironment(simulator)
+        let tag = "sim"
+        #else
+        let tag = "device"
+        #endif
+        return "recorder_start_failed(\(tag) prepare=\(prepared) record=\(recording) "
+            + "permission=\(permission) category=\(session.category.rawValue) mode=\(session.mode.rawValue) "
+            + "inputAvailable=\(session.isInputAvailable) inputs=[\(inputs)] available=[\(available)] "
+            + "dir=\(dirOK) freeMB=\(freeMB))"
     }
 
     /// 开始录音前的磁盘空间预检；读不到容量时放行（预检本身不能挡住录音）。

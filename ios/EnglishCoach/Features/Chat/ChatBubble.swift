@@ -78,10 +78,13 @@ enum ChatBubbleFactory {
     }
 
     static func from(dto: ChatMessageDTO, isChild: Bool) -> ChatBubble {
+        // 服务端在“创建会话”响应里可能不给消息 id（见 `ChatMessageDTO.id` 注释）；
+        // 没有服务端 id 时用本地临时 id 渲染，`serverID` 留空表示无法参与 pron 轮询匹配。
+        let serverID = dto.id ?? ""
         var bubble = ChatBubble(
-            id: dto.id,
+            id: serverID.isEmpty ? "message-\(UUID().uuidString)" : serverID,
             speaker: dto.role == ChatSpeaker.user.rawValue ? .user : .assistant,
-            serverID: dto.id,
+            serverID: serverID,
             text: dto.text ?? "",
             textZh: dto.textZh ?? "",
             unsafeFiltered: dto.flag == "unsafe_filtered",

@@ -54,7 +54,7 @@
 | `tokenMeta` | 非敏感元数据 JSON：`{expiresAt, baseURLHash}` | 同上（随 token 一起删） |
 | `lastUser` | `{email, userId, role}`，仅用于登录页预填与冷启动占位 | `kSecAttrAccessibleAfterFirstUnlock` |
 
-- `service = "top.dreamsearch.englishcoach.auth"`；
+- `service = "top.dreamsearch.english.coach.auth"`；
 - `ThisDeviceOnly` 保证备份/迁移到另一台设备时 token 不跟随（换机必须重新登录）；
 - 读取失败/解码失败 → 视为“无 token”，走登录，不要崩溃；写失败要 `OSLog` 记录**错误码**（不记录 token 本身）。
 

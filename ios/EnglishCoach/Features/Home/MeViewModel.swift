@@ -65,7 +65,7 @@ final class MeViewModel {
             return "今日时长已达上限"
         }
         guard let remaining = usage.remainingMinutes, remaining > 0 else { return nil }
-        return "剩余 \(Self.minutesText(Double(remaining))) 分钟"
+        return "剩余 \(Self.minutesText(remaining)) 分钟"
     }
 
     func refresh() async {

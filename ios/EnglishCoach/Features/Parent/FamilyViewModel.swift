@@ -195,6 +195,11 @@ final class FamilyViewModel {
 
     // MARK: - 重置密码
 
+    /// 重置密码弹层每次出现时清空上一次失败提示（error 是 private(set)，由 ViewModel 负责清）。
+    func clearResetError() {
+        resetError = nil
+    }
+
     func resetPassword(_ member: FamilyMemberDTO) async -> Bool {
         guard !isResetting else { return false }
         resetError = nil

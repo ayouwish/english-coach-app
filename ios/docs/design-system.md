@@ -226,7 +226,7 @@ enum AppFont {
 | 色盲 | 分数/状态均带图标或文字，不只靠颜色 |
 | 动效 | 遵循 Reduce Motion |
 | 语音提示 | 孩子模式关键状态可用 `.speech` 音效（M4） |
-| 横屏 | M0–M3 只支持竖屏（`UISupportedInterfaceOrientations` 仅 Portrait）；iPad 见开放问题 Q8 |
+| 横屏 | iPhone 只支持竖屏（`UISupportedInterfaceOrientations` 仅 Portrait）；iPad 原生全屏并支持竖屏 + 左右横屏（见 Q8 与契约 §5） |
 
 ---
 

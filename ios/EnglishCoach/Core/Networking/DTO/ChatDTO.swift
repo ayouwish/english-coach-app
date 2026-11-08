@@ -97,7 +97,9 @@ struct ChatScenarioMutationDTO: Decodable, Sendable {
 // MARK: - 会话与消息（§2.4–§2.9）
 
 struct ChatMessageDTO: Decodable, Sendable {
-    let id: String
+    /// `POST chat/sessions` 201 的 `messages[]` 不带 `id`（只有 `/messages` 与详情接口带）。
+    /// 声明成可选，避免整包解码失败 → 误报“版本不匹配”。
+    let id: String?
     /// user | assistant
     let role: String?
     let text: String?

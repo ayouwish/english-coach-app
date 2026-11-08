@@ -111,14 +111,16 @@ struct FlowRunningView: View {
                 )
             }
 
-            if store.recording || store.preparing || store.uploadingCount > 0 {
+            if store.recording || store.preparing || store.uploadingCount > 0 || store.isPlayingDemo {
                 HStack(spacing: Tokens.Spacing.s8) {
                     if store.preparing || store.uploadingCount > 0 {
                         ProgressView().controlSize(.small).tint(Tokens.Colors.primary)
                     }
                     Text(store.recording
                         ? "正在听你说…读完点「说完啦」"
-                        : (store.preparing ? "正在打开麦克风…" : "正在上传…"))
+                        : (store.preparing
+                            ? "正在打开麦克风…"
+                            : (store.isPlayingDemo ? "正在播放示范音…" : "正在上传…")))
                         .font(AppFont.caption(caps))
                         .foregroundStyle(store.recording ? Tokens.Colors.warningText : Tokens.Colors.primary)
                 }
@@ -137,12 +139,29 @@ struct FlowRunningView: View {
                         }
                     }
                 } else if item.status == .unsent {
-                    AppButton(
-                        title: store.preparing ? "麦克风准备中…" : "🎤 开始录音",
-                        isLoading: store.preparing,
-                        isEnabled: !store.limitReached
-                    ) {
-                        Task { await store.startRecording() }
+                    // 与跟读页一致：听示范 / 跟我读 / 开始说 三个动作都在当前卡片上。
+                    VStack(spacing: Tokens.Spacing.s8) {
+                        HStack(spacing: Tokens.Spacing.s8) {
+                            AppButton(
+                                title: "🔊 听示范",
+                                kind: .tonal,
+                                isLoading: store.isPreparingDemo,
+                                isEnabled: !store.preparing,
+                                action: { store.playDemo(autoRecord: false) }
+                            )
+                            AppButton(
+                                title: "🎧 跟我读",
+                                kind: .tonal,
+                                isEnabled: !store.preparing && !store.limitReached,
+                                action: { store.playDemo(autoRecord: true) }
+                            )
+                        }
+                        AppButton(
+                            title: store.preparing ? "麦克风准备中…" : "🎤 开始说",
+                            isLoading: store.preparing,
+                            isEnabled: !store.limitReached,
+                            action: { Task { await store.startRecording() } }
+                        )
                     }
                 } else if store.hasNextUnsentHint {
                     AppButton(title: "下一句 →", kind: .tonal) {

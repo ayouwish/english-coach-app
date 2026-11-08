@@ -123,7 +123,7 @@ ios/EnglishCoach/
 3. **命名**：类型 `UpperCamelCase`，文件名 = 主类型名（一个文件一个主类型 + 私有辅助类型）。网络 DTO 一律 `XxxDTO` 后缀；页面态模型放 Feature 内、不带 DTO 后缀。
 4. **文案**：所有用户可见字符串为**简体中文**；网络/业务错误文案**只能**来自 `ErrorMapper`（页面不许自造"网络错误"文案）。儿童模式文案来自 `RoleCapabilities.isChild`。
 5. **儿童模式**：只通过 `RoleCapabilities`（`canSeeIPA`、`showsNumericScore`、`minTapTarget`、`usesEncouragementOnly`）判断；**禁止**页面里写 `user.role == .child`。
-6. **日志**：`Logger(subsystem: "top.dreamsearch.englishcoach", category: ...)`；禁止 `print`；禁止打印 token/密码/邮箱/音频内容。**禁止** `TODO`/`FIXME`/`fatalError` 进提交（未实现项写进 `ios/README.md` §0.5）。
+6. **日志**：`Logger(subsystem: "top.dreamsearch.english.coach", category: ...)`；禁止 `print`；禁止打印 token/密码/邮箱/音频内容。**禁止** `TODO`/`FIXME`/`fatalError` 进提交（未实现项写进 `ios/README.md` §0.5）。
 7. **可用性**：目标 iOS 26，直接用最新 API（`@Observable`、`NavigationStack`、`Charts`、`PhotosPicker`、`.scrollEdgeEffect` 等）。**不要**写 `if #available` 兼容分支。
 8. **防御式解码**：DTO 字段按"服务端可能缺失/类型漂移"处理：可选 + 使用处兜底；数组字段用 `decodeFlexibleStringArray` 之类的容错（见既有 `DTOs.swift` 的 `decodeStringArray`）。解码统一走 `HTTPClient.decode`（`convertFromSnakeCase`）。
    **JSON 编解码唯一入口是 `ECJSON`（`Core/Networking/JSONCoding.swift`）**：请求体一律 `try ECJSON.encode(body, path: "xxx")`（`convertToSnakeCase`），禁止裸 `JSONEncoder().encode`；时间字符串用 `ECJSON.date(from:)` / `ECJSON.relativeText(from:)`。multipart 字段名手写 snake_case。
@@ -676,7 +676,7 @@ struct AppServices {
 
 ## 5. 隐私与 Info.plist（A6）
 
-必须包含：`NSMicrophoneUsageDescription`（如实写明音频会上传服务器并转发云端语音服务）、`NSCameraUsageDescription`、`NSPhotoLibraryAddUsageDescription`、`NSLocalNetworkUsageDescription`、`UIBackgroundModes=[audio]`、`ITSAppUsesNonExemptEncryption=false`、竖屏锁定（`UISupportedInterfaceOrientations` 仅 portrait，iPad 也只 portrait），以及 `PrivacyInfo.xcprivacy`（UserDefaults CA92.1 / FileTimestamp C617.1 / DiskSpace E174.1 / 音频 + 邮箱收集声明）。
+必须包含：`NSMicrophoneUsageDescription`（如实写明音频会上传服务器并转发云端语音服务）、`NSCameraUsageDescription`、`NSPhotoLibraryAddUsageDescription`、`NSLocalNetworkUsageDescription`、`UIBackgroundModes=[audio]`、`ITSAppUsesNonExemptEncryption=false`、方向声明（iPhone：`UISupportedInterfaceOrientations` 仅 portrait；iPad：`UISupportedInterfaceOrientations~ipad` 含 portrait + 左右横屏，保证 iPad 原生全屏且横屏占满；iPad 上用 `UIRequiresFullScreen=true` 暂时保证全屏——该键 iOS 26 已弃用，用 iOS 27 SDK 构建后系统改为按支持方向离散缩放，需按 TN3192 在 M4 处理窗口尺寸），以及 `PrivacyInfo.xcprivacy`（UserDefaults CA92.1 / FileTimestamp C617.1 / DiskSpace E174.1 / 音频 + 邮箱收集声明）。
 
 ## 6. 静态校验（A6 交付 `ios/tools/check_ios.py`，所有人本地可跑）
 

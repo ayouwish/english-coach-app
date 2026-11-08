@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let diskCacheLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let diskCacheLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// 小体积 JSON 磁盘缓存（契约 §3.11）：带 TTL，落 `Application Support/json`。
 ///

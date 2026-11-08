@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let janitorLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let janitorLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// 启动清理 + 用户级清理（契约 §3.11，architecture.md §7.2）。
 ///

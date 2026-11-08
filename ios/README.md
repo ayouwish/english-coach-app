@@ -69,6 +69,7 @@ cd ios && brew install xcodegen && xcodegen generate && open EnglishCoach.xcodep
 - **接口运行时形状**来自后端源码与 HOS 实现的一致性推导，**没有用真实 token 跑通**；字段缺失/类型漂移可能导致 `decoding` 错误（DTO 已按"可能缺失"容错）。
 - `project.yml` 未创建测试 target（`Tests/` 只有 `.gitkeep`）：XcodeGen 对空测试 target 会生成不可构建产物，等有真实测试用例再加。
 - 隐私清单的 Required Reason reason code 需在 Xcode 上传时用官方列表复核；麦克风/相机文案在 `PROVIDER_MODE` 变化时必须同步改。
+- iPad：**已支持原生全屏**（通用 App + iPad 竖/横屏 + 底部标签栏）；iPad 分栏（`NavigationSplitView`）仍未做。
 - 未做：后台锁屏播放控制、iPad 分栏、深色模式、Dynamic Type 自定义字号缩放、离线补交队列、推送、Widget（均在 `docs/roadmap.md` M4）。
 
 ---
@@ -108,7 +109,7 @@ xcodegen generate         # 生成 EnglishCoach.xcodeproj（不提交，已加�
 open EnglishCoach.xcodeproj
 ```
 
-1. Xcode 里选择 app target → Signing & Capabilities → 选自己的付费 Team；Bundle ID 默认 `top.dreamsearch.englishcoach`。
+1. Xcode 里选择 app target → Signing & Capabilities → 选自己的付费 Team；Bundle ID 默认 `top.dreamsearch.english.coach`。
 2. 选择 iOS 26 真机/模拟器，Run。**真机是验收基准**，模拟器的麦克风/路由不可信。
 3. 没有 Assets.xcassets：预计仍可构建（**未验证**），但会缺 App 图标（M1 补），Xcode 可能给资源警告。
 
@@ -392,7 +393,7 @@ ios/
 ### 6.2 首次运行
 
 1. 生成并打开工程：`cd ios && xcodegen generate && open EnglishCoach.xcodeproj`（见 §0.2）。
-2. Signing：`Team = 付费开发者 Team`，Bundle ID 建议 `top.dreamsearch.englishcoach`（**【待确认】**；TestFlight 要求 App Store Connect 内唯一，一经创建不要随意更换）。
+2. Signing：`Team = 付费开发者 Team`，Bundle ID 建议 `top.dreamsearch.english.coach`（**【待确认】**；TestFlight 要求 App Store Connect 内唯一，一经创建不要随意更换）。
 3. base URL **不再走 xcconfig**：M0 在登录页填写，存 `UserDefaults`（`app.baseURL`）；默认空、必填。设计阶段的 `Config/Debug.xcconfig` + `API_BASE_URL` 方案未实现。
 4. 真机运行前，手机与 NAS 必须在同一网络；若路由器做了 AP 隔离会连不上。
 5. M0 没有“设置 → 服务器体检”页；登录页的“测试连接”会调 `GET /health`（只判断 2xx，不解析 `db`/`voice.reachable` 明细）。
@@ -458,7 +459,7 @@ curl -i -X POST $BASE/auth/revoke -H 'Content-Type: application/json' \
 | 测试范围 | **内部测试员最多 100 名**（App Store Connect 用户），**无需 Beta App Review**，构建处理完成后即可分发 |
 | 外部测试 | 本期**不使用**（最多 10,000 人，但需要 Beta App Review + 测试信息） |
 | Beta 有效期 | **构建上传后 90 天过期**；到期后测试员无法再安装/打开，必须重新上传一个新构建并分发 |
-| Bundle ID | `top.dreamsearch.englishcoach`（**【待确认】**，App Store Connect 内唯一；创建后不要随意改，否则测试员要重装） |
+| Bundle ID | `top.dreamsearch.english.coach`（**【待确认】**，App Store Connect 内唯一；创建后不要随意改，否则测试员要重装） |
 | 最低系统 | iOS 26（测试员设备必须已升级） |
 | 审核 | 内部测试**不需要**审核；不要把“无需审核”误解为“无需签名/隐私清单” |
 
@@ -589,7 +590,7 @@ ATS：默认不开放例外。如果 NAS 使用自签证书或内网 CA，iOS �
 - **错误文案集中**：所有用户可见错误来自 `ErrorMapper`（`docs/architecture.md` §5 的表），页面禁止自造网络错误文案。
 - **儿童模式**：通过 `RoleCapabilities`（`canSeeIPA`、`showsNumericScore`、`minTapTarget` 等）注入 Environment，**禁止**在页面里写 `if user.role == .child` 散点判断。
 - **本地化**：基准 `zh-Hans`，`Localizable.xcstrings`（String Catalog）；英文 UI 不在本期范围（见开放问题 Q5）。
-- **日志**：`OSLog(subsystem: "top.dreamsearch.englishcoach")`；**禁止**打印 access/refresh token、Cookie、密码、邮箱、音频内容；请求日志只留 method/path/status/duration。
+- **日志**：`OSLog(subsystem: "top.dreamsearch.english.coach")`；**禁止**打印 access/refresh token、Cookie、密码、邮箱、音频内容；请求日志只留 method/path/status/duration。
 - **提交**：一个 Feature 一个 PR；PR 必须附 `docs/screens.md` 对应小节的勾选清单。
 
 ---

@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let corpusLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let corpusLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// 语料仓库（契约 §3.11）：`/sentences` 快照 24h、合并同 level 的并发请求、按 userId 分键。
 ///

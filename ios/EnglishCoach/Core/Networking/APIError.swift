@@ -81,6 +81,12 @@ enum APIError: Error, Equatable, Sendable {
         return false
     }
 
+    /// 403（角色无权）：不登出，也不该占用全屏启动错误页。
+    var isForbidden: Bool {
+        if case .forbidden = self { return true }
+        return false
+    }
+
     /// 是否值得给“重试”按钮。401/403/格式错误重试没有意义。
     var canRetry: Bool {
         switch self {

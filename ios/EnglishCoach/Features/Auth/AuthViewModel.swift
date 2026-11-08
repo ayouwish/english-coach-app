@@ -150,8 +150,9 @@ final class AuthViewModel {
             storageDegraded = await session.credentials.isDegraded()
         } catch let apiError as APIError {
             error = loginMessage(for: apiError)
-        } catch {
-            error = ErrorMapper.message(for: error, isChild: false)
+        } catch let caught {
+            // 裸 catch 会隐式绑定名为 error 的常量，遮蔽同名的 error 属性，因此显式命名。
+            error = ErrorMapper.message(for: caught, isChild: false)
         }
     }
 

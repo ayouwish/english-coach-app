@@ -210,7 +210,8 @@ final class ChatSessionStore {
     }
 
     private func bubbleIndex(for dto: ChatMessageDTO) -> Int? {
-        if let index = bubbles.firstIndex(where: { !$0.serverID.isEmpty && $0.serverID == dto.id }) {
+        if let dtoID = dto.id, !dtoID.isEmpty,
+           let index = bubbles.firstIndex(where: { $0.serverID == dtoID }) {
             return index
         }
         let role = dto.role == ChatSpeaker.user.rawValue ? ChatSpeaker.user : .assistant
@@ -320,7 +321,7 @@ final class ChatSessionStore {
                 title: "我没听清，再说一次",
                 body: "这次没识别到英文；说得慢一点、清楚一点就好。",
                 actionTitle: nil,
-                action: .none,
+                action: UIMessage.Action.none,
                 isRetryable: false,
                 diagnosticID: nil
             )
@@ -414,7 +415,7 @@ final class ChatSessionStore {
         do {
             let list = try await services.chat.messages(sessionId: sessionID)
             guard let target = (list.messages ?? []).last(where: {
-                $0.role == ChatSpeaker.user.rawValue && (!serverID.isEmpty ? $0.id == serverID : ($0.text ?? "") == text)
+                $0.role == ChatSpeaker.user.rawValue && (!serverID.isEmpty ? ($0.id ?? "") == serverID : ($0.text ?? "") == text)
             }), let pron = target.pron else {
                 return false
             }

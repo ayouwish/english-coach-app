@@ -34,7 +34,7 @@ final class SessionStore {
     let credentials: CredentialStore
 
     private let deps: SessionDependencies
-    private let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "session")
+    private let logger = Logger(subsystem: "top.dreamsearch.english.coach", category: "session")
 
     private var didAttemptRestore = false
     private var restoreTask: Task<Void, Never>?

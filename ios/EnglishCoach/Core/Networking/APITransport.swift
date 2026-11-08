@@ -5,7 +5,7 @@ import OSLog
 /// 不处理认证（Bearer 注入与 401 重放在 `APITransport`）。
 final class HTTPClient: Sendable {
     private let session: URLSession
-    private let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "net")
+    private let logger = Logger(subsystem: "top.dreamsearch.english.coach", category: "net")
 
     init() {
         let configuration = URLSessionConfiguration.ephemeral

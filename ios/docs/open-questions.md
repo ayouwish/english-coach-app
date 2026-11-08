@@ -47,7 +47,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 结论 | **TestFlight 内部测试** |
-| 细节 | 内部测试员最多 100 名、**无需 Beta App Review**；构建 **90 天过期**，需定期重传；Bundle ID `top.dreamsearch.englishcoach`（待确认唯一性）；需 Apple Developer Program 付费账号、App Store Connect 记录、`PrivacyInfo.xcprivacy`。 |
+| 细节 | 内部测试员最多 100 名、**无需 Beta App Review**；构建 **90 天过期**，需定期重传；Bundle ID `top.dreamsearch.english.coach`（待确认唯一性）；需 Apple Developer Program 付费账号、App Store Connect 记录、`PrivacyInfo.xcprivacy`。 |
 | 不再评估 | 免费账号自签（7 天重签）；App Store 上架（需解释“服务器仅家庭内网可达”，无收益）。 |
 | 记录 | `README.md` §6.6；`roadmap.md` M0（通道）/ M4（Beta 运维） |
 
@@ -96,6 +96,7 @@
 | 选项 | 仅 iPhone 竖屏（本期） / iPhone + iPad 自适应 |
 | 影响 | iPad 需要分栏（`NavigationSplitView`）、更大的句卡、横屏键盘处理；但家庭场景 iPad 很常见 |
 | 建议 | M0–M3 只做 iPhone 竖屏（工程上仍用自适应布局，避免写死宽度）；M4 再正式支持 iPad |
+| 结论（2026-11-07） | **提前支持 iPad 全屏**：`TARGETED_DEVICE_FAMILY=1,2`，iPad 支持竖屏 + 左右横屏，并保留 `UIRequiresFullScreen` 退出多任务（iOS 26 弃用但暂用；iOS 27 SDK 起改按方向离散缩放，见 TN3192）；主界面强制 compact 宽度让系统标签栏保持在底部（iPad 分栏仍留到 M4）。iPhone 仍只做竖屏。 |
 | 归属 | 产品 |
 
 ### Q9 · 数据保留与隐私（影响 M4、也影响文案）

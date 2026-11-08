@@ -62,8 +62,8 @@ final class ChatScenariosStore {
         let minutes = Int((usage.minutes ?? 0).rounded())
         if let limit = usage.limitMinutes, limit > 0 {
             var text = "今日已练 \(minutes)/\(limit) 分钟"
-            if let remaining = usage.remainingMinutes {
-                text += " · 还剩 \(max(0, remaining)) 分钟"
+            if let remaining = usage.remainingMinutes, remaining > 0 {
+                text += " · 还剩 \(Int(remaining.rounded())) 分钟"
             }
             return text
         }

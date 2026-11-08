@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 import OSLog
 
-private let playerLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "audio")
+private let playerLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "audio")
 
 /// 播放器门面：**同一时刻只播一个音频**，换源 = 先停旧的再播新的。
 ///
@@ -91,20 +91,26 @@ final class AudioPlayer: NSObject, AVAudioPlayerDelegate {
         do {
             newPlayer = try AVAudioPlayer(contentsOf: fileURL)
         } catch {
-            playerLogger.error("create audio player failed")
-            throw AudioError.engine("player_decode_failed")
+            let nsError = error as NSError
+            let detail = "player_decode_failed(\(nsError.domain)#\(nsError.code))"
+            playerLogger.error("\(detail, privacy: .public) ext=\(fileURL.pathExtension, privacy: .public)")
+            throw AudioError.engine(detail)
         }
 
         newPlayer.delegate = self
         newPlayer.volume = 1
         newPlayer.rate = 1
         guard newPlayer.prepareToPlay() else {
-            playerLogger.error("prepare audio player failed")
-            throw AudioError.engine("player_prepare_failed")
+            let detail = "player_prepare_failed(ext=\(fileURL.pathExtension))"
+            playerLogger.error("\(detail, privacy: .public)")
+            throw AudioError.engine(detail)
         }
         guard newPlayer.play() else {
-            playerLogger.error("start audio player failed")
-            throw AudioError.engine("player_play_failed")
+            // play() 返回 false 表示系统拒绝起播：把会话状态一起记下来，便于区分
+            // “category/active 不对”还是“被其他 App 抢占/设备路由不可用”。
+            let detail = "player_play_failed(\(Self.sessionSnapshot()))"
+            playerLogger.error("\(detail, privacy: .public)")
+            throw AudioError.engine(detail)
         }
 
         player = newPlayer
@@ -228,6 +234,14 @@ final class AudioPlayer: NSObject, AVAudioPlayerDelegate {
         default:
             return "m4a"
         }
+    }
+
+    /// 起播失败时的 `AVAudioSession` 快照（只读、不含用户数据），仅用于日志/诊断。
+    private static func sessionSnapshot() -> String {
+        let session = AVAudioSession.sharedInstance()
+        let category = session.category.rawValue
+        let mode = session.mode.rawValue
+        return "category=\(category) mode=\(mode) otherAudio=\(session.isOtherAudioPlaying)"
     }
 
     // MARK: - AVAudioPlayerDelegate

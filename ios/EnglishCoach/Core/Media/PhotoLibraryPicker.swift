@@ -4,7 +4,7 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-private let pickerLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "media")
+private let pickerLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "media")
 
 /// 相册选择按钮（task-14 冻结签名：`init(onImage:)`）。
 ///

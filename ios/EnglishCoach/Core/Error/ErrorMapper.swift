@@ -13,7 +13,7 @@ import OSLog
 ///   `message`（可能含术语或 IPA，孩子读不懂）；
 /// - 所有非取消错误生成短 `diagnosticID` 并写一条 OSLog（日志不含凭据/邮箱/音频）。
 enum ErrorMapper {
-    private static let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "ui")
+    private static let logger = Logger(subsystem: "top.dreamsearch.english.coach", category: "ui")
 
     // MARK: - 契约 §3.13
 
@@ -413,12 +413,22 @@ enum ErrorMapper {
                 ? presentation(title: "这句话太长啦", body: "这句话太长啦，短一点好吗", actionTitle: "再录一次", action: .retry, retryable: false)
                 : presentation(title: "录音文件过大", body: "录音文件超过 12MB，请缩短录音", actionTitle: "重新录制", action: .retry, retryable: false)
 
-        case .engine:
-            // 引擎层错误（AVAudioSession/AVAudioRecorder/AVAudioPlayer）不向用户暴露技术细节。
+        case .engine(let detail):
+            // 引擎层错误（AVAudioSession/AVAudioRecorder/AVAudioPlayer）不向用户暴露技术细节；
+            // DEBUG 构建把失败阶段/OSStatus 附在正文末尾，方便真机联调时直接截图定位。
             return isChild
-                ? presentation(title: "声音没有准备好", body: "声音没有准备好，再试一次吧", actionTitle: "再试一次", action: .retry, retryable: true)
-                : presentation(title: "音频暂时不可用", body: "音频暂时不可用，请重试；若持续失败可换一副耳机或重启 App", actionTitle: "重试", action: .retry, retryable: true)
+                ? presentation(title: "声音没有准备好", body: "声音没有准备好，再试一次吧" + audioDebugSuffix(detail), actionTitle: "再试一次", action: .retry, retryable: true)
+                : presentation(title: "音频暂时不可用", body: "音频暂时不可用，请重试；若持续失败可换一副耳机或重启 App" + audioDebugSuffix(detail), actionTitle: "重试", action: .retry, retryable: true)
         }
+    }
+
+    /// DEBUG 才把引擎失败细节拼进正文；Release 保持产品文案不变。
+    private static func audioDebugSuffix(_ detail: String) -> String {
+        #if DEBUG
+        return "\n[DEBUG] \(detail)"
+        #else
+        return ""
+        #endif
     }
 
     private static func diagnosticKind(audio error: AudioError) -> String {

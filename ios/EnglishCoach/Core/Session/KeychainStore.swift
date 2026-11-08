@@ -5,17 +5,17 @@ import Security
 /// Keychain 低层封装：只做 `kSecClassGenericPassword` 的读 / 写 / 删。
 ///
 /// 约定（`ios/docs/architecture.md` §8）：
-/// - 全 App 只有一个 service：`top.dreamsearch.englishcoach.auth`；
+/// - 全 App 只有一个 service：`top.dreamsearch.english.coach.auth`；
 /// - 可访问性固定 `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`：
 ///   设备重启后首次解锁前不可读（后台任务不需要凭据），换机 / 备份不迁移；
 /// - 只接受 `String`，序列化由调用方负责（`TokenStore` 存 token，`CredentialStore` 存“记住登录”）；
 /// - token / 密码绝不写 `UserDefaults`、绝不出现在日志里（日志只记 OSStatus）。
 struct KeychainStore: Sendable {
-    static let service = "top.dreamsearch.englishcoach.auth"
+    static let service = "top.dreamsearch.english.coach.auth"
     static let shared = KeychainStore(service: KeychainStore.service)
 
     private let serviceName: String
-    private let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "session")
+    private let logger = Logger(subsystem: "top.dreamsearch.english.coach", category: "session")
 
     init(service: String = KeychainStore.service) {
         self.serviceName = service

@@ -189,8 +189,8 @@ final class AvatarViewModel {
             await session.reloadUser()
         } catch let apiError as APIError {
             error = ErrorMapper.message(for: apiError, isChild: session.isChild)
-        } catch {
-            error = ErrorMapper.message(for: error, isChild: session.isChild)
+        } catch let caught {
+            error = ErrorMapper.message(for: caught, isChild: session.isChild)
         }
     }
 
@@ -220,8 +220,8 @@ final class AvatarViewModel {
         } catch let apiError as APIError {
             error = ErrorMapper.message(for: apiError, isChild: session.isChild)
             return false
-        } catch {
-            error = ErrorMapper.message(for: error, isChild: session.isChild)
+        } catch let caught {
+            error = ErrorMapper.message(for: caught, isChild: session.isChild)
             return false
         }
     }
@@ -242,8 +242,8 @@ final class AvatarViewModel {
         } catch let apiError as APIError {
             error = ErrorMapper.message(for: apiError, isChild: session.isChild)
             return false
-        } catch {
-            error = ErrorMapper.message(for: error, isChild: session.isChild)
+        } catch let caught {
+            error = ErrorMapper.message(for: caught, isChild: session.isChild)
             return false
         }
     }

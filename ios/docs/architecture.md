@@ -466,7 +466,7 @@ func cacheKey(_ parts: [String], userId: String) -> String {
 | 项 | 做法 |
 | --- | --- |
 | 凭据 | 不存密码；access/refresh token 只存 Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）；**不进 UserDefaults、不进日志、不进崩溃上报** |
-| Keychain 项 | `kSecClassGenericPassword`：`service = "top.dreamsearch.englishcoach.auth"`，`account = accessToken / refreshToken / tokenMeta`；另一个 service（`.session`）只存 `lastUser`（email/userId/role，无凭据） |
+| Keychain 项 | `kSecClassGenericPassword`：`service = "top.dreamsearch.english.coach.auth"`，`account = accessToken / refreshToken / tokenMeta`；另一个 service（`.session`）只存 `lastUser`（email/userId/role，无凭据） |
 | 刷新 | 单飞刷新（actor），并发 401 只 refresh 一次；refresh 被拒才清 token；网络错误保留 token（见 ADR-0003） |
 | 传输 | 仅 https；禁止在 Release 打开 `NSAllowsArbitraryLoads`；http 只允许 Debug 排障 |
 | ATS | 不自签例外；NAS 证书必须被设备信任（换受信任证书或安装内网 CA）；LAN IP 场景需用户明确开启并二次确认（默认关闭） |

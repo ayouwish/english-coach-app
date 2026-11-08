@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let audioCacheLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let audioCacheLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// TTS 音频字节缓存（契约 §3.11）：`Caches/TTS`，LRU 200MB。
 ///

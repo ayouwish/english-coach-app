@@ -139,7 +139,7 @@ final class ParentViewModel {
         return Self.scoreText(current.avgPron)
     }
 
-    func blindDelta(member: ParentMemberDTO) -> (text: String, tone: DeltaTone)? {
+    func blindDelta(_ member: ParentMemberDTO) -> (text: String, tone: DeltaTone)? {
         guard member.blind?.current != nil else { return nil }
         guard let delta = member.blind?.deltaPron else {
             return ("首次（无对比）", .unknown)

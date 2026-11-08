@@ -22,7 +22,7 @@ protocol TokenStoring: Sendable {
 
 /// Keychain 存取（`actor` 保证读、写、清不会互相穿插）。
 ///
-/// 底层只通过 `KeychainStore` 碰 Security 框架（service `top.dreamsearch.englishcoach.auth`，
+/// 底层只通过 `KeychainStore` 碰 Security 框架（service `top.dreamsearch.english.coach.auth`，
 /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）。对外契约保持不变（契约 §3.9）。
 actor TokenStore: TokenStoring {
     private let keychain: KeychainStore

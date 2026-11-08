@@ -407,7 +407,7 @@ private struct ResetPasswordSheet: View {
         }
         .onAppear {
             viewModel.newPassword = ""
-            viewModel.resetError = nil
+            viewModel.clearResetError()
             confirmPassword = ""
         }
     }

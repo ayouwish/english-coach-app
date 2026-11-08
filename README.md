@@ -223,7 +223,7 @@ brew install xcodegen
 xcodegen generate          # 生成 EnglishCoach.xcodeproj（不提交）
 open EnglishCoach.xcodeproj
 ```
-- 在 Xcode 里选 **Signing Team**（Bundle ID 默认 `top.dreamsearch.englishcoach`）
+- 在 Xcode 里选 **Signing Team**（Bundle ID 默认 `top.dreamsearch.english.coach`）
 - 登录页服务器地址填：`https://english.dreamsearch.top/api`（只填主机名会自动补 `/api`）
 - 局域网自签证书需要在 iPhone 上安装并信任根证书（公信证书则无需）
 - 演示账号：`dad@example.com / Dad12345!`（家长）、`girl@example.com / Girl12345!`（儿童）

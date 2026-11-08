@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let imageCacheLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let imageCacheLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// 插画/虚拟形象图片缓存（契约 §3.11）：`Caches/Images`，LRU 100MB。
 ///

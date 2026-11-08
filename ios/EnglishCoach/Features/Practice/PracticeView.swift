@@ -15,6 +15,8 @@ struct PracticeView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var store: PracticeStore?
+    /// 纵向卡片流当前停在哪一句（`scrollPosition(id:)` 绑定）。
+    @State private var pagerSentenceID: String?
 
     init(services: AppServices, audio: AudioCoordinator) {
         self.services = services
@@ -69,21 +71,34 @@ struct PracticeView: View {
 
     // MARK: - 内容
 
+    /// 页头固定；句子本身是**纵向卡片流**（与 HOS `PracticePage` 一致）：
+    /// 每张卡片占满可视高度，上下滑动切换句子（`.viewAligned` 保证卡片比屏幕高时也能读完整）。
     private func content(_ store: PracticeStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
-                header(store)
+        VStack(spacing: 0) {
+            header(store)
+                .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                .padding(.top, Tokens.Spacing.s16)
+                .padding(.bottom, Tokens.Spacing.s8)
+                .frame(maxWidth: 720, alignment: .leading)
+                .frame(maxWidth: .infinity)
 
-                if store.loadPhase == .failed, store.sentences.isEmpty, let error = store.loadError {
+            if store.loadPhase == .failed, store.sentences.isEmpty, let error = store.loadError {
+                ScrollView {
                     ErrorStateView(
                         title: error.title,
                         message: error.body ?? "",
                         retryTitle: error.actionTitle ?? "重试",
                         onRetry: { Task { await store.reload(force: true) } }
                     )
-                } else if store.loadPhase == .loading, store.sentences.isEmpty {
+                    .padding(Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                }
+            } else if store.loadPhase == .loading, store.sentences.isEmpty {
+                ScrollView {
                     loadingView
-                } else if store.sentences.isEmpty {
+                        .padding(Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                }
+            } else if store.sentences.isEmpty {
+                ScrollView {
                     EmptyStateView(
                         icon: "text.book.closed",
                         title: "这个等级还没有句子",
@@ -93,35 +108,107 @@ struct PracticeView: View {
                         actionTitle: "换个等级",
                         action: { Task { await store.selectLevel(nextLevel(after: store.level)) } }
                     )
-                } else {
-                    if let error = store.loadError {
-                        ErrorBanner(
-                            message: [error.title, error.body].compactMap { $0 }.joined(separator: " "),
-                            onRetry: { Task { await store.reload(force: true) } }
-                        )
-                    }
-                    if store.showsResumeBanner {
-                        resumeBanner(store)
-                    }
-                    PracticeCardView(store: store)
-                    stepNavigation(store)
+                    .padding(Tokens.Spacing.pageMargin(isChild: caps.isChild))
                 }
-
-                Text("录音最长 60 秒；一次「开始→结束」= 一段音频 = 一次评测。")
-                    .font(AppFont.micro(caps))
-                    .foregroundStyle(Tokens.Colors.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, Tokens.Spacing.s4)
+            } else {
+                if let error = store.loadError {
+                    ErrorBanner(
+                        message: [error.title, error.body].compactMap { $0 }.joined(separator: " "),
+                        onRetry: { Task { await store.reload(force: true) } }
+                    )
+                    .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                    .padding(.bottom, Tokens.Spacing.s4)
+                    .frame(maxWidth: 720, alignment: .leading)
+                    .frame(maxWidth: .infinity)
+                }
+                if store.showsResumeBanner {
+                    resumeBanner(store)
+                        .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                        .padding(.bottom, Tokens.Spacing.s4)
+                        .frame(maxWidth: 720, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                }
+                pager(store)
+                pagerFooter(store)
             }
-            .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
-            .padding(.vertical, Tokens.Spacing.s16)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
         }
-        .scrollDismissesKeyboard(.immediately)
-        .refreshable {
-            await store.reload(force: true)
+    }
+
+    // MARK: - 纵向卡片流
+
+    private func pager(_ store: PracticeStore) -> some View {
+        GeometryReader { geo in
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(store.sentences) { sentence in
+                        PracticeCardView(
+                            store: store,
+                            sentence: sentence,
+                            isActive: sentence.id == store.currentSentence?.id
+                        )
+                        .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                        .padding(.bottom, Tokens.Spacing.s8)
+                        // 卡片至少占满一屏；内容更长时允许在卡片内部滚到尾部再切下一张。
+                        .frame(minHeight: geo.size.height, alignment: .top)
+                        .frame(maxWidth: 720)
+                        .frame(maxWidth: .infinity)
+                        .id(sentence.id)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $pagerSentenceID)
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.immediately)
+            .refreshable {
+                await store.reload(force: true)
+            }
+            .onAppear {
+                if pagerSentenceID == nil {
+                    pagerSentenceID = store.currentSentence?.id
+                }
+            }
+            .onChange(of: pagerSentenceID) { _, newValue in
+                guard let newValue,
+                      let index = store.sentences.firstIndex(where: { $0.id == newValue }),
+                      index != store.index
+                else { return }
+                store.select(index: index)
+                store.dismissResumeBanner()
+            }
+            .onChange(of: store.currentSentence?.id) { _, newValue in
+                guard let newValue, pagerSentenceID != newValue else { return }
+                // 程序化切句（「下一句 →」/继续上次/换等级）时平滑滚动过去。
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    pagerSentenceID = newValue
+                }
+            }
         }
+    }
+
+    private func pagerFooter(_ store: PracticeStore) -> some View {
+        VStack(spacing: Tokens.Spacing.s2) {
+            HStack(spacing: Tokens.Spacing.s8) {
+                Text("上滑 / 下滑切换句子")
+                    .font(AppFont.micro(caps))
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+                Spacer(minLength: 0)
+                Text(store.progressText)
+                    .font(AppFont.micro(caps).weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+            }
+            Text("录音最长 60 秒；一次「开始→结束」= 一段音频 = 一次评测。")
+                .font(AppFont.micro(caps))
+                .foregroundStyle(Tokens.Colors.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+        .padding(.top, Tokens.Spacing.s2)
+        .padding(.bottom, Tokens.Spacing.s8)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 页头
@@ -245,59 +332,6 @@ struct PracticeView: View {
                 .fill(Tokens.Colors.surfaceMuted)
         )
         .accessibilityElement(children: .contain)
-    }
-
-    // MARK: - 上一句 / 下一句
-
-    private func stepNavigation(_ store: PracticeStore) -> some View {
-        HStack(spacing: Tokens.Spacing.s8) {
-            stepButton("上一句", icon: "chevron.left", enabled: store.canGoPrevious) {
-                store.previous()
-            }
-            Text(store.progressText)
-                .font(AppFont.bodyEmphasis(caps))
-                .monospacedDigit()
-                .foregroundStyle(Tokens.Colors.textSecondary)
-                .frame(minWidth: 64)
-            stepButton("下一句", icon: "chevron.right", enabled: store.canGoNext) {
-                store.next()
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func stepButton(
-        _ title: String,
-        icon: String,
-        enabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: Tokens.Spacing.s4) {
-                if icon == "chevron.left" {
-                    Image(systemName: icon)
-                }
-                Text(title)
-                if icon != "chevron.left" {
-                    Image(systemName: icon)
-                }
-            }
-            .font(AppFont.caption(caps).weight(.semibold))
-            .foregroundStyle(enabled ? Tokens.Colors.primary : Tokens.Colors.textTertiary)
-            .frame(maxWidth: .infinity, minHeight: caps.minTapTarget)
-            .background(
-                RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
-                    .fill(Tokens.Colors.surfaceCard)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous)
-                    .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
-            )
-            .opacity(enabled ? 1 : 0.5)
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .accessibilityLabel(Text(title))
     }
 
     // MARK: - 加载骨架

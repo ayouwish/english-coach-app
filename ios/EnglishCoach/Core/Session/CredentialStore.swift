@@ -15,7 +15,7 @@ actor CredentialStore {
     private static let account = "savedLogin"
 
     private let keychain: KeychainStore
-    private let logger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "session")
+    private let logger = Logger(subsystem: "top.dreamsearch.english.coach", category: "session")
 
     /// 记录“当前用的是哪台服务器”：save/load 都按它做绑定校验。
     private var boundBaseURL: String?

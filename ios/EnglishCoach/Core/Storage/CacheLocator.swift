@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let cacheLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let cacheLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// 缓存目录（契约 §3.11 / architecture.md §7.1）。
 ///

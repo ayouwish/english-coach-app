@@ -3,7 +3,7 @@ import Observation
 import OSLog
 import SwiftUI
 
-private let practiceLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "practice")
+private let practiceLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "practice")
 
 /// 跟读页状态（卡片流 + 页内结果）。
 ///
@@ -267,6 +267,11 @@ final class PracticeStore {
     func previous() {
         guard canGoPrevious else { return }
         select(index: index - 1)
+    }
+
+    /// 用户手动上下滑动切句后，不再需要「上次练到第 N 句」提示（HOS 同语义）。
+    func dismissResumeBanner() {
+        resumeIndex = -1
     }
 
     func continueFromResume() {

@@ -39,7 +39,11 @@
     <key>NSLocalNetworkUsageDescription</key>
     <string>用于连接家庭内网的学习服务器。只有在你把服务器地址填成局域网 IP 时才会用到。</string>
 
-    <!-- ===== 界面方向：仅竖屏（iPhone / iPad 都只允许 portrait，契约 §5） ===== -->
+    <!-- ===== 界面方向（契约 §5，2026-11 修订）=====
+         iPhone：仅竖屏；iPad：竖屏 + 左右横屏（iPad 原生运行，横屏也要占满全屏）。
+         `UIRequiresFullScreen` 在 iOS 26 已弃用，但**暂时保留**：家庭场景要求 iPad 全屏，
+         该键在“用 iOS 26 SDK 构建 + 运行在 iPadOS 26/27”时仍会退出多任务模式。
+         改用 iOS 27 SDK 后系统会按支持方向离散缩放（TN3192），届时再按 M4 的 iPad 分栏方案处理。 -->
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -47,10 +51,10 @@
     </dict>
     <key>UILaunchScreen</key>
     <dict/>
-    <key>UIRequiresFullScreen</key>
-    <true/>
     <key>UIStatusBarStyle</key>
     <string>UIStatusBarStyleDarkContent</string>
+    <key>UIRequiresFullScreen</key>
+    <true/>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -58,6 +62,9 @@
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIUserInterfaceStyle</key>
     <string>Light</string>

@@ -56,6 +56,8 @@ struct StoryHomeView: View {
     }
 
     private func newStory() {
+        // 连点/慢响应时避免把同一个页面压栈多次。
+        guard router.top != .storyRecord else { return }
         router.push(.storyRecord)
     }
 }
@@ -74,6 +76,12 @@ private struct StoryHomeContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s24) {
                 introCard
+                // 显式的新建入口：不依赖导航栏「+」（iPad 分屏/紧凑宽度下工具栏按钮容易看不见）。
+                AppButton(
+                    title: caps.isChild ? "🎤 我要讲故事" : "✨ 讲一个故事",
+                    kind: .primary,
+                    action: onNew
+                )
                 filterRow
                 switch store.phase {
                 case .loading:

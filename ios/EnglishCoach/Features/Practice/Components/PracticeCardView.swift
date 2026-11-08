@@ -7,6 +7,11 @@ import SwiftUI
 @MainActor
 struct PracticeCardView: View {
     let store: PracticeStore
+    /// 卡片流里要渲染的那一句；nil 时用 store 的当前句（单句练习页复用）。
+    var sentence: SentenceDTO? = nil
+    /// 是否停在这一句上：只有当前句才渲染动作 / 状态 / 结果。
+    /// 滑动过程中相邻卡片先只显示句子，落位后 `PracticeStore.select(index:)` 再激活。
+    var isActive: Bool = true
     var onFinish: (() -> Void)? = nil
 
     @Environment(AppRouter.self) private var router
@@ -16,10 +21,12 @@ struct PracticeCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s16) {
             sentenceSection
-            actionSection
-            statusSection
-            if let result = store.result {
-                resultSection(result)
+            if isActive {
+                actionSection
+                statusSection
+                if let result = store.result {
+                    resultSection(result)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -33,39 +40,41 @@ struct PracticeCardView: View {
 
     // MARK: - 句子
 
+    private var item: SentenceDTO? { sentence ?? store.currentSentence }
+
     private var sentenceSection: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s12) {
             HStack(spacing: Tokens.Spacing.s8) {
-                if let level = store.currentSentence?.level, !level.isEmpty {
+                if let level = item?.level, !level.isEmpty {
                     PillTag(text: level, tone: .primary)
                 }
                 if !caps.isChild {
-                    ForEach(store.focusPhonemes.prefix(3), id: \.self) { phoneme in
+                    ForEach((item?.focusPhonemes ?? []).prefix(3), id: \.self) { phoneme in
                         PillTag(text: phoneme, tone: .neutral)
                     }
                 }
                 Spacer(minLength: 0)
-                if store.result != nil {
+                if isActive, store.result != nil {
                     PillTag(text: "已评分", tone: .success)
                 }
             }
 
             WordTextView(
-                text: store.currentText,
+                text: item?.text ?? "",
                 showIPA: caps.canSeeIPA,
                 onTapWord: caps.canSeeIPA ? { word in openIPA(word) } : nil
             )
 
-            if !store.currentTranslation.isEmpty {
-                Text(store.currentTranslation)
+            if let translation = item?.translationZh, !translation.isEmpty {
+                Text(translation)
                     .font(AppFont.body(caps))
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !caps.isChild, let sentence = store.currentSentence, !sentence.tags.isEmpty {
+            if !caps.isChild, let tags = item?.tags, !tags.isEmpty {
                 HStack(spacing: Tokens.Spacing.s8) {
-                    ForEach(sentence.tags.prefix(3), id: \.self) { tag in
+                    ForEach(tags.prefix(3), id: \.self) { tag in
                         PillTag(text: tag, tone: .neutral)
                     }
                 }
@@ -108,13 +117,15 @@ struct PracticeCardView: View {
                                 title: "🔊 听示范",
                                 kind: .tonal,
                                 isLoading: store.isPreparingDemo,
-                                isEnabled: !store.isEvaluating,
+                                // 录音中不允许起播（AudioCoordinator 会拒绝）：直接禁用，
+                                // 避免点了之后弹出含义不清的“音频暂时不可用”。
+                                isEnabled: !store.isEvaluating && !store.isRecording,
                                 action: { store.playDemo(autoRecord: false) }
                             )
                             AppButton(
                                 title: "🎧 跟我读",
                                 kind: .tonal,
-                                isEnabled: !store.isEvaluating && !store.isLimitReached,
+                                isEnabled: !store.isEvaluating && !store.isLimitReached && !store.isRecording,
                                 action: { store.playDemo(autoRecord: true) }
                             )
                         }
@@ -327,7 +338,7 @@ private struct PracticeLevelMeter: View {
                 let factor = 0.3 + 0.7 * Double((index * 7) % 11) / 10
                 Capsule(style: .continuous)
                     .fill(Tokens.Colors.recordingRed.opacity(0.78))
-                    .frame(width: 3, height: max(4, CGFloat(level) * 44 * factor + 4))
+                    .frame(width: 3, height: max(4, CGFloat(level * 44 * factor + 4)))
             }
         }
         .frame(height: 52)

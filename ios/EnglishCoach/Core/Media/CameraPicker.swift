@@ -3,7 +3,7 @@ import OSLog
 import SwiftUI
 import UIKit
 
-private let cameraLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "media")
+private let cameraLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "media")
 
 /// 相机拍照（task-14 冻结签名：`init(onImage:onCancel:)`）。
 ///

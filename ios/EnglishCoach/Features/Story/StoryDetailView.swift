@@ -288,7 +288,7 @@ struct StoryDetailView: View {
 
     private func sentencesSection(_ store: StoryDetailStore) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
-            SectionHeader(title: "一句一句听", subtitle: "点 ▶ 听示范")
+            SectionHeader(title: "一句一句听 / 跟读", subtitle: "点 ▶ 听示范；点 🎤 跟读这一句（会打分）")
             ForEach(store.sentences) { sentence in
                 HStack(alignment: .top, spacing: Tokens.Spacing.s8) {
                     Text("\(sentence.id).")
@@ -313,12 +313,38 @@ struct StoryDetailView: View {
                     .buttonStyle(.plain)
                     .disabled(store.isTTSLoading && store.playingSentenceId != sentence.id)
                     .accessibilityLabel(Text(store.playingSentenceId == sentence.id ? "停止第 \(sentence.id) 句" : "播放第 \(sentence.id) 句"))
+
+                    Button {
+                        openPractice(sentence: sentence, level: store.level)
+                    } label: {
+                        Image(systemName: "mic.circle.fill")
+                            .font(.system(size: 24, weight: .regular))
+                            .foregroundStyle(Tokens.Colors.primary)
+                            .frame(width: caps.minTapTarget, height: caps.minTapTarget)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("跟读第 \(sentence.id) 句"))
                 }
                 .padding(.vertical, Tokens.Spacing.s2)
             }
         }
         .padding(Tokens.Spacing.s12)
         .cardStyle(padding: Tokens.Spacing.s12)
+    }
+
+    /// 故事句子 → 单句跟读页（`.practice(SentenceDTO)`）：复用跟读页的
+    /// 听示范 / 跟我读 / 开始说 / 评分，句子 id 用 `story:` 前缀避免与语料 id 冲突。
+    private func openPractice(sentence: StorySentenceItem, level: String) {
+        let dto = SentenceDTO(
+            id: "story:\(materialId):\(sentence.id)",
+            text: sentence.en,
+            translationZh: sentence.zh,
+            level: level.isEmpty ? (session.user?.normalizedLevel ?? "A2") : level,
+            focusPhonemes: [],
+            tags: ["story"],
+            source: "story"
+        )
+        router.push(.practice(dto))
     }
 
     // MARK: 原声

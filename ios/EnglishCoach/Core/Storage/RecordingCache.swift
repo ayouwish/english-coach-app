@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let recordingCacheLogger = Logger(subsystem: "top.dreamsearch.englishcoach", category: "storage")
+private let recordingCacheLogger = Logger(subsystem: "top.dreamsearch.english.coach", category: "storage")
 
 /// 录音副本缓存（契约 §3.11）：`Caches/Recordings`，300MB / 7 天。
 ///
