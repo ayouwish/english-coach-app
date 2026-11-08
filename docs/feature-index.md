@@ -54,6 +54,7 @@
 | 场景列表（内置 + 自定义） | `GET /api/chat/scenarios[?include_child=1]` | ✅ | README §6.3、`screens-matrix.md` §4 |
 | 自定义场景 CRUD | `POST /api/chat/scenarios`、`PATCH/DELETE /:id` | ✅ | 同上 |
 | 场景随机变体（variation） | `POST /api/chat/sessions` 随机抽 + turn 带 `scenario.variation` | ✅ | 同上、`screens-matrix.md` §4 |
+| **开场白中文** | `scenario.opening_zh` / `messages[0].text_zh`（76 条文本映射 + 自定义场景可填）；回填脚本 `backfill:opening-zh` | ✅ | 同上 |
 | 开始/结束会话 | `POST /api/chat/sessions`、`POST /:id/end` | ✅ | README §6.3 |
 | 一轮对话（三步） | `/api/asr` → `POST /:id/turn` → `POST /api/tts` | ✅ | README §6.3、`design-overview.md` §5.3 |
 | 消息（校正 + 发音） | `GET /api/chat/sessions/:id/messages` | ✅ | 同上 |

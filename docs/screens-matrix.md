@@ -46,6 +46,7 @@
 | 场景列表 | `GET /api/chat/scenarios[?include_child=1]` | 内置 + **自定义场景**（`is_custom:true`）；成人默认只看 adult，儿童只 child；成人可开「再看小朋友的场景」| 大卡片，无该开关 |
 | 自定义场景 | `POST /api/chat/scenarios`、`PATCH/DELETE /[id]` | 标题/场景说明/角色提示词/开场白/难度/受众；**仅 owner**（他人 404）；儿童强制 child；注入词 400 | 表单简化 |
 | 场景随机变体 | 包含在 `POST /api/chat/sessions` 响应与 turn 请求的 `scenario.variation` | 每次开会话**随机抽一组**（人设/地点/细节/目标/开场白）；历史回看用当时那组 | — |
+| **开场白中文** | `POST /api/chat/sessions` 响应 `scenario.opening_zh` / `messages[0].text_zh` | **按实际开场白文本精确匹配**（19 场景 × 4 条 = 76 条全覆盖）；自定义场景可填「开场白中文」；历史数据用 `pnpm backfill:opening-zh` 回填 | 同左 |
 | 开始会话 | `POST /api/chat/sessions` | 返回 `session_id` + 随机开场白；**不限轮数**（`CHAT_MAX_TURNS=0`）；随时可点「🏁 结束对话」→ `POST /api/chat/sessions/:id/end` | — |
 | 一轮对话 | ① `POST /api/asr` ② `POST /api/chat/sessions/:id/turn`（multipart：text 必填 + audio）③ `POST /api/tts` | 后端**没有**一体化接口，必须三步；turn 只返回助手文本 | — |
 | 会话历史 | `GET /api/chat/sessions`（列表）、`/:id`（详情）、**`/:id/messages`** | 列表含轮数/场景/平均发音；messages 返回 `pron`（后台评分轮询补齐）与 **`correction`（"更自然"提示）**；家长看分数，儿童只看鼓励 | 不显示分数 |
