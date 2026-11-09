@@ -83,7 +83,7 @@ final class AudioCoordinator {
     func prepare() async {
         permission = MicPermission.current()
         CacheLocator.ensureAll()
-        await sessionController.prepare()
+        sessionController.prepare()
     }
 
     /// 首次点“开始录音”时调用（audio.md §2.2：不在启动时请求）。
@@ -113,10 +113,10 @@ final class AudioCoordinator {
         interruptionReason = nil
 
         do {
-            try await sessionController.activate(.recording)
+            try sessionController.activate(.recording)
             try await recorder.start()
         } catch {
-            await sessionController.deactivate()
+            sessionController.deactivate()
             throw error
         }
 
@@ -134,12 +134,12 @@ final class AudioCoordinator {
         } catch {
             mode = .idle
             level = 0
-            await sessionController.deactivate()
+            sessionController.deactivate()
             throw error
         }
         mode = .idle
         level = 0
-        await sessionController.deactivate()
+        sessionController.deactivate()
 
         // 全静音在本层拦截（audio.md §4.3：提示“没有听到声音”，允许重录）。
         guard !audio.isSilent else {
@@ -153,7 +153,7 @@ final class AudioCoordinator {
         level = 0
         guard mode == .recording else { return }
         mode = .idle
-        await sessionController.deactivate()
+        sessionController.deactivate()
     }
 
     // MARK: - 播放
@@ -163,7 +163,7 @@ final class AudioCoordinator {
             throw AudioError.engine("playback_blocked_while_recording")
         }
         await stopPlayback()
-        try await sessionController.activate(.playback)
+        try sessionController.activate(.playback)
 
         mode = .playing
         do {
@@ -173,7 +173,7 @@ final class AudioCoordinator {
             startProgressMirror()
         } catch {
             mode = .idle
-            await sessionController.deactivate()
+            sessionController.deactivate()
             throw error
         }
     }
@@ -183,7 +183,7 @@ final class AudioCoordinator {
             throw AudioError.engine("playback_blocked_while_recording")
         }
         await stopPlayback()
-        try await sessionController.activate(.playback)
+        try sessionController.activate(.playback)
 
         mode = .playing
         do {
@@ -193,7 +193,7 @@ final class AudioCoordinator {
             startProgressMirror()
         } catch {
             mode = .idle
-            await sessionController.deactivate()
+            sessionController.deactivate()
             throw error
         }
     }
@@ -204,7 +204,7 @@ final class AudioCoordinator {
         guard mode == .playing else { return }
         mode = .idle
         level = 0
-        await sessionController.deactivate()
+        sessionController.deactivate()
     }
 
     /// 页面切走 / 切后台：停止播放并丢弃当前录音（audio.md §3.2、§7）。
@@ -214,7 +214,7 @@ final class AudioCoordinator {
         resetPlaybackProgress()
         mode = .idle
         level = 0
-        await sessionController.deactivate()
+        sessionController.deactivate()
     }
 
     // MARK: - 播放进度
@@ -254,7 +254,7 @@ final class AudioCoordinator {
         level = 0
         Task { @MainActor [weak self] in
             guard let self, self.mode == .idle else { return }
-            await self.sessionController.deactivate()
+            self.sessionController.deactivate()
         }
     }
 
@@ -273,7 +273,7 @@ final class AudioCoordinator {
             // 拔耳机：立即暂停，不自动外放（audio.md §6.5）；录音继续（输入会回退到手机麦克风）。
             player.stop()
             mode = .idle
-            await sessionController.deactivate()
+            sessionController.deactivate()
         case .mediaServicesWereReset:
             coordinatorLogger.debug("audio media services reset")
             interruptionReason = "media_services_reset"
@@ -290,7 +290,7 @@ final class AudioCoordinator {
         resetPlaybackProgress()
         mode = .idle
         level = 0
-        await sessionController.deactivate()
+        sessionController.deactivate()
     }
 
     private static func reasonText(for change: AudioRouteChange) -> String {

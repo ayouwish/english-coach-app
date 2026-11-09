@@ -115,6 +115,8 @@ enum Tokens {
 
     // MARK: - 间距
 
+    /// 页面内容区的统一最大宽度（iPad 上居中；iPhone 上等于屏宽减边距）。
+    ///
     enum Spacing {
         static let s2: CGFloat = 2
         static let s4: CGFloat = 4

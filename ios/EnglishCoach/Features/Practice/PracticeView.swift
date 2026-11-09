@@ -79,8 +79,7 @@ struct PracticeView: View {
                 .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
                 .padding(.top, Tokens.Spacing.s16)
                 .padding(.bottom, Tokens.Spacing.s8)
-                .frame(maxWidth: 720, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                .contentColumn()
 
             if store.loadPhase == .failed, store.sentences.isEmpty, let error = store.loadError {
                 ScrollView {
@@ -118,15 +117,13 @@ struct PracticeView: View {
                     )
                     .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
                     .padding(.bottom, Tokens.Spacing.s4)
-                    .frame(maxWidth: 720, alignment: .leading)
-                    .frame(maxWidth: .infinity)
+                    .contentColumn()
                 }
                 if store.showsResumeBanner {
                     resumeBanner(store)
                         .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
                         .padding(.bottom, Tokens.Spacing.s4)
-                        .frame(maxWidth: 720, alignment: .leading)
-                        .frame(maxWidth: .infinity)
+                        .contentColumn()
                 }
                 pager(store)
                 pagerFooter(store)
@@ -150,8 +147,7 @@ struct PracticeView: View {
                         .padding(.bottom, Tokens.Spacing.s8)
                         // 卡片至少占满一屏；内容更长时允许在卡片内部滚到尾部再切下一张。
                         .frame(minHeight: geo.size.height, alignment: .top)
-                        .frame(maxWidth: 720)
-                        .frame(maxWidth: .infinity)
+                        .contentColumn(alignment: .center)
                         .id(sentence.id)
                     }
                 }
@@ -207,8 +203,7 @@ struct PracticeView: View {
         .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
         .padding(.top, Tokens.Spacing.s2)
         .padding(.bottom, Tokens.Spacing.s8)
-        .frame(maxWidth: 720)
-        .frame(maxWidth: .infinity)
+        .contentColumn(alignment: .center)
     }
 
     // MARK: - 页头

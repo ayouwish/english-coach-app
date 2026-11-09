@@ -135,8 +135,7 @@ struct PracticeResultView: View {
             }
             .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
             .padding(.vertical, Tokens.Spacing.s16)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+            .contentColumn(alignment: .center)
         }
     }
 

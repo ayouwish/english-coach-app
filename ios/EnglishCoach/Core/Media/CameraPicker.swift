@@ -91,10 +91,10 @@ struct CameraPicker: UIViewControllerRepresentable {
         return controller
     }
 
-    /// 相机代理。UIKit 的代理协议在不同 SDK 里可能带 `@MainActor`，用 `@preconcurrency`
-    /// 声明一致性，避免隔离注解差异直接变成编译错误；闭包统一在 `@MainActor` 里编排。
+    /// 相机代理。iOS 26 SDK 里 UIKit 的代理协议已经是 `@MainActor`，
+    /// Coordinator 本身也是 `@MainActor`，直接声明一致性即可（不再需要 `@preconcurrency`）。
     @MainActor
-    final class Coordinator: NSObject, @preconcurrency UIImagePickerControllerDelegate, @preconcurrency UINavigationControllerDelegate {
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         private let onImage: (UIImage) -> Void
         private let onCancel: () -> Void
         private var didNotify = false

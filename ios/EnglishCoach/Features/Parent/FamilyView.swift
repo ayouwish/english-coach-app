@@ -131,8 +131,7 @@ struct FamilyView: View {
                         .padding(.top, Tokens.Spacing.s8)
                 }
                 .padding(Tokens.Spacing.s16)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
+                .contentColumn(alignment: .center)
             }
             .background(Tokens.Colors.canvas.ignoresSafeArea())
             .refreshable { await model.load(force: true) }

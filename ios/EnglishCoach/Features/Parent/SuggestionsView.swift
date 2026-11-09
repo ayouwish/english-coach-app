@@ -60,8 +60,7 @@ struct SuggestionsView: View {
                 }
             }
             .padding(Tokens.Spacing.s16)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            .contentColumn(alignment: .center)
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Tokens.Colors.canvas.ignoresSafeArea())

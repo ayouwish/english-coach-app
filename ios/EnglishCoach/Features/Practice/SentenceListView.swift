@@ -141,8 +141,7 @@ struct SentenceListView: View {
             }
             .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
             .padding(.bottom, Tokens.Spacing.s24)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+            .contentColumn(alignment: .center)
         }
     }
 

@@ -134,6 +134,7 @@ struct StoryDetailView: View {
                     footerHint
                 }
                 .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+                .contentColumn(alignment: .center)
                 .padding(.vertical, Tokens.Spacing.s16)
             }
             .scrollIndicators(.hidden)
@@ -147,7 +148,7 @@ struct StoryDetailView: View {
         if store.imageData != nil || store.hasImage || store.isIllustrating {
             VStack(alignment: .leading, spacing: Tokens.Spacing.s8) {
                 ZStack {
-                    StoryImageView(data: store.imageData, height: 220, placeholderIcon: "photo")
+                    StoryHeroImageView(data: store.imageData)
                     if store.isIllustrating {
                         LoadingBlock(text: store.busyText.isEmpty ? "正在画插画…" : store.busyText)
                             .background(Tokens.Colors.surfaceCard.opacity(0.92))

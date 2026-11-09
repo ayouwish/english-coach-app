@@ -111,8 +111,7 @@ struct MeView: View {
             }
             .padding(.horizontal, Tokens.Spacing.s16)
             .padding(.vertical, Tokens.Spacing.s16)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
+            .contentColumn(alignment: .center)
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Tokens.Colors.canvas.ignoresSafeArea())

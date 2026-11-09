@@ -110,6 +110,7 @@ private struct StoryHomeContent: View {
                 footerHint
             }
             .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+            .contentColumn(alignment: .center)
             .padding(.bottom, Tokens.Spacing.s32)
         }
         .refreshable { await store.reload() }

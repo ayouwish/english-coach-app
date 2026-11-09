@@ -97,8 +97,7 @@ struct VoicesView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(Tokens.Spacing.s16)
-                .frame(maxWidth: 680)
-                .frame(maxWidth: .infinity)
+                .contentColumn(alignment: .center)
             }
             .background(Tokens.Colors.canvas.ignoresSafeArea())
             .refreshable { await model.load(force: true) }
