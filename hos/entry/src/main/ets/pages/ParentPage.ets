@@ -241,7 +241,7 @@ export struct ParentPage {
       .width('100%')
       .alignItems(VerticalAlign.Center)
 
-      Text('把邀请码发给另一位家长，对方在登录页点「注册 / 用邀请码加入家庭」即可加入同一个家庭；家庭之间互相看不到数据。')
+      Text('把邀请码发给另一位家长，对方在登录页点「受邀加入 / 受邀创建家庭」即可加入同一个家庭；家庭之间互相看不到数据。')
         .fontSize(EcFont.micro)
         .fontColor($r('app.color.ec_muted'))
         .width('100%')
