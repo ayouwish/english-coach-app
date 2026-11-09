@@ -76,10 +76,19 @@ export class AuthService {
    * 注册接口只返回单个 token；调用方随后用 /auth/token 登录以拿到 access+refresh 并建立会话。
    */
   static async register(displayName: string, email: string, password: string,
-    familyName: string, inviteCode: string): Promise<void> {
+    familyName: string, inviteCode: string, newFamilyCode: string): Promise<void> {
     const code = inviteCode.trim().toUpperCase();
+    const newCode = newFamilyCode.trim().toUpperCase();
     let body: RegisterBodyDto;
-    if (code.length > 0) {
+    if (newCode.length > 0) {
+      body = {
+        display_name: displayName.trim(),
+        email: email.trim(),
+        password: password,
+        family_name: familyName.trim(),
+        new_family_code: newCode
+      };
+    } else if (code.length > 0) {
       body = {
         display_name: displayName.trim(),
         email: email.trim(),

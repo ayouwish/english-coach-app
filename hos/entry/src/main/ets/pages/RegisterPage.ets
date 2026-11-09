@@ -6,8 +6,11 @@ import { NavigationService } from '../core/router/NavigationService';
 import { RegisterVM } from '../viewmodel/RegisterVM';
 
 /**
- * 注册页（多家庭）：创建新家庭 / 用邀请码加入（服务端 task-97/99）。
- * 家庭之间数据完全隔离；孩子账号仍由家长在「家长面板 → 家庭成员」里创建。
+ * 注册页（多家庭两级邀请）：
+ * - 🔑 受邀加入家庭：用「共同家长邀请码」加入现有家庭；
+ * - 🏠 受邀创建新家庭：用管理员生成的「新家庭邀请码」创建全新家庭；
+ * - 🆕 创建家庭：仅当服务端 self_signup=true 时显示（默认关闭）。
+ * 孩子账号仍由家长在「家长面板 → 家庭成员」里创建。
  */
 @Component
 export struct RegisterPage {
@@ -25,9 +28,21 @@ export struct RegisterPage {
   private async submit(): Promise<void> {
     const ok = await this.vm.submit();
     if (ok) {
-      // 注册即登录：清掉注册页，回到首页（Index 的 session 变化会切到 HomeTabs）
       NavigationService.clear();
     }
+  }
+
+  private submitLabel(): string {
+    if (this.vm.loading) {
+      return '正在提交…';
+    }
+    if (this.vm.mode === 'newfamily') {
+      return '创建新家庭并开始';
+    }
+    if (this.vm.mode === 'create') {
+      return '创建家庭并开始';
+    }
+    return '加入家庭并开始';
   }
 
   @Builder
@@ -48,7 +63,7 @@ export struct RegisterPage {
       .backgroundColor(active ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
       .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x2, bottom: EcSpace.x2 })
       .borderRadius(EcRadius.pill)
-      .margin({ right: EcSpace.x2 })
+      .margin({ right: EcSpace.x2, bottom: EcSpace.x2 })
       .onClick(() => {
         this.vm.setMode(mode);
       })
@@ -70,24 +85,22 @@ export struct RegisterPage {
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.ec_ink'))
             .width('100%')
-          Text('每个家庭独立使用、互相看不到数据。创建一个新家庭，或用家长分享的邀请码加入。')
+          Text('每个家庭独立使用、互相看不到数据。凭家长或管理员分享的邀请码加入/创建家庭。')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))
             .width('100%')
 
-          if (this.vm.allowSelfSignup) {
-            Row() {
+          Flex({ wrap: FlexWrap.Wrap }) {
+            this.modeChipView('🔑 受邀加入家庭', this.vm.mode === 'join', 'join')
+            this.modeChipView('🏠 受邀创建新家庭', this.vm.mode === 'newfamily', 'newfamily')
+            if (this.vm.allowSelfSignup) {
               this.modeChipView('🆕 创建家庭', this.vm.mode === 'create', 'create')
-              this.modeChipView('🔑 用邀请码加入', this.vm.mode === 'join', 'join')
             }
-            .width('100%')
-          } else {
-            Text('🔑 用邀请码加入家庭')
-              .fontSize(EcFont.body)
-              .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.ec_ink'))
-              .width('100%')
-            Text('公开注册已关闭。请用家长分享的邀请码加入家庭；需要新家庭请联系管理员。')
+          }
+          .width('100%')
+
+          if (!this.vm.allowSelfSignup && this.vm.featureChecked) {
+            Text('公开注册已关闭。请用家长分享的邀请码加入家庭，或用管理员分享的新家庭邀请码创建新家庭。')
               .fontSize(EcFont.caption)
               .fontColor($r('app.color.ec_warn_text'))
               .width('100%')
@@ -96,9 +109,12 @@ export struct RegisterPage {
               .borderRadius(EcRadius.sm)
           }
 
-          if (this.vm.mode === 'create') {
+          if (this.vm.mode !== 'join') {
             this.fieldLabel('家庭名称')
-            TextInput({ text: this.vm.familyName, placeholder: '例如：王家' })
+            TextInput({
+              text: this.vm.familyName,
+              placeholder: this.vm.mode === 'newfamily' ? '你的新家庭名称（例如：李家）' : '例如：王家'
+            })
               .type(InputType.Normal)
               .height(48)
               .fontSize(EcFont.body)
@@ -107,7 +123,9 @@ export struct RegisterPage {
               .onChange((value: string) => {
                 this.vm.familyName = value;
               })
-          } else {
+          }
+
+          if (this.vm.mode === 'join') {
             this.fieldLabel('邀请码')
             TextInput({ text: this.vm.inviteCode, placeholder: '8 位邀请码（一次性）' })
               .type(InputType.Normal)
@@ -117,6 +135,17 @@ export struct RegisterPage {
               .borderRadius(EcRadius.md)
               .onChange((value: string) => {
                 this.vm.inviteCode = value.toUpperCase();
+              })
+          } else if (this.vm.mode === 'newfamily') {
+            this.fieldLabel('新家庭邀请码')
+            TextInput({ text: this.vm.newFamilyCode, placeholder: '8 位新家庭邀请码（一次性）' })
+              .type(InputType.Normal)
+              .height(48)
+              .fontSize(EcFont.body)
+              .backgroundColor($r('app.color.ec_surface_alt'))
+              .borderRadius(EcRadius.md)
+              .onChange((value: string) => {
+                this.vm.newFamilyCode = value.toUpperCase();
               })
           }
 
@@ -164,7 +193,7 @@ export struct RegisterPage {
           }
 
           EcButton({
-            label: this.vm.loading ? '正在提交…' : (this.vm.mode === 'create' ? '创建家庭并开始' : '加入家庭并开始'),
+            label: this.submitLabel(),
             kind: EcButtonKind.PRIMARY,
             loading: this.vm.loading,
             big: true,

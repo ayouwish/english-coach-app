@@ -8,21 +8,23 @@ import { CredentialStore } from '../core/session/CredentialStore';
 import { SessionStore } from '../core/session/SessionStore';
 
 /**
- * 自助注册 / 用邀请码加入家庭（多家庭体系，服务端 task-97/99）。
+ * 注册页（多家庭两级邀请，服务端 task-97/99/105）。
  *
- * - 无邀请码 → 创建新家庭（role=parent）；
- * - 有邀请码 → 加入该家庭（共同家长；邀请码一次性，家长上限 3）；
- * - ALLOW_SELF_SIGNUP=0（/health.features.self_signup=false）时只允许「用邀请码加入」；
- * - 注册成功后调用 /auth/token 建立会话（注册接口只返回单个 token，没有 refresh）。
+ * - join：凭「共同家长邀请码」加入现有家庭（一次性、≤3 家长）；
+ * - newfamily：凭管理员生成的「新家庭邀请码」创建全新家庭（一次性、消耗管理员 1 个名额）；
+ * - create：无码公开创建家庭，仅当 `/health.features.self_signup === true` 时可用
+ *   （默认关闭；无码注册服务端返回 403 signup_disabled）。
  */
 @Observed
 export class RegisterVM {
-  mode: string = 'create';
-  allowSelfSignup: boolean = true;
+  /** 'join' | 'newfamily' | 'create' */
+  mode: string = 'join';
+  allowSelfSignup: boolean = false;
   featureChecked: boolean = false;
 
   familyName: string = '';
   inviteCode: string = '';
+  newFamilyCode: string = '';
   displayName: string = '';
   email: string = '';
   password: string = '';
@@ -32,17 +34,19 @@ export class RegisterVM {
   error: UiError = new UiError('', '', '', false, '');
 
   async init(): Promise<void> {
-    this.mode = 'create';
+    // 默认关闭公开注册；只有服务端显式 self_signup=true 才显示「创建家庭」
+    this.allowSelfSignup = false;
+    this.mode = 'join';
     try {
       const health: HealthDto = await PracticeService.health();
       const features = health.features;
-      if (features !== undefined && features.self_signup === false) {
-        this.allowSelfSignup = false;
-        this.mode = 'join';
+      if (features !== undefined && features.self_signup === true) {
+        this.allowSelfSignup = true;
+        this.mode = 'create';
       }
     } catch (err) {
-      // 健康检查失败不阻塞注册：保持默认（允许创建家庭），提交时服务端会再校验
-      this.allowSelfSignup = true;
+      this.allowSelfSignup = false;
+      this.mode = 'join';
     } finally {
       this.featureChecked = true;
     }
@@ -84,22 +88,35 @@ export class RegisterVM {
       this.setError('密码至少 8 位', ApiErrorCode.BAD_REQUEST);
       return false;
     }
-    const code = this.inviteCode.trim().toUpperCase();
+    const invite = this.inviteCode.trim().toUpperCase();
+    const newCode = this.newFamilyCode.trim().toUpperCase();
+    const family = this.familyName.trim();
+
     if (this.mode === 'join') {
-      if (code.length === 0) {
+      if (invite.length === 0) {
         this.setError('请填写家长分享的邀请码', ApiErrorCode.BAD_REQUEST);
+        return false;
+      }
+    } else if (this.mode === 'newfamily') {
+      if (newCode.length === 0) {
+        this.setError('请填写管理员分享的新家庭邀请码', ApiErrorCode.BAD_REQUEST);
+        return false;
+      }
+      if (family.length === 0) {
+        this.setError('请填写新家庭名称（例如：李家）', ApiErrorCode.BAD_REQUEST);
         return false;
       }
     } else {
       if (!this.allowSelfSignup) {
-        this.setError('本站未开放自助注册，请用邀请码加入家庭', 'signup_disabled');
+        this.setError('本站未开放自助注册，请联系管理员', 'signup_disabled');
         return false;
       }
-      if (this.familyName.trim().length === 0) {
+      if (family.length === 0) {
         this.setError('请填写家庭名称（例如：王家）', ApiErrorCode.BAD_REQUEST);
         return false;
       }
     }
+
     const baseUrl = AppConfig.getBaseUrl();
     if (!AppConfig.isValidUrl(baseUrl)) {
       this.setError(ErrorMapper.messageFor(ApiErrorCode.BAD_BASE_URL, false), ApiErrorCode.BAD_BASE_URL);
@@ -107,8 +124,9 @@ export class RegisterVM {
     }
     this.loading = true;
     try {
-      await AuthService.register(name, email, this.password,
-        this.mode === 'create' ? this.familyName.trim() : '', this.mode === 'join' ? code : '');
+      await AuthService.register(name, email, this.password, family,
+        this.mode === 'join' ? invite : '',
+        this.mode === 'newfamily' ? newCode : '');
       // 注册接口只返回单 token；再用 /auth/token 建立可刷新会话
       await SessionStore.login(email, this.password);
       await CredentialStore.save(email, this.password);

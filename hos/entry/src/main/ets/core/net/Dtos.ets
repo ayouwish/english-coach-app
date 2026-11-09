@@ -236,6 +236,7 @@ export interface RegisterBodyDto {
   password: string;
   family_name?: string;
   invite_code?: string;
+  new_family_code?: string;
 }
 
 export interface LoginBodyDto {

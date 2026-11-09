@@ -192,7 +192,7 @@ export struct LoginPage {
         })
 
         EcButton({
-          label: '🆕 注册 / 用邀请码加入家庭',
+          label: '🔑 受邀加入 / 🏠 受邀创建家庭',
           kind: EcButtonKind.GHOST,
           onTap: () => {
             NavigationService.push(Routes.REGISTER);
@@ -221,7 +221,7 @@ export struct LoginPage {
         }
         .width('100%')
 
-        Text('忘记密码？让家长在家长面板重置。家长可自助注册，或用邀请码加入已有家庭；孩子账号由家长创建。')
+        Text('忘记密码？让家长在家长面板重置。新家庭需管理员邀请码；共同家长可用家庭邀请码加入；孩子账号由家长创建。')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
           .width('100%')
