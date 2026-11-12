@@ -34,7 +34,7 @@
 
 | 状态 | 行为 |
 |---|---|
-| 关 | 保存故事不自动画；**故事详情无生成按钮**；`POST /api/story/:id/illustrate` → 403 `policy_disabled` |
+| 关 | 保存故事不自动画；**故事详情整块不渲染**（无标题/说明/按钮/占位）；`POST /api/story/:id/illustrate` → 403 `policy_disabled` |
 | 开 | 手动可画 + 保存后自动画 |
 | `capabilities.image=false` | 按钮禁用 + 「图片服务未配置」提示 |
 

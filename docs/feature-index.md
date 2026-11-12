@@ -111,6 +111,7 @@
 |---|---|---|---|
 | 家长汇总 | `GET /api/parent/summary` | ✅ | README §6.6 |
 | **家庭成本台账** | `GET /api/cost/summary?month=`、`/parent` 成本卡（LLM/图片/TTS/ASR，按家庭）| ✅ | README §6.1b、§3.3 |
+| **管理员成本看板（跨家庭）** | `/admin/costs?month=`、`GET /api/admin/costs`（仅管理员家庭；LLM tokens/图片/金额/按家庭/按天/明细）| ✅ | `screens-matrix.md` §7 |
 | 提建议 / 导出 | `POST /api/suggestions`、`GET /api/suggestions`、`/export` | ✅ | 同上 |
 | 部署自查 | `GET /api/health`（features）、`GET /v1/health`（capabilities） | ✅ | README §2.4、§3 |
 | 清理某账号测试数据 | `web/scripts/cleanup-user-data.mjs` | ✅ | `english-coach/docs/deployment.md` §6.5 |
