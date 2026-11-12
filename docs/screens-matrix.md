@@ -14,7 +14,7 @@
 | 我的偏好 | `GET/PATCH /api/settings` | `auto_illustrate`（默认关）/`gender`/`tts_voice`/`story_sentences`/每日时长/自由聊 | 同左（儿童页口语化）|
 | 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码；**仅本家庭**（跨家庭 404）| 儿童不可见 |
 | **家长邀请码 🔒** | `GET /api/family/invite`、`POST .../rotate` | 邀请共同家长**加入现有家庭**：一次性、每家庭家长 ≤3；面板显示「家长账号 N/3」 | 儿童不可见 |
-| **新家庭邀请（名额制）🔒** | `GET/POST /api/family/family-invites` | 邀请**创建全新家庭**：管理员家庭（`fam_default`）默认 **100 名额**、其它家庭 0；每码消耗 1 名额；一次性；非管理员/无额度 → 403 `no_family_quota` | 儿童不可见 |
+| **新家庭邀请（名额制）** | 后台 `/admin` 的「🎟️ 邀请码管理」（`GET/POST /api/admin/family-invites`） | **后台管理员**生成一次性新家庭邀请码（默认 100 名额，可调整）；家庭端**无此能力** | 家庭账号不可见 |
 
 ## 2. 跟读练习
 
@@ -111,7 +111,7 @@
 |---|---|---|
 | 家长汇总 🔒 | `GET /api/parent/summary` | 使用时长、趋势、掌握度（**仅本家庭**）|
 | **家庭成本 🔒** | `GET /api/cost/summary?month=` | 「💰 本月成本」：总金额 + LLM/图片/TTS/ASR 分项 + 成员明细 + 近 7 天；单价可配置 |
-| **管理员成本看板 🔒（仅管理员家庭）** | 页面 `/admin/costs?month=`、`GET /api/admin/costs` | 跨家庭：总成本/LLM tokens（输入/输出/合计）/图片张数/TTS/ASR + **按家庭表格**（家庭名/成员数/成本/tokens/图片）+ 按天 + 最近 50 条明细；儿童/非管理员家庭 403 |
+| **后台管理员（独立登录）** | 页面 `/admin/login` → `/admin`；`POST /api/admin/login|logout`；`GET /api/admin/costs`、`GET/POST /api/admin/family-invites` | **与家庭账号完全无关**：`ADMIN_PASSWORD` 环境变量 + 独立 HttpOnly cookie；成本看板（跨家庭 LLM tokens/图片/金额/按家庭/按天/最近明细）+ 邀请码管理（名额/生成/列表/调整）；家庭账号访问 → 401/跳登录 |
 | 提建议 | `POST /api/suggestions`（所有人）；`GET /api/suggestions` 🔒 | 家长集中查看 + 导出 Markdown |
 | 设置 | `GET/PATCH /api/settings` | **卡通插画自动生成开关（默认关）**、**性别**、**音色（9 种+试听）**、**故事句子数（3–12 / 角色默认）**、**单词显示音标（成人开/儿童关）**、语速、每日时长、免费聊开关 |
 | 健康检查 | `GET /api/health` | 显示「服务降级」提示（`voice.capabilities`、`degraded`）|
