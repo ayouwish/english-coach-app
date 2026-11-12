@@ -42,7 +42,7 @@ export struct PracticePage {
   @State detailMode: string = 'result';
   /** 练习游标：上次读到第几句（0-based；-1 = 无） */
   @State resumeIndex: number = -1;
-  private levels: string[] = ['A1', 'A2', 'B1', 'B2'];
+  @State levels: string[] = ['A1', 'A2', 'B1', 'B2'];
   private swiper: SwiperController = new SwiperController();
   private started: boolean = false;
 
@@ -56,7 +56,36 @@ export struct PracticePage {
     } else if (this.focusToken.length > 0) {
       void this.loadFocus();
     } else {
+      void this.refreshLevels();
       void this.load(this.initialLevel());
+    }
+  }
+
+  /**
+   * 等级 tab 按服务端实际语料动态生成（不再写死 A1–B2）：
+   * 以后服务端补了 C1/C2，这里会自动出现，不用改客户端。
+   */
+  private async refreshLevels(): Promise<void> {
+    try {
+      const all = await PracticeService.sentences('');
+      const set: string[] = [];
+      for (let i = 0; i < all.length; i++) {
+        const level = all[i].level;
+        if (level !== undefined && level.length > 0 && set.indexOf(level) < 0) {
+          set.push(level);
+        }
+      }
+      if (set.length === 0) {
+        return;
+      }
+      set.sort();
+      if (set.indexOf(this.level) < 0) {
+        set.push(this.level);
+        set.sort();
+      }
+      this.levels = set;
+    } catch (err) {
+      // 拉不到就保留默认 A1–B2
     }
   }
 
@@ -129,26 +158,33 @@ export struct PracticePage {
     return AppConfig.levelForCefr(this.session.cefrLevel);
   }
 
-  private async load(level: string): Promise<void> {
+  private async load(level: string, shuffle: boolean = false): Promise<void> {
     this.loading = true;
     this.loadError = '';
     this.level = level;
     try {
-      const list = await PracticeService.sentences(level);
+      let list = await PracticeService.sentences(level);
+      if (shuffle && list.length > 1) {
+        // 「换一批」：打乱本级别顺序（服务端固定 sort_order，重拉不会变化）
+        list = PracticePage.shuffled(list);
+      }
       this.total = list.length;
       this.vm.setup(list, 0, level, this.session.isChild);
       this.resumeIndex = -1;
       if (list.length > 0) {
         // 练习游标（服务端 /practice/cursor 未部署，这里用本地偏好记「上次读到哪句」）
-        const saved = await AppConfig.getString('practice_cursor_' + level, '');
-        if (saved.length > 0) {
-          for (let i = 0; i < list.length; i++) {
-            if (list[i].id === saved) {
-              // 与 Web 一致：先显示「上次练到第 N 句」横幅，由用户选继续/从头
-              if (i > 0) {
-                this.resumeIndex = i;
+        // 换一批是随机顺序，不再显示「上次练到第 N 句」横幅
+        if (!shuffle) {
+          const saved = await AppConfig.getString('practice_cursor_' + level, '');
+          if (saved.length > 0) {
+            for (let i = 0; i < list.length; i++) {
+              if (list[i].id === saved) {
+                // 与 Web 一致：先显示「上次练到第 N 句」横幅，由用户选继续/从头
+                if (i > 0) {
+                  this.resumeIndex = i;
+                }
+                break;
               }
-              break;
             }
           }
         }
@@ -164,6 +200,18 @@ export struct PracticePage {
     } finally {
       this.loading = false;
     }
+  }
+
+  /** Fisher–Yates 洗牌（返回新数组，不改原数组）。 */
+  private static shuffled(input: SentenceDto[]): SentenceDto[] {
+    const list: SentenceDto[] = input.slice(0);
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = list[i];
+      list[i] = list[j];
+      list[j] = tmp;
+    }
+    return list;
   }
 
   /** 退出盲测：先尝试服务端取消，失败也回普通跟读并提示。 */
@@ -367,7 +415,7 @@ export struct PracticePage {
             .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('重新加载语料')
             .onClick(() => {
-              void this.load(this.level);
+              void this.load(this.level, true);
             })
         }
         .width('100%')

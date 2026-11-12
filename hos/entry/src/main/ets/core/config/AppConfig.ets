@@ -151,7 +151,8 @@ export class AppConfig {
   /** 当前账号 cefrLevel → 可用的语料等级（服务端没有 C1 语料，回退 B2）。 */
   static levelForCefr(cefr: string): string {
     const upper = cefr.trim().toUpperCase();
-    if (upper === 'A1' || upper === 'A2' || upper === 'B1' || upper === 'B2') {
+    if (upper === 'A1' || upper === 'A2' || upper === 'B1' || upper === 'B2' ||
+      upper === 'C1' || upper === 'C2') {
       return upper;
     }
     return 'B2';
