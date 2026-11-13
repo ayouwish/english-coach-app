@@ -392,15 +392,16 @@ export struct PracticePage {
       }
 
       if (!this.vm.blindActive) {
-        Row({ space: EcSpace.x2 }) {
+        Flex({ wrap: FlexWrap.Wrap }) {
           ForEach(this.levels, (item: string) => {
             Text(item)
               .fontSize(this.session.isChild ? EcFont.body : EcFont.caption)
               .fontWeight(FontWeight.Medium)
               .fontColor(this.levelFg(item))
               .backgroundColor(this.levelBg(item))
-              .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x2, bottom: EcSpace.x2 })
+              .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x2, bottom: EcSpace.x2 })
               .borderRadius(EcRadius.pill)
+              .margin({ right: EcSpace.x2, bottom: EcSpace.x1 })
               .accessibilityText('等级 ' + item)
               .onClick(() => {
                 if (this.level !== item) {
@@ -408,18 +409,8 @@ export struct PracticePage {
                 }
               })
           }, (item: string) => item + '-' + this.level)
-          Blank()
-          Text('↻ 换一批')
-            .fontSize(EcFont.caption)
-            .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
-            .accessibilityText('重新加载语料')
-            .onClick(() => {
-              void this.load(this.level, true);
-            })
         }
         .width('100%')
-        .alignItems(VerticalAlign.Center)
       }
     }
     .width('100%')
@@ -1490,6 +1481,16 @@ export struct PracticePage {
           .fontSize(EcFont.micro)
           .fontColor($r('app.color.ec_muted'))
         Blank()
+        if (!this.vm.blindActive) {
+          Text('↻ 换一批')
+            .fontSize(EcFont.caption)
+            .fontColor($r('app.color.ec_primary'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .accessibilityText('重新加载语料（打乱顺序）')
+            .onClick(() => {
+              void this.load(this.level, true);
+            })
+        }
       }
       .width('100%')
       .padding({ left: EcSpace.x4, right: EcSpace.x4, bottom: EcSpace.x3 })
