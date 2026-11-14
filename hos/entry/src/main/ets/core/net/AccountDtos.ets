@@ -398,25 +398,3 @@ export interface FamilyInviteDto {
   parents_count?: number;
   parents_limit?: number;
 }
-/** 新家庭邀请码（管理员家庭生成；一次性，消耗 1 个名额）。 */
-export interface FamilyInviteCodeDto {
-  code: string;
-  created_at: string;
-  used_at?: string | null;
-  used_by_family_name?: string | null;
-}
-
-/** GET /family/family-invites —— 名额 + 最近 20 条新家庭邀请码。 */
-export interface FamilyInvitesDto {
-  is_admin?: boolean;
-  quota_remaining?: number;
-  quota_total_hint?: number;
-  invites?: FamilyInviteCodeDto[];
-}
-
-/** POST /family/family-invites —— 新生成的新家庭邀请码。 */
-export interface FamilyInviteCreateDto {
-  ok?: boolean;
-  code?: string;
-  quota_remaining?: number;
-}

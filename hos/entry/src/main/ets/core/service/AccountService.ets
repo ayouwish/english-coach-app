@@ -9,9 +9,7 @@ import {
   FamilyMemberDto,
   FamilyMemberListDto,
   FamilyMemberResponseDto,
-  FamilyInviteCreateDto,
   FamilyInviteDto,
-  FamilyInvitesDto,
   FamilyPatchBodyDto,
   ParentSummaryDto,
   ResetPasswordBodyDto,
@@ -86,28 +84,12 @@ export class AccountService {
     ApiClient.requireOk(raw);
   }
 
-  /** GET /family/family-invites —— 管理员家庭：剩余名额 + 最近 20 条新家庭邀请码。 */
-  static async familyInvites(): Promise<FamilyInvitesDto> {
-    const raw = await ApiClient.getJson('/family/family-invites', null, AccountService.SHORT);
-    ApiClient.requireOk(raw);
-    return AccountService.parse<FamilyInvitesDto>(raw.text, raw.status, '新家庭邀请码返回格式异常');
-  }
-
-  /** POST /family/family-invites —— 生成新家庭邀请码（原子扣减 1 个名额）。 */
-  static async createFamilyInvite(): Promise<FamilyInviteCreateDto> {
-    const raw = await ApiClient.postJson('/family/family-invites', '{}', true, AccountService.WRITE_TIMEOUT);
-    ApiClient.requireOk(raw);
-    return AccountService.parse<FamilyInviteCreateDto>(raw.text, raw.status, '生成新家庭邀请码返回格式异常');
-  }
-  // ------------------------------------------------------------------ 家庭邀请码（多家庭）
-
-  /** GET /family/invite —— 仅家长；返回邀请码/是否已用/家长人数与上限。 */
+  /** GET /family/invite —— 仅家长；邀请码/是否已用/家长人数与上限。 */
   static async familyInvite(): Promise<FamilyInviteDto> {
     const raw = await ApiClient.getJson('/family/invite', null, AccountService.SHORT);
     ApiClient.requireOk(raw);
     return AccountService.parse<FamilyInviteDto>(raw.text, raw.status, '邀请码返回格式异常');
   }
-
   /** POST /family/invite/rotate —— 仅家长；旧码立即失效。 */
   static async rotateFamilyInvite(): Promise<FamilyInviteDto> {
     const raw = await ApiClient.postJson('/family/invite/rotate', '{}', true, AccountService.WRITE_TIMEOUT);

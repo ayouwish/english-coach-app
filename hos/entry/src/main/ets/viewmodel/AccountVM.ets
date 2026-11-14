@@ -14,7 +14,6 @@ import {
   AvatarStateDto,
   AvatarStyleDto,
   FamilyCreateBodyDto,
-  FamilyInviteCodeDto,
   FamilyMemberDto,
   FamilyPatchBodyDto,
   ParentChildDto,
@@ -701,20 +700,10 @@ export class ParentVM {
   inviteParentsCount: number = 0;
   inviteParentsLimit: number = 3;
 
-  // 新家庭邀请（管理员家庭名额制；非管理员/名额 0 显示提示）
-  nfLoading: boolean = false;
-  nfGenerating: boolean = false;
-  nfError: string = '';
-  nfIsAdmin: boolean = false;
-  nfQuota: number = 0;
-  nfLastCode: string = '';
-  nfInvites: FamilyInviteCodeDto[] = [];
-
   async init(): Promise<void> {
     await this.load();
     if (!this.forbidden) {
       await this.loadInvite();
-      await this.loadFamilyInvites();
     }
   }
 
@@ -773,78 +762,6 @@ export class ParentVM {
       return '家长账号 ' + count + ' · 邀请码已被使用（一次性），点「重置」生成新码';
     }
     return '家长账号 ' + count + ' · 邀请码可用（一次性，用后失效）';
-  }
-
-  /** GET /family/family-invites —— 管理员家庭：剩余名额 + 最近 20 条新家庭邀请码。 */
-  async loadFamilyInvites(): Promise<void> {
-    if (this.nfLoading) {
-      return;
-    }
-    this.nfLoading = true;
-    this.nfError = '';
-    try {
-      const dto = await AccountService.familyInvites();
-      this.nfIsAdmin = dto.is_admin === true;
-      this.nfQuota = dto.quota_remaining === undefined ? 0 : dto.quota_remaining;
-      this.nfInvites = dto.invites === undefined ? [] : dto.invites;
-    } catch (err) {
-      const e = err as Error;
-      if (e instanceof ApiError && e.status === 403) {
-        // 非管理员家庭 / 名额 0：不是错误，卡片显示「名额 0 · 联系管理员」
-        this.nfIsAdmin = false;
-        this.nfQuota = 0;
-        this.nfInvites = [];
-        this.nfError = '';
-      } else {
-        this.nfError = SessionStore.toUiError(e, false).message;
-      }
-    } finally {
-      this.nfLoading = false;
-    }
-  }
-
-  /** POST /family/family-invites —— 生成新家庭邀请码（原子扣减 1 个名额）。 */
-  async generateFamilyInvite(): Promise<boolean> {
-    if (this.nfGenerating) {
-      return false;
-    }
-    this.nfGenerating = true;
-    this.nfError = '';
-    try {
-      const dto = await AccountService.createFamilyInvite();
-      this.nfLastCode = dto.code === undefined ? '' : dto.code;
-      await this.loadFamilyInvites();
-      return this.nfLastCode.length > 0;
-    } catch (err) {
-      this.nfError = SessionStore.toUiError(err as Error, false).message;
-      return false;
-    } finally {
-      this.nfGenerating = false;
-    }
-  }
-
-  nfCanGenerate(): boolean {
-    return this.nfIsAdmin && this.nfQuota > 0;
-  }
-
-  nfStatusText(): string {
-    if (!this.nfIsAdmin) {
-      return '名额 0 · 请联系管理员';
-    }
-    return '剩余名额 ' + this.nfQuota.toString();
-  }
-
-  nfButtonLabel(): string {
-    if (this.nfGenerating) {
-      return '生成中…';
-    }
-    if (!this.nfIsAdmin) {
-      return '名额 0 · 联系管理员';
-    }
-    if (this.nfQuota <= 0) {
-      return '名额已用完';
-    }
-    return '生成新家庭邀请码';
   }
 
   async loadSummaryOnly(): Promise<void> {

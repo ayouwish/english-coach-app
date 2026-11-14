@@ -4,7 +4,6 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { LoadingBlock } from '../components/LoadingBlock';
 import { EcFont, EcRadius, EcShadow, EcScore, EcSpace } from '../design/DesignTokens';
 import {
-  FamilyInviteCodeDto,
   ParentBlindScoreDto,
   ParentChildDto,
   ParentMemberDto,
@@ -52,132 +51,6 @@ export struct ParentPage {
   private async refreshAll(): Promise<void> {
     await this.vm.load();
     await this.vm.loadInvite();
-    await this.vm.loadFamilyInvites();
-  }
-
-  private async copyNewFamilyCode(code: string): Promise<void> {
-    if (code.length === 0) {
-      return;
-    }
-    const ok = await ClipboardUtil.copy(code);
-    this.getUIContext().getPromptAction().showToast({
-      message: ok ? '已复制新家庭邀请码' : '复制失败，请长按手动复制'
-    });
-  }
-
-  private async generateNewFamilyInvite(): Promise<void> {
-    const ok = await this.vm.generateFamilyInvite();
-    this.getUIContext().getPromptAction().showToast({
-      message: ok ? '已生成新家庭邀请码' : (this.vm.nfError.length > 0 ? this.vm.nfError : '生成失败')
-    });
-  }
-
-  /** 🏠 邀请新家庭（管理员名额制）：生成一次性码，朋友凭码创建全新家庭；消耗 1 个名额。 */
-  @Builder
-  newFamilyInviteCard() {
-    Column({ space: EcSpace.x2 }) {
-      Row({ space: EcSpace.x2 }) {
-        Text('🏠 邀请新家庭')
-          .fontSize(EcFont.body)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.ec_ink'))
-          .layoutWeight(1)
-        Text(this.vm.nfLoading ? '读取中…' : '刷新')
-          .fontSize(EcFont.caption)
-          .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
-          .onClick(() => {
-            void this.vm.loadFamilyInvites();
-          })
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-
-      Text('每个邀请码可让一位朋友创建一个全新家庭，消耗本家庭 1 个名额（一次性）。共同家长请用上面的「家庭邀请码」。')
-        .fontSize(EcFont.micro)
-        .fontColor($r('app.color.ec_muted'))
-        .width('100%')
-
-      if (this.vm.nfError.length > 0) {
-        Text(this.vm.nfError)
-          .fontSize(EcFont.caption)
-          .fontColor($r('app.color.ec_bad_text'))
-          .width('100%')
-      }
-
-      Text(this.vm.nfStatusText())
-        .fontSize(EcFont.caption)
-        .fontColor(this.vm.nfCanGenerate() ? $r('app.color.ec_muted') : $r('app.color.ec_warn_text'))
-        .width('100%')
-
-      EcButton({
-        label: this.vm.nfButtonLabel(),
-        kind: EcButtonKind.PRIMARY,
-        loading: this.vm.nfGenerating,
-        disabled: !this.vm.nfCanGenerate(),
-        onTap: () => {
-          void this.generateNewFamilyInvite();
-        }
-      })
-
-      if (this.vm.nfLastCode.length > 0) {
-        Row({ space: EcSpace.x2 }) {
-          Text('新码：')
-            .fontSize(EcFont.caption)
-            .fontColor($r('app.color.ec_muted'))
-          Text(this.vm.nfLastCode)
-            .fontSize(EcFont.h3)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.ec_primary'))
-            .letterSpacing(3)
-            .backgroundColor($r('app.color.ec_primary_soft'))
-            .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
-            .borderRadius(EcRadius.sm)
-          Text('📋 复制')
-            .fontSize(EcFont.caption)
-            .fontColor($r('app.color.ec_primary'))
-            .onClick(() => {
-              void this.copyNewFamilyCode(this.vm.nfLastCode);
-            })
-          Blank()
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-      }
-
-      if (this.vm.nfInvites.length > 0) {
-        Text('最近的邀请码（最近 20 条）')
-          .fontSize(EcFont.caption)
-          .fontColor($r('app.color.ec_muted'))
-          .width('100%')
-          .padding({ top: EcSpace.x1 })
-        ForEach(this.vm.nfInvites, (invite: FamilyInviteCodeDto) => {
-          Row({ space: EcSpace.x2 }) {
-            Text(invite.code)
-              .fontSize(EcFont.caption)
-              .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.ec_ink'))
-              .letterSpacing(2)
-            Blank()
-            Text(invite.used_at !== undefined && invite.used_at !== null && invite.used_at.length > 0
-              ? ('已用（' + (invite.used_by_family_name === undefined || invite.used_by_family_name === null
-                ? '新家庭' : invite.used_by_family_name) + '）')
-              : '未使用')
-              .fontSize(EcFont.micro)
-              .fontColor(invite.used_at !== undefined && invite.used_at !== null && invite.used_at.length > 0
-                ? $r('app.color.ec_muted') : $r('app.color.ec_good_text'))
-          }
-          .width('100%')
-          .padding({ top: 3, bottom: 3 })
-        }, (invite: FamilyInviteCodeDto) => invite.code)
-      }
-    }
-    .width('100%')
-    .padding(EcSpace.x4)
-    .backgroundColor($r('app.color.ec_surface'))
-    .borderRadius(EcRadius.lg)
-    .shadow(EcShadow.card())
-    .alignItems(HorizontalAlign.Start)
   }
 
   private async copyInviteCode(): Promise<void> {
@@ -581,9 +454,6 @@ export struct ParentPage {
         } else {
           this.summaryCard()
           this.inviteCard()
-          if (this.vm.nfIsAdmin) {
-            this.newFamilyInviteCard()
-          }
 
           if (this.vm.hasError) {
             ErrorBanner({
