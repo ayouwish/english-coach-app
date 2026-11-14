@@ -581,7 +581,9 @@ export struct ParentPage {
         } else {
           this.summaryCard()
           this.inviteCard()
-          this.newFamilyInviteCard()
+          if (this.vm.nfIsAdmin) {
+            this.newFamilyInviteCard()
+          }
 
           if (this.vm.hasError) {
             ErrorBanner({
