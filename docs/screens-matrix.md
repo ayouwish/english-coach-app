@@ -6,12 +6,15 @@
 
 | 页面 | 接口 | 说明 | 儿童差异 |
 |---|---|---|---|
-| 登录 | `POST /api/auth/token`（Bearer）、`GET /api/auth/me` | 邮箱+密码 → access(1h)+refresh(30d)；网络层单飞刷新；退出调 `/api/auth/revoke` | 用**演示账号快捷按钮**（只填邮箱，不猜密码）|
+| 登录 | `POST /api/auth/token`（Bearer）、`GET /api/auth/me` | 邮箱+密码 → access(1h)+refresh(30d)；网络层单飞刷新；退出调 `/api/auth/revoke`；页面有「创建家庭 / 邀请码加入」入口 | 用**演示账号快捷按钮**（只填邮箱，不猜密码）|
+| **注册（受邀制）** | `POST /api/auth/register` | 默认（`ALLOW_SELF_SIGNUP=0`）只有两种：「🔑 受邀加入家庭」`invite_code`、「🏠 受邀创建新家庭」`new_family_code`；仅 env=1 才显示公开「创建家庭」 | 儿童不开放自助注册 |
 | 退出 | `POST /api/auth/revoke`（+ 清本地 token） | 吊销 refresh；清 Keychain/Asset Store 与缓存 | — |
 | 改密码：家长重置 | `POST /api/family/members/:id/password`（**含自己**）| **已可用**：`/parent` → 家庭成员 → 「重置密码」，不需要旧密码 | 儿童页面无此入口（家长代改）|
-| 改密码：自助修改（可选增强）| `POST /api/auth/password`（**待实现**）| 需当前密码；改后当前会话保持、其他会话失效；不阻塞其他功能 | 文案口语化 |
+| 改密码：自助修改 | `POST /api/auth/password` | 需当前密码（错→401）；新密码≥8（否则 400）、新旧相同→400；成功后**当前会话保留、其他会话失效**；`/settings` 有表单 | 文案「改成新的秘密口令」 |
 | 我的偏好 | `GET/PATCH /api/settings` | `auto_illustrate`（默认关）/`gender`/`tts_voice`/`story_sentences`/每日时长/自由聊 | 同左（儿童页口语化）|
-| 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码 | 儿童不可见 |
+| 家庭成员 🔒 | `GET/POST /api/family/members`、`PATCH`、`POST .../password` | 建账号/改水平（A1–C1）/重置密码；**仅本家庭**（跨家庭 404）| 儿童不可见 |
+| **家长邀请码 🔒** | `GET /api/family/invite`、`POST .../rotate` | 邀请共同家长**加入现有家庭**：一次性、每家庭家长 ≤3；面板显示「家长账号 N/3」 | 儿童不可见 |
+| **新家庭邀请（名额制）** | 后台 `/admin` 的「🎟️ 邀请码管理」（`GET/POST /api/admin/family-invites`） | **后台管理员**生成一次性新家庭邀请码（默认 100 名额，可调整）；家庭端**无此能力** | 家庭账号不可见 |
 
 ## 2. 跟读练习
 
@@ -44,6 +47,7 @@
 | 场景列表 | `GET /api/chat/scenarios[?include_child=1]` | 内置 + **自定义场景**（`is_custom:true`）；成人默认只看 adult，儿童只 child；成人可开「再看小朋友的场景」| 大卡片，无该开关 |
 | 自定义场景 | `POST /api/chat/scenarios`、`PATCH/DELETE /[id]` | 标题/场景说明/角色提示词/开场白/难度/受众；**仅 owner**（他人 404）；儿童强制 child；注入词 400 | 表单简化 |
 | 场景随机变体 | 包含在 `POST /api/chat/sessions` 响应与 turn 请求的 `scenario.variation` | 每次开会话**随机抽一组**（人设/地点/细节/目标/开场白）；历史回看用当时那组 | — |
+| **开场白中文** | `POST /api/chat/sessions` 响应 `scenario.opening_zh` / `messages[0].text_zh` | **按实际开场白文本精确匹配**（19 场景 × 4 条 = 76 条全覆盖）；自定义场景可填「开场白中文」；历史数据用 `pnpm backfill:opening-zh` 回填 | 同左 |
 | 开始会话 | `POST /api/chat/sessions` | 返回 `session_id` + 随机开场白；**不限轮数**（`CHAT_MAX_TURNS=0`）；随时可点「🏁 结束对话」→ `POST /api/chat/sessions/:id/end` | — |
 | 一轮对话 | ① `POST /api/asr` ② `POST /api/chat/sessions/:id/turn`（multipart：text 必填 + audio）③ `POST /api/tts` | 后端**没有**一体化接口，必须三步；turn 只返回助手文本 | — |
 | 会话历史 | `GET /api/chat/sessions`（列表）、`/:id`（详情）、**`/:id/messages`** | 列表含轮数/场景/平均发音；messages 返回 `pron`（后台评分轮询补齐）与 **`correction`（"更自然"提示）**；家长看分数，儿童只看鼓励 | 不显示分数 |
@@ -82,11 +86,21 @@
 
 ---
 
+### 5.2 插画总开关（成本控制）
+
+`users.auto_illustrate` = **插画功能总开关**（默认关）：
+- 关：保存不自动画；**故事详情整块不渲染**（无标题/说明/按钮/占位）；API 403 `policy_disabled`；自动触发跳过
+- 开：手动可画 + 保存后自动画
+- 图片服务未配置：按钮 disabled + 提示
+- 客户端要求：关闭时**不要渲染任何画图入口**（不是禁用）
+
+---
+
 ## 6. 盲测 / 诊断 / 复习
 
 | 页面 | 接口 | 要点 | 儿童差异 |
 |---|---|---|---|
-| 盲测 | `POST /api/blind-tests`、`POST /api/attempts/async`（带 blind_test_id）、`POST /api/blind-tests/:id/finish` | 异步、不显示分数 | — |
+| 盲测 | `POST /api/blind-tests`、`POST /api/attempts/async`（带 blind_test_id）、`POST /api/blind-tests/:id/finish`、**`DELETE /api/blind-tests/:id`**（取消）| 异步、不显示分数；**取消后该轮作废**（in_progress 消失、不进周报、下次为全新一轮）；周报「进行中」卡片有「取消这轮盲测」（二次确认）| 「不想测了就取消～」|
 | 盲测周报 | `GET /api/blind-tests` | 只统计已评分，显示待评分条数 | 分数仅家长 |
 | 发音诊断 | `GET /api/diagnosis` | 最弱音素、掌握度、建议 | 不显示 IPA |
 | 错音本 | `GET /api/review` | SRS 卡片 | — |
@@ -95,7 +109,9 @@
 
 | 页面 | 接口 | 要点 |
 |---|---|---|
-| 家长汇总 🔒 | `GET /api/parent/summary` | 使用时长、趋势、掌握度 |
+| 家长汇总 🔒 | `GET /api/parent/summary` | 使用时长、趋势、掌握度（**仅本家庭**）|
+| **家庭成本 🔒** | `GET /api/cost/summary?month=` | 「💰 本月成本」：总金额 + LLM/图片/TTS/ASR 分项 + 成员明细 + 近 7 天；单价可配置 |
+| **后台管理员（独立登录）** | 页面 `/admin/login` → `/admin`；`POST /api/admin/login|logout`；`GET /api/admin/costs`、`GET/POST /api/admin/family-invites` | **与家庭账号完全无关**：`ADMIN_PASSWORD` 环境变量 + 独立 HttpOnly cookie；成本看板（跨家庭 LLM tokens/图片/金额/按家庭/按天/最近明细）+ 邀请码管理（名额/生成/列表/调整）；家庭账号访问 → 401/跳登录 |
 | 提建议 | `POST /api/suggestions`（所有人）；`GET /api/suggestions` 🔒 | 家长集中查看 + 导出 Markdown |
 | 设置 | `GET/PATCH /api/settings` | **卡通插画自动生成开关（默认关）**、**性别**、**音色（9 种+试听）**、**故事句子数（3–12 / 角色默认）**、**单词显示音标（成人开/儿童关）**、语速、每日时长、免费聊开关 |
 | 健康检查 | `GET /api/health` | 显示「服务降级」提示（`voice.capabilities`、`degraded`）|

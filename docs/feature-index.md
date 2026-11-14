@@ -18,8 +18,9 @@
 | 退出/吊销 | `POST /api/auth/revoke` | ✅ | 同上 |
 | 当前用户 | `GET /api/auth/me` | ✅ | 同上 |
 | 改密码（家长重置，含自己） | `POST /api/family/members/:id/password` | ✅ | `screens-matrix.md` §1 |
-| 改密码（自助，需旧密码） | `POST /api/auth/password` | 📋 可选增强 | `screens-matrix.md` §1 |
+| 改密码（自助，需旧密码） | `POST /api/auth/password` | ✅ | `screens-matrix.md` §1 |
 | 多账号/家庭成员 | `GET/POST /api/family/members`、`PATCH` | ✅ | `screens-matrix.md` §1 |
+| **多家庭（邀请制）** | `POST /api/auth/register`（`invite_code` 加入 / `new_family_code` 建新家庭）；`GET/POST /api/family/family-invites`（管理员名额制）| ✅ | README §6.1b、`screens-matrix.md` §1 |
 | 账号偏好 | `GET/PATCH /api/settings` | ✅ | README §6.1、§3.3（`auto_illustrate`/`gender`/`tts_voice`/`story_sentences`）|
 
 ## 2. 跟读练习
@@ -53,6 +54,7 @@
 | 场景列表（内置 + 自定义） | `GET /api/chat/scenarios[?include_child=1]` | ✅ | README §6.3、`screens-matrix.md` §4 |
 | 自定义场景 CRUD | `POST /api/chat/scenarios`、`PATCH/DELETE /:id` | ✅ | 同上 |
 | 场景随机变体（variation） | `POST /api/chat/sessions` 随机抽 + turn 带 `scenario.variation` | ✅ | 同上、`screens-matrix.md` §4 |
+| **开场白中文** | `scenario.opening_zh` / `messages[0].text_zh`（76 条文本映射 + 自定义场景可填）；回填脚本 `backfill:opening-zh` | ✅ | 同上 |
 | 开始/结束会话 | `POST /api/chat/sessions`、`POST /:id/end` | ✅ | README §6.3 |
 | 一轮对话（三步） | `/api/asr` → `POST /:id/turn` → `POST /api/tts` | ✅ | README §6.3、`design-overview.md` §5.3 |
 | 消息（校正 + 发音） | `GET /api/chat/sessions/:id/messages` | ✅ | 同上 |
@@ -101,12 +103,16 @@
 | 对子去重（a→b / b→a 合并） | 同上（`contrasts` 已去重） | ✅ | 同上 |
 | 错音本（SRS） | `GET /api/review` | ✅ | README §6.5 |
 | 盲测（异步） | `POST /api/blind-tests`、`/api/attempts/async`、`POST /:id/finish` | ✅ | README §6.5 |
+| **盲测取消（软取消）** | `DELETE /api/blind-tests/:id`（三态；幂等；他人 404；已结束 409）| ✅ | `screens-matrix.md` §6 |
 
 ## 8. 家长 / 运维
 
 | 功能 | 接口 / 页面 | 状态 | 文档 |
 |---|---|---|---|
 | 家长汇总 | `GET /api/parent/summary` | ✅ | README §6.6 |
+| **家庭成本台账** | `GET /api/cost/summary?month=`、`/parent` 成本卡（LLM/图片/TTS/ASR，按家庭）| ✅ | README §6.1b、§3.3 |
+| **后台管理员** | `/admin/login`、`/admin`（独立 `ADMIN_PASSWORD` 登录）；成本看板 + 邀请码管理 | ✅ | `screens-matrix.md` §7、README §3.3 |
+| **管理员成本看板（跨家庭）** | `GET /api/admin/costs`（独立管理员会话；LLM tokens/图片/金额/按家庭/按天/明细）| ✅ | 同上 |
 | 提建议 / 导出 | `POST /api/suggestions`、`GET /api/suggestions`、`/export` | ✅ | 同上 |
 | 部署自查 | `GET /api/health`（features）、`GET /v1/health`（capabilities） | ✅ | README §2.4、§3 |
 | 清理某账号测试数据 | `web/scripts/cleanup-user-data.mjs` | ✅ | `english-coach/docs/deployment.md` §6.5 |
