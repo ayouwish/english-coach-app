@@ -5,6 +5,7 @@ import {
   AvatarPresetsDto,
   AvatarSelectBodyDto,
   AvatarStateDto,
+  CostSummaryDto,
   FamilyCreateBodyDto,
   FamilyMemberDto,
   FamilyMemberListDto,
@@ -105,6 +106,18 @@ export class AccountService {
     return AccountService.parse<ParentSummaryDto>(raw.text, raw.status, '家长面板返回格式异常');
   }
 
+  // ------------------------------------------------------------------ 家庭成本
+
+  /** GET /cost/summary?month=YYYY-MM —— 仅家长；只统计本家庭。 */
+  static async costSummary(month: string): Promise<CostSummaryDto> {
+    const query = new Map<string, string>();
+    if (month.length > 0) {
+      query.set('month', month);
+    }
+    const raw = await ApiClient.getJson('/cost/summary', query, AccountService.SHORT);
+    ApiClient.requireOk(raw);
+    return AccountService.parse<CostSummaryDto>(raw.text, raw.status, '成本汇总返回格式异常');
+  }
   // ------------------------------------------------------------------ 建议箱
 
   /** POST /suggestions —— 所有人（含儿童）都能提；不校验 user_id（服务端从会话取）。 */

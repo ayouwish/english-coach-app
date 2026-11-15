@@ -17,6 +17,7 @@ import { fileIo, picker } from '@kit.CoreFileKit';
 import { AppRuntime } from '../core/config/AppRuntime';
 import { WordText } from '../components/WordText';
 import { CapabilityCache } from '../core/content/CapabilityCache';
+import { AccountPrefs } from '../core/content/AccountPrefs';
 
 /**
  * 故事详情：英文全文 + 中文对照 + 插画（提示词可见）+ 整段朗读回放 + 复述入口。
@@ -38,6 +39,8 @@ export struct StoryDetailPage {
   @State printBusy: boolean = false;
   /** capabilities.image=false 时隐藏画图入口（README §2.4） */
   @State imageCapable: boolean = true;
+  /** 插画功能总开关（users.auto_illustrate；默认关，关闭时整块不渲染） */
+  @State illustrationOn: boolean = false;
   private started: boolean = false;
 
   aboutToAppear(): void {

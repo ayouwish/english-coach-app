@@ -4,6 +4,8 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { LoadingBlock } from '../components/LoadingBlock';
 import { EcFont, EcRadius, EcShadow, EcScore, EcSpace } from '../design/DesignTokens';
 import {
+  CostByDayDto,
+  CostByUserDto,
   ParentBlindScoreDto,
   ParentChildDto,
   ParentMemberDto,
@@ -13,7 +15,7 @@ import {
 import { NavigationService } from '../core/router/NavigationService';
 import { Routes } from '../core/router/Routes';
 import { ClipboardUtil } from '../core/util/ClipboardUtil';
-import { ParentVM } from '../viewmodel/AccountVM';
+import { CostKindItem, ParentVM } from '../viewmodel/AccountVM';
 
 /**
  * 家长面板（`GET /api/parent/summary`，仅家长；儿童 403 只提示「家长专用」，不跳登录）。
@@ -51,6 +53,120 @@ export struct ParentPage {
   private async refreshAll(): Promise<void> {
     await this.vm.load();
     await this.vm.loadInvite();
+    await this.vm.loadCost();
+  }
+
+  /** 💰 本月成本（task-101，仅家长）：总额 + LLM/图片/TTS/ASR 分项 + 成员明细 + 近 7 天。 */
+  @Builder
+  costCard() {
+    Column({ space: EcSpace.x2 }) {
+      Row({ space: EcSpace.x2 }) {
+        Text('💰 本月成本' + (this.vm.costMonth.length > 0 ? ('（' + this.vm.costMonth + '）') : ''))
+          .fontSize(EcFont.body)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.ec_ink'))
+          .layoutWeight(1)
+        Text(this.vm.costLoading ? '读取中…' : '刷新')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .onClick(() => {
+            void this.vm.loadCost();
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Text('按 voice 返回的实际用量估算，单价由服务端配置；只统计本家庭。')
+        .fontSize(EcFont.micro)
+        .fontColor($r('app.color.ec_muted'))
+        .width('100%')
+
+      if (this.vm.costError.length > 0) {
+        Text(this.vm.costError)
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_bad_text'))
+          .width('100%')
+      }
+
+      Text(ParentVM.yuan(this.vm.costTotal))
+        .fontSize(34)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.ec_ink'))
+        .width('100%')
+
+      if (this.vm.costItems.length === 0) {
+        Text('本月还没有产生成本的调用。')
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_muted'))
+          .width('100%')
+      } else {
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(this.vm.costItems, (item: CostKindItem) => {
+            Text(item.label + ' ' + ParentVM.yuan(item.cny))
+              .fontSize(EcFont.micro)
+              .fontColor($r('app.color.ec_primary'))
+              .backgroundColor($r('app.color.ec_primary_soft'))
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: 2, bottom: 2 })
+              .borderRadius(EcRadius.pill)
+              .margin({ right: EcSpace.x1, bottom: EcSpace.x1 })
+          }, (item: CostKindItem) => item.label + item.cny.toString())
+        }
+        .width('100%')
+      }
+
+      if (this.vm.costUsers.length > 0) {
+        Text('成员明细')
+          .fontSize(EcFont.caption)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.ec_ink'))
+          .width('100%')
+          .padding({ top: EcSpace.x1 })
+        ForEach(this.vm.costUsers, (user: CostByUserDto) => {
+          Row({ space: EcSpace.x2 }) {
+            Text(user.display_name === undefined || user.display_name === null || user.display_name.length === 0
+              ? '未知成员' : user.display_name)
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_ink'))
+            Blank()
+            Text(ParentVM.yuan(user.cny) + ' · ' + user.count.toString() + ' 次')
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_muted'))
+          }
+          .width('100%')
+          .padding({ top: 2, bottom: 2 })
+        }, (user: CostByUserDto) => (user.user_id === undefined || user.user_id === null ? 'unknown' : user.user_id)
+          + user.cny.toString())
+      }
+
+      if (this.vm.costDays.length > 0) {
+        Text('近 7 天')
+          .fontSize(EcFont.caption)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.ec_ink'))
+          .width('100%')
+          .padding({ top: EcSpace.x1 })
+        ForEach(this.vm.costDays, (day: CostByDayDto) => {
+          Row({ space: EcSpace.x2 }) {
+            Text(day.date)
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_muted'))
+            Blank()
+            Text(ParentVM.yuan(day.cny))
+              .fontSize(EcFont.caption)
+              .fontColor($r('app.color.ec_ink'))
+          }
+          .width('100%')
+          .padding({ top: 2, bottom: 2 })
+        }, (day: CostByDayDto) => day.date + day.cny.toString())
+      }
+    }
+    .width('100%')
+    .padding(EcSpace.x4)
+    .backgroundColor($r('app.color.ec_surface'))
+    .borderRadius(EcRadius.lg)
+    .shadow(EcShadow.card())
+    .alignItems(HorizontalAlign.Start)
   }
 
   private async copyInviteCode(): Promise<void> {
@@ -453,6 +569,7 @@ export struct ParentPage {
           this.forbiddenView()
         } else {
           this.summaryCard()
+          this.costCard()
           this.inviteCard()
 
           if (this.vm.hasError) {

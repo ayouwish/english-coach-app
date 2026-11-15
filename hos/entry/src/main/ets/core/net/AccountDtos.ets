@@ -398,3 +398,32 @@ export interface FamilyInviteDto {
   parents_count?: number;
   parents_limit?: number;
 }
+
+/** GET /cost/summary?month=YYYY-MM —— 家庭本月成本（仅家长）。 */
+export interface CostByKindDto {
+  llm?: number;
+  image?: number;
+  tts?: number;
+  asr?: number;
+}
+
+export interface CostByUserDto {
+  user_id?: string | null;
+  display_name?: string | null;
+  cny: number;
+  count: number;
+}
+
+export interface CostByDayDto {
+  date: string;
+  cny: number;
+}
+
+export interface CostSummaryDto {
+  month: string;
+  family_id?: string;
+  total_cny: number;
+  by_kind?: CostByKindDto;
+  by_user?: CostByUserDto[];
+  by_day?: CostByDayDto[];
+}

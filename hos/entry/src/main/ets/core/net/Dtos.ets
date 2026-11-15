@@ -239,6 +239,11 @@ export interface RegisterBodyDto {
   new_family_code?: string;
 }
 
+export interface ChangePasswordBodyDto {
+  current_password: string;
+  new_password: string;
+}
+
 export interface LoginBodyDto {
   email: string;
   password: string;

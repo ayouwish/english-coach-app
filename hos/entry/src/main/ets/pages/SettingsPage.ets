@@ -5,7 +5,10 @@ import { LoadingBlock } from '../components/LoadingBlock';
 import { AppConfig } from '../core/config/AppConfig';
 import { NavigationService } from '../core/router/NavigationService';
 import { Routes } from '../core/router/Routes';
-import { SessionState } from '../core/session/SessionStore';
+import { SessionState, SessionStore } from '../core/session/SessionStore';
+import { CredentialStore } from '../core/session/CredentialStore';
+import { AuthService } from '../core/service/AuthService';
+import { ApiError } from '../core/net/ApiError';
 import { EcFont, EcRadius, EcShadow, EcSpace } from '../design/DesignTokens';
 import { AccountSettingsVM } from '../viewmodel/AccountVM';
 
@@ -21,6 +24,12 @@ import { AccountSettingsVM } from '../viewmodel/AccountVM';
 export struct SettingsPage {
   @StorageLink('session') session: SessionState = new SessionState();
   @State vm: AccountSettingsVM = new AccountSettingsVM();
+  @State pwdCurrent: string = '';
+  @State pwdNew: string = '';
+  @State pwdConfirm: string = '';
+  @State pwdBusy: boolean = false;
+  @State pwdError: string = '';
+  @State pwdNotice: string = '';
   private started: boolean = false;
 
   private genderKeys: string[] = ['', 'girl', 'boy', 'woman', 'man', 'other'];
@@ -45,6 +54,49 @@ export struct SettingsPage {
     return list;
   }
 
+  /** POST /auth/password —— 自助修改密码（需当前密码；成功后其他设备会话失效）。 */
+  private async submitPasswordChange(): Promise<void> {
+    if (this.pwdBusy) {
+      return;
+    }
+    this.pwdError = '';
+    this.pwdNotice = '';
+    if (this.pwdCurrent.length === 0) {
+      this.pwdError = '请输入当前密码';
+      return;
+    }
+    if (this.pwdNew.length < 8) {
+      this.pwdError = '新密码至少 8 位';
+      return;
+    }
+    if (this.pwdNew !== this.pwdConfirm) {
+      this.pwdError = '两次输入的新密码不一致';
+      return;
+    }
+    this.pwdBusy = true;
+    try {
+      await AuthService.changePassword(this.pwdCurrent, this.pwdNew);
+      // 记住的密码同步更新，避免下次自动登录用旧密码
+      try {
+        await CredentialStore.save(this.session.email, this.pwdNew);
+      } catch (err) {
+      }
+      this.pwdCurrent = '';
+      this.pwdNew = '';
+      this.pwdConfirm = '';
+      this.pwdNotice = '密码已修改 ✅ 其他设备需要重新登录';
+      this.getUIContext().getPromptAction().showToast({ message: '密码已修改' });
+    } catch (err) {
+      const e = err as Error;
+      if (e instanceof ApiError && e.status === 401) {
+        this.pwdError = e.detail.length > 0 ? e.detail : '当前密码不对';
+      } else {
+        this.pwdError = SessionStore.toUiError(e, this.session.isChild).message;
+      }
+    } finally {
+      this.pwdBusy = false;
+    }
+  }
   private async doLogout(): Promise<void> {
     await this.vm.logout();
     NavigationService.clear();
@@ -72,6 +124,74 @@ export struct SettingsPage {
       .onClick(onTap)
   }
 
+  /** 🔒 修改密码（自助；需当前密码）。 */
+  @Builder
+  securityCard() {
+    Column({ space: EcSpace.x3 }) {
+      Text('🔒 修改密码')
+        .fontSize(EcFont.body)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.ec_ink'))
+        .width('100%')
+      Text('修改成功后当前登录保留，其他设备上的登录会失效。')
+        .fontSize(EcFont.micro)
+        .fontColor($r('app.color.ec_muted'))
+        .width('100%')
+      TextInput({ text: this.pwdCurrent, placeholder: '当前密码' })
+        .type(InputType.Password)
+        .height(48)
+        .fontSize(EcFont.body)
+        .backgroundColor($r('app.color.ec_surface_alt'))
+        .borderRadius(EcRadius.md)
+        .onChange((value: string) => {
+          this.pwdCurrent = value;
+        })
+      TextInput({ text: this.pwdNew, placeholder: '新密码（至少 8 位）' })
+        .type(InputType.Password)
+        .height(48)
+        .fontSize(EcFont.body)
+        .backgroundColor($r('app.color.ec_surface_alt'))
+        .borderRadius(EcRadius.md)
+        .onChange((value: string) => {
+          this.pwdNew = value;
+        })
+      TextInput({ text: this.pwdConfirm, placeholder: '再输一次新密码' })
+        .type(InputType.Password)
+        .height(48)
+        .fontSize(EcFont.body)
+        .backgroundColor($r('app.color.ec_surface_alt'))
+        .borderRadius(EcRadius.md)
+        .onChange((value: string) => {
+          this.pwdConfirm = value;
+        })
+      if (this.pwdError.length > 0) {
+        Text(this.pwdError)
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_bad_text'))
+          .width('100%')
+      }
+      if (this.pwdNotice.length > 0) {
+        Text(this.pwdNotice)
+          .fontSize(EcFont.caption)
+          .fontColor($r('app.color.ec_good_text'))
+          .width('100%')
+      }
+      EcButton({
+        label: this.pwdBusy ? '修改中…' : '修改密码',
+        kind: EcButtonKind.TONAL,
+        loading: this.pwdBusy,
+        onTap: () => {
+          void this.submitPasswordChange();
+        }
+      })
+    }
+    .width('100%')
+    .padding(EcSpace.x4)
+    .backgroundColor($r('app.color.ec_surface'))
+    .borderRadius(EcRadius.lg)
+    .shadow(EcShadow.card())
+    .alignItems(HorizontalAlign.Start)
+  }
   @Builder
   headerCard() {
     Column({ space: EcSpace.x2 }) {
@@ -165,7 +285,7 @@ export struct SettingsPage {
       Divider().color($r('app.color.ec_border'))
 
       Row({ space: EcSpace.x2 }) {
-        Text(this.vm.isChild ? '要不要自动画一张画？' : '🎨 卡通插画自动生成')
+        Text(this.vm.isChild ? '要不要画插画？' : '🎨 插画功能')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_ink'))
           .layoutWeight(1)
@@ -177,7 +297,7 @@ export struct SettingsPage {
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
-      Text('每张约 ¥0.1；关闭后保存故事不会自动画，仍可在故事页手动点「生成插画」。')
+      Text('关闭后故事详情整块隐藏插画入口，保存故事也不会自动画；开启后可手动或自动生成（每张约 ¥0.1）。')
         .fontSize(EcFont.micro)
         .fontColor($r('app.color.ec_muted'))
         .width('100%')
@@ -455,6 +575,7 @@ export struct SettingsPage {
           }
 
           this.prefsCard()
+          this.securityCard()
           this.serverCard()
           this.miscCard()
 

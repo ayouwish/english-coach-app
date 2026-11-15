@@ -10,6 +10,8 @@ import { ApiError, ApiErrorCode } from '../core/net/ApiError';
 import { ErrorMapper, UiError } from '../core/error/UiError';
 import {
   AccountUserDto,
+  CostByDayDto,
+  CostByUserDto,
   AvatarPresetCharacterDto,
   AvatarStateDto,
   AvatarStyleDto,
@@ -700,11 +702,66 @@ export class ParentVM {
   inviteParentsCount: number = 0;
   inviteParentsLimit: number = 3;
 
+  // 本月成本（仅家长；GET /cost/summary）
+  costLoading: boolean = false;
+  costError: string = '';
+  costMonth: string = '';
+  costTotal: number = 0;
+  costItems: CostKindItem[] = [];
+  costUsers: CostByUserDto[] = [];
+  costDays: CostByDayDto[] = [];
+
   async init(): Promise<void> {
     await this.load();
     if (!this.forbidden) {
       await this.loadInvite();
+      await this.loadCost();
     }
+  }
+
+  /** GET /cost/summary?month=YYYY-MM —— 本家庭本月成本（仅家长）。 */
+  async loadCost(): Promise<void> {
+    if (this.costLoading) {
+      return;
+    }
+    this.costLoading = true;
+    this.costError = '';
+    try {
+      const now = new Date();
+      const month = now.getFullYear().toString() + '-' +
+        (now.getMonth() + 1 < 10 ? '0' : '') + (now.getMonth() + 1).toString();
+      const dto = await AccountService.costSummary(month);
+      this.costMonth = dto.month.length > 0 ? dto.month : month;
+      this.costTotal = dto.total_cny;
+      const kind = dto.by_kind;
+      const items: CostKindItem[] = [];
+      if (kind !== undefined) {
+        if (kind.llm !== undefined && kind.llm > 0) {
+          items.push(new CostKindItem('LLM 文本', kind.llm));
+        }
+        if (kind.image !== undefined && kind.image > 0) {
+          items.push(new CostKindItem('图片生成', kind.image));
+        }
+        if (kind.tts !== undefined && kind.tts > 0) {
+          items.push(new CostKindItem('语音合成', kind.tts));
+        }
+        if (kind.asr !== undefined && kind.asr > 0) {
+          items.push(new CostKindItem('语音识别', kind.asr));
+        }
+      }
+      this.costItems = items;
+      this.costUsers = dto.by_user === undefined ? [] : dto.by_user;
+      const days = dto.by_day === undefined ? [] : dto.by_day;
+      this.costDays = days.length > 7 ? days.slice(days.length - 7) : days;
+    } catch (err) {
+      this.costError = SessionStore.toUiError(err as Error, false).message;
+    } finally {
+      this.costLoading = false;
+    }
+  }
+
+  static yuan(value: number): string {
+    return '¥' + value.toFixed(2);
   }
 
   /** GET /family/invite —— 邀请码 / 是否已用 / 家长人数与上限。 */
@@ -1669,3 +1726,14 @@ export class VoicesVM {
   }
 }
 
+
+/** 成本分项（页面展示用）。 */
+export class CostKindItem {
+  label: string = '';
+  cny: number = 0;
+
+  constructor(label: string, cny: number) {
+    this.label = label;
+    this.cny = cny;
+  }
+}

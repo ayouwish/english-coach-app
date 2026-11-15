@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { ApiClient, ApiRequest } from '../net/ApiClient';
 import { ApiError, ApiErrorCode } from '../net/ApiError';
-import { LoginBodyDto, MeResponseDto, RegisterBodyDto, RevokeBodyDto, TokenResponseDto, UsageDto, UserDto } from '../net/Dtos';
+import { ChangePasswordBodyDto, LoginBodyDto, MeResponseDto, RegisterBodyDto, RevokeBodyDto, TokenResponseDto, UsageDto, UserDto } from '../net/Dtos';
 import { TokenSession } from '../net/TokenSession';
 
 /** 登录结果：user 来自 `/auth/token`（并尽量用 `/auth/me` 校正），usage 可能为 null。 */
@@ -110,6 +110,21 @@ export class AuthService {
     }
   }
 
+  /**
+   * POST /auth/password —— 自助修改密码（需当前密码）。
+   * 成功后当前会话保留，其他会话由服务端失效；错误文案（当前密码不对/至少 8 位）由服务端返回。
+   */
+  static async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const body: ChangePasswordBodyDto = {
+      current_password: currentPassword,
+      new_password: newPassword
+    };
+    const raw = await ApiClient.postJson('/auth/password', JSON.stringify(body), true,
+      AuthService.ME_TIMEOUT_MS);
+    if (raw.status !== 200) {
+      throw ApiClient.errorOf(raw);
+    }
+  }
   /**
    * GET /auth/me。
    * 兼容「无效 Bearer 返回 200 + {user:null}」的旧行为：先刷新一次再取，仍为空则清 token 抛 unauthorized。
