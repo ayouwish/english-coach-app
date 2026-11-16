@@ -76,9 +76,12 @@ export struct SettingsPage {
     this.pwdBusy = true;
     try {
       await AuthService.changePassword(this.pwdCurrent, this.pwdNew);
-      // 记住的密码同步更新，避免下次自动登录用旧密码
+      // 只有之前勾选过「记住密码」才同步更新，避免把未记住的密码写进安全存储
       try {
-        await CredentialStore.save(this.session.email, this.pwdNew);
+        const saved = await CredentialStore.load();
+        if (saved !== null && saved.email === this.session.email) {
+          await CredentialStore.save(this.session.email, this.pwdNew);
+        }
       } catch (err) {
       }
       this.pwdCurrent = '';
