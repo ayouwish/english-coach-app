@@ -15,6 +15,15 @@ export class AccountPrefs {
   /** 点单词显示音标（null/未设置 = 默认开，成人儿童一致） */
   static showWordIpa: boolean = true;
 
+  /** Reset cached prefs when account changes (login/logout/expire). */
+  static invalidate(): void {
+    AccountPrefs.loaded = false;
+    AccountPrefs.ttsVoice = '';
+    AccountPrefs.ttsRate = '';
+    AccountPrefs.storySentences = 0;
+    AccountPrefs.autoIllustrate = false;
+    AccountPrefs.showWordIpa = true;
+  }
   static async ensure(): Promise<void> {
     if (AccountPrefs.loaded) {
       return;

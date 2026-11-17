@@ -72,6 +72,8 @@ export struct StoryDetailPage {
   private async loadCapabilities(): Promise<void> {
     await CapabilityCache.ensure();
     this.imageCapable = CapabilityCache.image;
+    await AccountPrefs.ensure();
+    this.illustrationOn = AccountPrefs.autoIllustrate;
   }
 
   private openReview(): void {
@@ -868,7 +870,9 @@ export struct StoryDetailPage {
           this.headerCard()
           this.englishCard()
           this.sourceCard()
-          this.imageCard()
+          if (this.imageCapable && this.illustrationOn) {
+            this.imageCard()
+          }
           this.audioCard()
           this.originalCard()
           this.retellCard()
