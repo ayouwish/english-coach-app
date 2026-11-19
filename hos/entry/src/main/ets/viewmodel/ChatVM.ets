@@ -43,6 +43,8 @@ export class ChatMsg {
   hasCorrection: boolean = false;
   better: string = '';
   explainZh: string = '';
+  /** 纠错对应的学习者原句（用于校验是否属于本轮，防旧纠错串台） */
+  correctionOriginal: string = '';
   unsafeFiltered: boolean = false;
   hasPron: boolean = false;
   /** -1 = 不可得（不落 0） */
@@ -84,16 +86,48 @@ export class ChatMsgFactory {
     return msg;
   }
 
+  /** 纠错是否属于这一句学习者原话（词集合 Jaccard ≥ 0.5，防止旧纠错串到新一轮）。 */
+  static correctionFits(original: string, userText: string): boolean {
+    const a = ChatMsgFactory.words(original);
+    const b = ChatMsgFactory.words(userText);
+    if (a.length === 0 || b.length === 0) {
+      return true;
+    }
+    let same = 0;
+    for (let i = 0; i < a.length; i++) {
+      if (b.indexOf(a[i]) >= 0) {
+        same++;
+      }
+    }
+    return same / a.length >= 0.5;
+  }
+
+  private static words(text: string): string[] {
+    const cleaned = text.toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleaned.length === 0) {
+      return [];
+    }
+    return cleaned.split(' ');
+  }
+
+  static clearCorrection(msg: ChatMsg): void {
+    msg.hasCorrection = false;
+    msg.better = '';
+    msg.explainZh = '';
+    msg.correctionOriginal = '';
+  }
   static applyCorrection(msg: ChatMsg, correction: ChatCorrectionDto | null | undefined): void {
     if (correction === undefined || correction === null || correction.has_error !== true) {
       msg.hasCorrection = false;
       msg.better = '';
       msg.explainZh = '';
+      msg.correctionOriginal = '';
       return;
     }
     msg.hasCorrection = true;
     msg.better = typeof correction.better === 'string' ? correction.better : '';
     msg.explainZh = typeof correction.explain_zh === 'string' ? correction.explain_zh : '';
+    msg.correctionOriginal = typeof correction.original === 'string' ? correction.original : '';
   }
 
   static applyPron(msg: ChatMsg, pron: ChatPronDto | null | undefined, isChild: boolean): void {
@@ -367,6 +401,24 @@ export class ChatVM {
       for (let i = 0; i < list.length; i++) {
         built.push(ChatMsgFactory.fromDto(list[i], isChild));
       }
+      // 历史里可能残留「上一轮的纠错串到下一轮」的脏数据：
+      // 纠错原句必须与它前面那条用户消息匹配，否则不显示（宁可少显示，也不误导）。
+      for (let i = 0; i < built.length; i++) {
+        const msg = built[i];
+        if (msg.role !== 'assistant' || !msg.hasCorrection) {
+          continue;
+        }
+        let prevUser = '';
+        for (let j = i - 1; j >= 0; j--) {
+          if (built[j].role === 'user') {
+            prevUser = built[j].text;
+            break;
+          }
+        }
+        if (prevUser.length > 0 && !ChatMsgFactory.correctionFits(msg.correctionOriginal, prevUser)) {
+          ChatMsgFactory.clearCorrection(msg);
+        }
+      }
       this.messages = built;
       this.loading = false;
       void this.beginReplay();
@@ -524,6 +576,10 @@ export class ChatVM {
     bot.textZh = typeof turn.reply_zh === 'string' ? turn.reply_zh : '';
     bot.unsafeFiltered = turn.flag === 'unsafe_filtered';
     ChatMsgFactory.applyCorrection(bot, turn.correction);
+    // 服务端偶发返回上一轮的旧纠错：原句对不上本轮用户输入就不显示
+    if (bot.hasCorrection && !ChatMsgFactory.correctionFits(bot.correctionOriginal, userMsg.text)) {
+      ChatMsgFactory.clearCorrection(bot);
+    }
     this.pushMessage(bot);
     const suggested = turn.suggested_replies;
     this.suggestedReplies = suggested === undefined ? [] : suggested.slice(0, 3);
