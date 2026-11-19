@@ -30,9 +30,42 @@ export struct StoryRecordPage {
     }
     this.started = true;
     this.vm.configure(this.session.isChild, this.session.cefrLevel, this.session.userId);
+    void this.restoreDraft();
+  }
+
+  /** 有未完成草稿（最多一份）时先问：继续上次，还是放弃重新开始。 */
+  private async restoreDraft(): Promise<void> {
+    const draft = await this.vm.loadDraft();
+    if (draft === null) {
+      return;
+    }
+    const preview = draft.textZh.trim().length > 0
+      ? draft.textZh.trim().substring(0, 40) + (draft.textZh.trim().length > 40 ? '…' : '')
+      : (draft.hasResult ? '英文预览已生成，但还没保存' : '有一段录音还没处理');
+    setTimeout(() => {
+      this.getUIContext().showAlertDialog({
+        title: '继续上次的故事？',
+        message: '检测到一份未完成的草稿：\n「' + preview + '」\n\n继续上次会恢复文字/录音/预览；放弃则清空草稿，重新开始。',
+        buttons: [
+          {
+            value: '继续上次',
+            action: () => {
+              this.vm.applyDraft(draft);
+            }
+          },
+          {
+            value: '放弃，重新开始',
+            action: () => {
+              void this.vm.clearDraft();
+            }
+          }
+        ]
+      });
+    }, 300);
   }
 
   aboutToDisappear(): void {
+    void this.vm.saveDraftNow();
     this.vm.dispose();
   }
 

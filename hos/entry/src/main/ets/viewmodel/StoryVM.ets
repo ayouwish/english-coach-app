@@ -17,6 +17,7 @@ import { CacheService } from '../core/service/CacheService';
 import { StoryService } from '../core/service/StoryService';
 import { SessionStore } from '../core/session/SessionStore';
 import { FileUtil } from '../core/util/FileUtil';
+import { AppConfig } from '../core/config/AppConfig';
 
 /**
  * 「本次会话」跨页共享的临时数据。
@@ -330,6 +331,19 @@ enum RecordAction {
 }
 
 @Observed
+/** 讲故事草稿（最多一份/账号，Preferences JSON）。 */
+export class StoryDraft {
+  version: number = 1;
+  textZh: string = '';
+  level: string = 'A1';
+  maxSentences: number = 5;
+  title: string = '';
+  sentences: string[] = [];
+  hasResult: boolean = false;
+  originalTextZh: string = '';
+  audioPath: string = '';
+  updatedAt: number = 0;
+}
 export class StoryRecordVM {
   textZh: string = '';
   level: string = 'A1';
@@ -370,6 +384,112 @@ export class StoryRecordVM {
   private timerId: number = -1;
   private lastAction: RecordAction = RecordAction.NONE;
 
+  // ------------------------------------------------------------------ 草稿（最多一份/账号）
+
+  private draftTimer: number = -1;
+  /** 已保存过：不要再把同一份内容写回草稿 */
+  private saved: boolean = false;
+
+  private draftKey(): string {
+    return 'story_draft_' + (this.userId.length > 0 ? this.userId : 'anon');
+  }
+
+  /** 读草稿；没有内容/解析失败返回 null。 */
+  async loadDraft(): Promise<StoryDraft | null> {
+    const raw = await AppConfig.getString(this.draftKey(), '');
+    if (raw.length === 0) {
+      return null;
+    }
+    try {
+      const draft = JSON.parse(raw) as StoryDraft;
+      if (draft === null || draft === undefined) {
+        return null;
+      }
+      if (draft.textZh.trim().length === 0 && draft.sentences.length === 0) {
+        return null;
+      }
+      return draft;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /** 恢复草稿到表单（音频文件不存在时只恢复文字/预览）。 */
+  applyDraft(draft: StoryDraft): void {
+    this.textZh = draft.textZh;
+    if (draft.level.length > 0 && this.levels.indexOf(draft.level) >= 0) {
+      this.level = draft.level;
+    }
+    if (draft.maxSentences >= 3 && draft.maxSentences <= 12) {
+      this.maxSentences = draft.maxSentences;
+    }
+    this.title = draft.title;
+    this.originalTextZh = draft.originalTextZh;
+    const items: StorySentenceItem[] = [];
+    for (let i = 0; i < draft.sentences.length; i++) {
+      const item = new StorySentenceItem();
+      item.index = i + 1;
+      item.en = draft.sentences[i];
+      items.push(item);
+    }
+    this.sentences = items;
+    this.hasResult = draft.hasResult && items.length > 0;
+    if (draft.audioPath.length > 0 && FileUtil.exists(draft.audioPath)) {
+      this.originalPath = draft.audioPath;
+    }
+    this.notice = '已恢复上次的草稿，接着写吧 ✅';
+  }
+
+  /** 立刻保存草稿（空内容则清空）。 */
+  async saveDraftNow(): Promise<void> {
+    if (this.saved) {
+      return;
+    }
+    if (this.draftTimer >= 0) {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = -1;
+    }
+    const hasText = this.textZh.trim().length > 0;
+    if (!hasText && !this.hasResult && this.originalPath.length === 0) {
+      // 空表单不代表要删草稿：用户可能还没点「继续上次」就离开了。
+      // 只有显式「放弃」或保存成功才清草稿。
+      return;
+    }
+    const draft = new StoryDraft();
+    draft.textZh = this.textZh;
+    draft.level = this.level;
+    draft.maxSentences = this.maxSentences;
+    draft.title = this.title;
+    draft.hasResult = this.hasResult;
+    draft.originalTextZh = this.originalTextZh;
+    draft.audioPath = (this.originalPath.length > 0 && FileUtil.exists(this.originalPath)) ? this.originalPath : '';
+    const sentences: string[] = [];
+    for (let i = 0; i < this.sentences.length; i++) {
+      sentences.push(this.sentences[i].en);
+    }
+    draft.sentences = sentences;
+    draft.updatedAt = Date.now();
+    await AppConfig.putString(this.draftKey(), JSON.stringify(draft));
+  }
+
+  /** 输入过程中防抖保存，避免每次按键都写 Preferences。 */
+  scheduleDraftSave(): void {
+    if (this.draftTimer >= 0) {
+      clearTimeout(this.draftTimer);
+    }
+    this.draftTimer = setTimeout(() => {
+      this.draftTimer = -1;
+      void this.saveDraftNow();
+    }, 800);
+  }
+
+  async clearDraft(): Promise<void> {
+    if (this.draftTimer >= 0) {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = -1;
+    }
+    await AppConfig.putString(this.draftKey(), '');
+  }
   configure(isChild: boolean, cefrLevel: string, userId: string): void {
     this.isChild = isChild;
     this.level = StoryRecordVM.normalizeLevel(cefrLevel);
@@ -389,6 +509,7 @@ export class StoryRecordVM {
 
   setTextZh(value: string): void {
     this.textZh = value;
+    this.scheduleDraftSave();
   }
 
   /** 改级别：已有结果时按规格自动重新生成。 */
@@ -397,6 +518,7 @@ export class StoryRecordVM {
       return;
     }
     this.level = value;
+    this.scheduleDraftSave();
     if (this.hasResult && !this.busy) {
       void this.rewrite();
     }
@@ -404,6 +526,7 @@ export class StoryRecordVM {
 
   setMaxSentences(value: number): void {
     this.maxSentences = value;
+    this.scheduleDraftSave();
   }
 
   adjustLevel(direction: number): void {
@@ -485,6 +608,7 @@ export class StoryRecordVM {
       this.textZh = current.length === 0 ? text : (current + '\n' + text);
       this.notice = '听到啦，已经写进上面的框里了 ✅';
       this.clearError();
+      void this.saveDraftNow();
     } catch (err) {
       this.handleError(err as Error);
     } finally {
@@ -537,6 +661,7 @@ export class StoryRecordVM {
       const dto = await StoryService.rewrite(text, this.level, this.maxSentences);
       this.applyRewrite(dto);
       this.originalTextZh = text;
+      void this.saveDraftNow();
     } catch (err) {
       this.handleError(err as Error);
     } finally {
@@ -615,10 +740,12 @@ export class StoryRecordVM {
       return;
     }
     this.sentences[index].en = value;
+    this.scheduleDraftSave();
   }
 
   setTitle(value: string): void {
     this.title = value;
+    this.scheduleDraftSave();
   }
 
   // ------------------------------------------------------------------ 保存
@@ -663,6 +790,8 @@ export class StoryRecordVM {
         }
       }
       this.clearError();
+      this.saved = true;
+      await this.clearDraft();
       return created.id;
     } catch (err) {
       this.handleError(err as Error);
@@ -723,6 +852,7 @@ export class StoryRecordVM {
   }
 
   dispose(): void {
+    void this.saveDraftNow();
     this.stopTimer();
     this.recording = false;
     this.preparing = false;
