@@ -202,6 +202,7 @@ export struct FlowPage {
           Text('取消编辑')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.vm.cancelEdit();
             })
@@ -336,7 +337,7 @@ export struct FlowPage {
           Text(this.vm.randomMode ? '🎲 随机 ✓' : '🎲 随机')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.vm.toggleRandom();
             })
@@ -344,7 +345,7 @@ export struct FlowPage {
             Text('🔀 换一批')
               .fontSize(EcFont.caption)
               .fontColor($r('app.color.ec_primary'))
-              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .accessibilityText('换一批随机句子')
               .onClick(() => {
                 this.vm.drawRandom();
@@ -392,7 +393,7 @@ export struct FlowPage {
               .fontColor(this.vm.count === n ? Color.White : this.muted())
               .backgroundColor(this.vm.count === n
                 ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .borderRadius(EcRadius.sm)
               .onClick(() => {
                 this.vm.setCount(n);
@@ -457,6 +458,7 @@ export struct FlowPage {
         Text('刷新')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             void this.vm.loadMaterials();
           })
@@ -511,14 +513,14 @@ export struct FlowPage {
                   .fontSize(EcFont.caption)
                   .fontColor(this.vm.editingMaterialId === material.id
                     ? $r('app.color.ec_good_text') : $r('app.color.ec_muted'))
-                  .padding({ left: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+                  .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
                   .onClick(() => {
                     void this.vm.beginEdit(material.id);
                   })
                 Text('删除')
                   .fontSize(EcFont.caption)
                   .fontColor($r('app.color.ec_bad_text'))
-                  .padding({ left: EcSpace.x1, right: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+                  .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
                   .onClick(() => {
                     this.getUIContext().showAlertDialog({
                       title: '删除这一页？',
@@ -540,7 +542,7 @@ export struct FlowPage {
                 Text('打开 →')
                   .fontSize(EcFont.caption)
                   .fontColor($r('app.color.ec_primary'))
-                  .padding({ left: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+                  .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
                   .onClick(() => {
                     void this.vm.openMaterial(material.id);
                   })
@@ -739,7 +741,7 @@ export struct FlowPage {
         Text('‹ 重新选句')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('退出连读，重新选句')
           .onClick(() => {
             this.confirmExitRun();
@@ -775,12 +777,13 @@ export struct FlowPage {
           .fontSize(EcFont.body)
           .fontColor($r('app.color.ec_primary'))
         Text(this.session.isChild ? '读完自动跳到下一句' : '录完后自动进入下一句（400ms 缓冲）')
-          .fontSize(EcFont.micro)
+          .fontSize(EcFont.caption)
           .fontColor(this.muted())
           .layoutWeight(1)
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
       .onClick(() => {
         this.vm.autoNext = !this.vm.autoNext;
       })
@@ -836,7 +839,7 @@ export struct FlowPage {
               label: '⏹ 说完啦 ' + Math.floor(this.vm.elapsedMs / 1000).toString() + 's',
               kind: EcButtonKind.DANGER,
               big: this.session.isChild,
-              btnWidth: '62%',
+              btnWidth: '48%',
               disabled: this.vm.submitting,
               onTap: () => {
                 void this.vm.stopAndSubmit();
@@ -845,7 +848,8 @@ export struct FlowPage {
             EcButton({
               label: '✖️ 不要了',
               kind: EcButtonKind.GHOST,
-              btnWidth: '34%',
+              btnWidth: '48%',
+              big: this.session.isChild,
               disabled: this.vm.submitting,
               onTap: () => {
                 void this.vm.cancelRecording();
@@ -968,8 +972,9 @@ export struct FlowPage {
             .maxLines(2)
             .layoutWeight(1)
           Text('重录这句')
-            .fontSize(EcFont.micro)
+            .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.vm.retryItem(item.index);
             })

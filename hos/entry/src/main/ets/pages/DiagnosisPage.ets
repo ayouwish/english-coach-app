@@ -277,6 +277,7 @@ export struct DiagnosisPage {
         Text(this.vm.showOk ? '收起' : '点击展开')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             this.vm.showOk = !this.vm.showOk;
           })
@@ -330,6 +331,7 @@ export struct DiagnosisPage {
         Text('刷新')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             void this.vm.loadRecent();
           })
@@ -367,6 +369,7 @@ export struct DiagnosisPage {
             Text(this.vm.playingAttemptId === item.id ? '播放中…' : '▶ 回放')
               .fontSize(EcFont.caption)
               .fontColor($r('app.color.ec_primary'))
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .onClick(() => {
                 void this.vm.playRecent(item.id);
               })

@@ -78,7 +78,7 @@ export struct FamilyPage {
         Text(this.vm.showForm ? '收起' : '＋ 添加成员')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('添加成员')
           .onClick(() => {
             this.vm.toggleForm();
@@ -223,8 +223,9 @@ export struct FamilyPage {
           .fontColor($r('app.color.ec_ink'))
           .layoutWeight(1)
         Text('取消')
-          .fontSize(EcFont.micro)
+          .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             this.vm.cancelEdit();
           })
@@ -384,14 +385,14 @@ export struct FamilyPage {
           Text('编辑')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.vm.beginEdit(member);
             })
           Text('重置密码')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_warn_text'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.vm.beginReset(member);
             })

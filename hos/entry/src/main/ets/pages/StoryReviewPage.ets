@@ -92,7 +92,7 @@ export struct StoryReviewPage {
         .fontWeight(this.vm.textMode ? FontWeight.Normal : FontWeight.Medium)
         .fontColor(this.vm.textMode ? $r('app.color.ec_muted') : Color.White)
         .backgroundColor(this.vm.textMode ? $r('app.color.ec_surface_alt') : $r('app.color.ec_primary'))
-        .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .borderRadius(EcRadius.pill)
         .accessibilityText('录音复述')
         .onClick(() => {
@@ -103,7 +103,7 @@ export struct StoryReviewPage {
         .fontWeight(this.vm.textMode ? FontWeight.Medium : FontWeight.Normal)
         .fontColor(this.vm.textMode ? Color.White : $r('app.color.ec_muted'))
         .backgroundColor(this.vm.textMode ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-        .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .borderRadius(EcRadius.pill)
         .accessibilityText('打字复述')
         .onClick(() => {
@@ -123,25 +123,37 @@ export struct StoryReviewPage {
       this.modeRow()
 
       if (!this.vm.textMode) {
-        EcButton({
-          label: this.recordLabel(),
-          kind: this.vm.recording ? EcButtonKind.DANGER : EcButtonKind.PRIMARY,
-          big: this.session.isChild,
-          disabled: this.vm.busy,
-          onTap: () => {
-            if (this.vm.recording) {
-              void this.vm.stopRecordingAndSubmit();
-            } else {
-              void this.vm.startRecording();
-            }
-          }
-        })
         if (this.vm.recording) {
+          Row({ space: EcSpace.x2 }) {
+            EcButton({
+              label: this.recordLabel(),
+              kind: EcButtonKind.DANGER,
+              big: this.session.isChild,
+              btnWidth: '48%',
+              disabled: this.vm.busy,
+              onTap: () => {
+                void this.vm.stopRecordingAndSubmit();
+              }
+            })
+            EcButton({
+              label: '✖️ 不要了',
+              kind: EcButtonKind.GHOST,
+              big: this.session.isChild,
+              btnWidth: '48%',
+              onTap: () => {
+                void this.vm.cancelRecording();
+              }
+            })
+          }
+          .width('100%')
+        } else {
           EcButton({
-            label: '✖️ 不要了',
-            kind: EcButtonKind.GHOST,
+            label: this.recordLabel(),
+            kind: EcButtonKind.PRIMARY,
+            big: this.session.isChild,
+            disabled: this.vm.busy,
             onTap: () => {
-              void this.vm.cancelRecording();
+              void this.vm.startRecording();
             }
           })
         }

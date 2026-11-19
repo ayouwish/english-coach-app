@@ -266,7 +266,7 @@ export struct PracticePage {
       Text('▶ 继续上次')
         .fontSize(EcFont.caption)
         .fontColor($r('app.color.ec_primary'))
-        .padding({ left: EcSpace.x1, right: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .accessibilityText('继续上次练习')
         .onClick(() => {
           this.swiper.changeIndex(this.resumeIndex);
@@ -274,9 +274,9 @@ export struct PracticePage {
           this.resumeIndex = -1;
         })
       Text('从头开始')
-        .fontSize(EcFont.micro)
+        .fontSize(EcFont.caption)
         .fontColor($r('app.color.ec_muted'))
-        .padding({ left: EcSpace.x1, right: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .onClick(() => {
           void AppConfig.putString('practice_cursor_' + this.level, '');
           this.resumeIndex = -1;
@@ -358,7 +358,7 @@ export struct PracticePage {
           Text('📈 历史')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('查看这一句的历史朗读')
             .onClick(() => {
               void this.openHistory();
@@ -381,7 +381,7 @@ export struct PracticePage {
           Text('退出专项')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('退出专项练习')
             .onClick(() => {
               PracticeFocus.clear();
@@ -462,7 +462,7 @@ export struct PracticePage {
           label: '⏹ 说完啦 ' + Math.floor(this.vm.elapsedMs / 1000).toString() + 's',
           kind: EcButtonKind.DANGER,
           big: this.session.isChild,
-          btnWidth: '62%',
+          btnWidth: '48%',
           disabled: this.vm.submitting,
           onTap: () => {
             if (this.vm.blindActive) {
@@ -475,7 +475,8 @@ export struct PracticePage {
         EcButton({
           label: '✖️ 不要了',
           kind: EcButtonKind.GHOST,
-          btnWidth: '34%',
+          btnWidth: '48%',
+          big: this.session.isChild,
           disabled: this.vm.submitting,
           onTap: () => {
             void this.vm.cancelRecording();
@@ -818,7 +819,7 @@ export struct PracticePage {
         Text('关闭')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('关闭详细结果')
           .onClick(() => {
             this.detailShown = false;
@@ -1367,7 +1368,7 @@ export struct PracticePage {
         Text('关闭')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('关闭详细结果')
           .onClick(() => {
             this.detailShown = false;
@@ -1485,7 +1486,7 @@ export struct PracticePage {
           Text('↻ 换一批')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('重新加载语料（打乱顺序）')
             .onClick(() => {
               void this.load(this.level, true);

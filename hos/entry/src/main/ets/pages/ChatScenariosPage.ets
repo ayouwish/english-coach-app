@@ -229,7 +229,7 @@ export struct ChatScenariosPage {
           .fontSize(EcFont.caption)
           .fontColor(this.rate === 'slow' ? Color.White : $r('app.color.ec_muted'))
           .backgroundColor(this.rate === 'slow' ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-          .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .borderRadius(EcRadius.pill)
           .accessibilityText('语速慢速')
           .onClick(() => {
@@ -239,7 +239,7 @@ export struct ChatScenariosPage {
           .fontSize(EcFont.caption)
           .fontColor(this.rate === 'normal' ? Color.White : $r('app.color.ec_muted'))
           .backgroundColor(this.rate === 'normal' ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-          .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .borderRadius(EcRadius.pill)
           .accessibilityText('语速正常')
           .onClick(() => {
@@ -384,7 +384,7 @@ export struct ChatScenariosPage {
         Text('编辑')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: 2, bottom: 2 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('编辑这个自定义场景')
           .onClick(() => {
             this.openCustom(item);
@@ -415,7 +415,7 @@ export struct ChatScenariosPage {
         Text(actionLabel)
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText(actionLabel)
           .onClick(() => {
             this.openCustom(null);

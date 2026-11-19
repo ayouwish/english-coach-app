@@ -170,7 +170,7 @@ export struct StoryDetailPage {
           Text('改名')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('重命名故事')
             .onClick(() => {
               this.renameText = this.vm.title;
@@ -180,7 +180,7 @@ export struct StoryDetailPage {
           Text('删除')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_bad_text'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('删除故事')
             .onClick(() => {
               this.confirmDelete();
@@ -214,6 +214,7 @@ export struct StoryDetailPage {
           Text('取消')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.renameShown = false;
             })
@@ -408,7 +409,7 @@ export struct StoryDetailPage {
           Text('复制全文')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText('复制英文全文')
             .onClick(() => {
               void this.copyStory();
@@ -417,7 +418,7 @@ export struct StoryDetailPage {
         Text(this.printBusy ? '🖨️ 生成中…' : '🖨️ 打印')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('打印故事')
           .onClick(() => {
             this.choosePrintLayout();
@@ -464,11 +465,12 @@ export struct StoryDetailPage {
             .fontColor($r('app.color.ec_primary'))
             .layoutWeight(1)
           Text(this.vm.showSource ? '收起' : '展开')
-            .fontSize(EcFont.micro)
+            .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))
         }
         .width('100%')
         .alignItems(VerticalAlign.Center)
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .onClick(() => {
           this.vm.toggleSource();
         })
@@ -529,11 +531,12 @@ export struct StoryDetailPage {
               .fontSize(EcFont.micro)
               .fontColor($r('app.color.ec_primary'))
             Text(this.vm.showPrompt ? '收起' : '展开')
-              .fontSize(EcFont.micro)
+              .fontSize(EcFont.caption)
               .fontColor($r('app.color.ec_muted'))
           }
           .width('100%')
           .alignItems(VerticalAlign.Center)
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             this.vm.togglePrompt();
           })

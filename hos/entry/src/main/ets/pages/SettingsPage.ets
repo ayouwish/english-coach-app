@@ -378,7 +378,7 @@ export struct SettingsPage {
         Text('去试听选择')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             NavigationService.push(Routes.VOICES);
           })
@@ -484,7 +484,7 @@ export struct SettingsPage {
         Text('检查')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             void this.vm.checkServer();
           })
@@ -527,7 +527,7 @@ export struct SettingsPage {
         Text('清除')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_bad_text'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             this.vm.clearAudioCache();
           })

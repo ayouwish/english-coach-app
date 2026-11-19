@@ -98,7 +98,7 @@ export struct StoryRecordPage {
         EcButton({
           label: this.recordButtonLabel(),
           kind: this.vm.recording ? EcButtonKind.DANGER : EcButtonKind.TONAL,
-          btnWidth: this.vm.recording ? '58%' : '100%',
+          btnWidth: this.vm.recording ? '48%' : '100%',
           disabled: this.vm.busy,
           onTap: () => {
             if (this.vm.recording) {
@@ -112,7 +112,7 @@ export struct StoryRecordPage {
           EcButton({
             label: '✖️ 不要了',
             kind: EcButtonKind.GHOST,
-            btnWidth: '38%',
+            btnWidth: '48%',
             onTap: () => {
               void this.vm.cancelRecording();
             }
@@ -173,17 +173,17 @@ export struct StoryRecordPage {
           .fontColor($r('app.color.ec_muted'))
         Blank()
         Text('⬇️ 再简单一点')
-          .fontSize(EcFont.micro)
+          .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x1, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('降低难度')
           .onClick(() => {
             this.vm.adjustLevel(-1);
           })
         Text('⬆️ 再难一点')
-          .fontSize(EcFont.micro)
+          .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x1, right: EcSpace.x1, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('提高难度')
           .onClick(() => {
             this.vm.adjustLevel(1);
@@ -199,7 +199,7 @@ export struct StoryRecordPage {
             .fontWeight(this.vm.level === item ? FontWeight.Medium : FontWeight.Normal)
             .fontColor(this.vm.level === item ? Color.White : $r('app.color.ec_muted'))
             .backgroundColor(this.vm.level === item ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-            .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .borderRadius(EcRadius.pill)
             .margin(3)
             .accessibilityText('难度 ' + item)

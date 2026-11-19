@@ -106,7 +106,7 @@ export struct ChatBubbleView {
           Text(this.playLabel())
             .fontSize(EcFont.caption)
             .fontColor(this.playState === 'failed' ? $r('app.color.ec_bad_text') : $r('app.color.ec_primary'))
-            .padding({ top: 2, bottom: 2 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .accessibilityText(this.playLabel())
             .onClick(() => {
               this.onPlayTap();
@@ -119,9 +119,10 @@ export struct ChatBubbleView {
         }
         if (this.wordTexts.length > 0) {
           Text(this.toggleWordsLabel())
-            .fontSize(EcFont.micro)
+            .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_muted'))
             .accessibilityText(this.toggleWordsLabel())
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.onWordsTap();
             })
@@ -504,7 +505,7 @@ export struct ChatSessionPage {
               .fontSize(EcFont.caption)
               .fontColor($r('app.color.ec_primary'))
               .backgroundColor($r('app.color.ec_primary_soft'))
-              .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .borderRadius(EcRadius.pill)
               .margin(3)
               .maxLines(2)
@@ -605,35 +606,47 @@ export struct ChatSessionPage {
         .width('100%')
         .alignItems(VerticalAlign.Center)
       }
-      EcButton({
-        label: this.vm.recording
-          ? ('⏹ 说完啦 ' + Math.floor(this.vm.elapsedMs / 1000).toString() + 's')
-          : (this.vm.preparing ? '正在打开麦克风…' : '🎤 开始录音'),
-        kind: this.vm.recording ? EcButtonKind.DANGER : EcButtonKind.PRIMARY,
-        big: true,
-        loading: this.vm.preparing,
-        disabled: this.vm.busy || this.vm.ending || this.vm.quotaExceeded,
-        onTap: () => {
-          void this.onRecordTap();
-        }
-      })
       if (this.vm.recording) {
+        // 与跟读页一致：说完啦 / 不要了 两个按钮各占一半
         Row({ space: EcSpace.x2 }) {
-          Text('正在听你说…说完点上面按钮')
-            .fontSize(EcFont.micro)
-            .fontColor($r('app.color.ec_warn_text'))
-            .layoutWeight(1)
-          Text('✖️ 不要了')
-            .fontSize(EcFont.caption)
-            .fontColor($r('app.color.ec_bad_text'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: 2, bottom: 2 })
-            .accessibilityText('取消这次录音')
-            .onClick(() => {
+          EcButton({
+            label: '⏹ 说完啦 ' + Math.floor(this.vm.elapsedMs / 1000).toString() + 's',
+            kind: EcButtonKind.DANGER,
+            big: true,
+            btnWidth: '48%',
+            disabled: this.vm.busy || this.vm.ending || this.vm.quotaExceeded,
+            onTap: () => {
+              void this.onRecordTap();
+            }
+          })
+          EcButton({
+            label: '✖️ 不要了',
+            kind: EcButtonKind.GHOST,
+            big: true,
+            btnWidth: '48%',
+            disabled: this.vm.ending,
+            onTap: () => {
               void this.vm.cancelRecording();
-            })
+            }
+          })
         }
         .width('100%')
-        .alignItems(VerticalAlign.Center)
+        Text('正在听你说…说完点「说完啦」；点「不要了」丢弃这条')
+          .fontSize(EcFont.micro)
+          .fontColor($r('app.color.ec_warn_text'))
+          .width('100%')
+          .textAlign(TextAlign.Center)
+      } else {
+        EcButton({
+          label: this.vm.preparing ? '正在打开麦克风…' : '🎤 开始录音',
+          kind: EcButtonKind.PRIMARY,
+          big: true,
+          loading: this.vm.preparing,
+          disabled: this.vm.busy || this.vm.ending || this.vm.quotaExceeded,
+          onTap: () => {
+            void this.onRecordTap();
+          }
+        })
       }
       Text('本页需要麦克风才能对话（没有输入框）')
         .fontSize(EcFont.micro)

@@ -353,6 +353,7 @@ struct Index {
         .fontSize(EcFont.caption)
         .fontColor($r('app.color.ec_muted'))
         .textAlign(TextAlign.Center)
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .onClick(() => {
           this.goLogin();
         })

@@ -253,6 +253,7 @@ export struct PracticeResultPage {
                 this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index] ? '播放中…' : '▶ 回放')
                 .fontSize(EcFont.caption)
                 .fontColor($r('app.color.ec_primary'))
+                .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
                 .onClick(() => {
                   this.playHistory(this.vm.historyAttemptIds[this.vm.historyAttemptIds.length - 1 - index]);
                 })

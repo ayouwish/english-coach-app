@@ -128,7 +128,7 @@ export struct StoryHomePage {
       Text('↻ 刷新')
         .fontSize(EcFont.caption)
         .fontColor($r('app.color.ec_primary'))
-        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .accessibilityText('刷新故事集')
         .onClick(() => {
           void this.vm.load();
@@ -146,7 +146,7 @@ export struct StoryHomePage {
         .fontWeight(this.vm.onlyMine ? FontWeight.Normal : FontWeight.Medium)
         .fontColor(this.vm.onlyMine ? $r('app.color.ec_muted') : Color.White)
         .backgroundColor(this.vm.onlyMine ? $r('app.color.ec_surface_alt') : $r('app.color.ec_primary'))
-        .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .borderRadius(EcRadius.pill)
         .accessibilityText('显示全家故事')
         .onClick(() => {
@@ -157,7 +157,7 @@ export struct StoryHomePage {
         .fontWeight(this.vm.onlyMine ? FontWeight.Medium : FontWeight.Normal)
         .fontColor(this.vm.onlyMine ? Color.White : $r('app.color.ec_muted'))
         .backgroundColor(this.vm.onlyMine ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-        .padding({ left: EcSpace.x4, right: EcSpace.x4, top: EcSpace.x1, bottom: EcSpace.x1 })
+        .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
         .borderRadius(EcRadius.pill)
         .accessibilityText('只看我创建的故事')
         .onClick(() => {

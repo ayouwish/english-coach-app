@@ -209,6 +209,7 @@ export struct RegisterPage {
           Text('已有账号？去登录')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               NavigationService.pop();
             })

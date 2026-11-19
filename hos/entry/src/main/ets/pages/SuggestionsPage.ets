@@ -198,7 +198,7 @@ export struct SuggestionsPage {
         Text('刷新')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             void this.vm.loadList();
           })
@@ -253,7 +253,7 @@ export struct SuggestionsPage {
         Text('一键复制')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('复制 Markdown')
           .onClick(() => {
             void this.copyExport();
@@ -261,6 +261,7 @@ export struct SuggestionsPage {
         Text('清空')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_muted'))
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .onClick(() => {
             this.vm.exportText = '';
             this.vm.exportNotice = '';
@@ -330,7 +331,7 @@ export struct SuggestionsPage {
           Text('👁 标记已读')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .backgroundColor($r('app.color.ec_primary_soft'))
             .borderRadius(EcRadius.sm)
             .onClick(() => {
@@ -341,7 +342,7 @@ export struct SuggestionsPage {
           Text('✅ 标记已解决')
             .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_good_text'))
-            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .backgroundColor($r('app.color.ec_good_bg'))
             .borderRadius(EcRadius.sm)
             .onClick(() => {

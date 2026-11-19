@@ -291,7 +291,7 @@ export struct ChatCustomPage {
               .fontWeight(FontWeight.Medium)
               .fontColor(this.level === item ? Color.White : $r('app.color.ec_muted'))
               .backgroundColor(this.level === item ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-              .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .borderRadius(EcRadius.pill)
               .accessibilityText('难度 ' + item)
               .onClick(() => {
@@ -318,7 +318,7 @@ export struct ChatCustomPage {
               .fontWeight(FontWeight.Medium)
               .fontColor(this.audience === 'adult' ? Color.White : $r('app.color.ec_muted'))
               .backgroundColor(this.audience === 'adult' ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-              .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .borderRadius(EcRadius.pill)
               .accessibilityText('创建成人场景')
               .onClick(() => {
@@ -329,7 +329,7 @@ export struct ChatCustomPage {
               .fontWeight(FontWeight.Medium)
               .fontColor(this.audience === 'child' ? Color.White : $r('app.color.ec_muted'))
               .backgroundColor(this.audience === 'child' ? $r('app.color.ec_primary') : $r('app.color.ec_surface_alt'))
-              .padding({ left: EcSpace.x3, right: EcSpace.x3, top: EcSpace.x1, bottom: EcSpace.x1 })
+              .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
               .borderRadius(EcRadius.pill)
               .accessibilityText('创建小朋友的场景')
               .onClick(() => {

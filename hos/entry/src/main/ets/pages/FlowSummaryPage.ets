@@ -195,7 +195,7 @@ export struct FlowSummaryPage {
         Text(this.encPlaying ? '🔊 播放中…' : '🔊 听鼓励')
           .fontSize(EcFont.caption)
           .fontColor($r('app.color.ec_primary'))
-          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x1, bottom: EcSpace.x1 })
+          .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
           .accessibilityText('播放鼓励语')
           .onClick(() => {
             void this.playEncouragement();
@@ -426,8 +426,9 @@ export struct FlowSummaryPage {
             .maxLines(2)
             .layoutWeight(1)
           Text('重录这句')
-            .fontSize(EcFont.micro)
+            .fontSize(EcFont.caption)
             .fontColor($r('app.color.ec_primary'))
+            .padding({ left: EcSpace.x2, right: EcSpace.x2, top: EcSpace.x2, bottom: EcSpace.x2 })
             .onClick(() => {
               this.redo(item.index);
             })
