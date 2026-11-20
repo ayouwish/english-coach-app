@@ -32,6 +32,18 @@
 
 ---
 
+## v0.29 · 2026-11-14（ASR 接入 DeepSeek · Phase 1）
+
+| # | 功能 | commit | 怎么验证 |
+|---|---|---|---|
+| 1 | **ASR 新增 DeepSeek provider**（可选，`ASR_PROVIDER=deepseek`；默认 `auto` 不变）：16k WAV 分片（≤110s/≤8MiB）+ 逐片识别；失败自动回退智谱/Azure 并标 `fallback_from` | `41c04b5`（voice）+ `e375188`（web）| `.env` 设 `DEEPSEEK_ASR_API_KEY` + `ASR_PROVIDER=deepseek` → 录音识别走 DeepSeek；异常自动回退 |
+| 2 | **成本按 provider 计价**：DeepSeek ASR ¥0.78/小时（`COST_ASR_DEEPSEEK_CNY_PER_HOUR`），管理员看板可单独看到 DeepSeek ASR 成本 | `e375188` | 管理员看板 ASR 成本按 provider 区分 |
+| 3 | **A/B 报告**：合成语音 20 英 + 20 中，DeepSeek 英文 CER 0.007/755ms（Azure 0.043/1892ms）、中文 0.015/810ms | `docs/asr-ab-report.md` | 见报告；**限制**：无时间戳/置信度，不能替代发音评测（PA）；合成语音≠儿童真实语音 |
+
+升级要点：重建 **voice + web**；`.env` 可选 `DEEPSEEK_ASR_API_KEY`、`ASR_PROVIDER=deepseek`、`ASR_FALLBACK=1`、`COST_ASR_DEEPSEEK_CNY_PER_HOUR`。默认行为不变（auto）。
+
+---
+
 ## v0.28 · 2026-11-12（独立后台管理员 + 邀请码后台管理）
 
 | # | 功能 | commit | 怎么验证 |
