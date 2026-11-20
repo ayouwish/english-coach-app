@@ -111,7 +111,7 @@
 |---|---|---|
 | 家长汇总 🔒 | `GET /api/parent/summary` | 使用时长、趋势、掌握度（**仅本家庭**）|
 | **家庭成本 🔒** | `GET /api/cost/summary?month=` | 「💰 本月成本」：总金额 + LLM/图片/TTS/ASR 分项 + 成员明细 + 近 7 天；单价可配置 |
-| **后台管理员（独立登录）** | 页面 `/admin/login` → `/admin`；`POST /api/admin/login|logout`；`GET /api/admin/costs`、`GET/POST /api/admin/family-invites` | **与家庭账号完全无关**：`ADMIN_PASSWORD` 环境变量 + 独立 HttpOnly cookie；成本看板（跨家庭 LLM tokens/图片/金额/按家庭/按天/最近明细）+ 邀请码管理（名额/生成/列表/调整）；家庭账号访问 → 401/跳登录 |
+| **后台管理员（独立登录）** | 页面 `/admin/login` → `/admin`；`POST /api/admin/login|logout`；`GET /api/admin/costs`、`GET/POST /api/admin/family-invites`、`GET/POST /api/admin/tts-warmup` | **与家庭账号完全无关**：`ADMIN_PASSWORD` + 独立 cookie；成本看板 + 邀请码管理 + **音色缓存预热**（全量 600×9×2=10,800 条，估算成本/进度/取消/再次补缓存）；家庭账号访问 → 401/跳登录 |
 | 提建议 | `POST /api/suggestions`（所有人）；`GET /api/suggestions` 🔒 | 家长集中查看 + 导出 Markdown |
 | 设置 | `GET/PATCH /api/settings` | **卡通插画自动生成开关（默认关）**、**性别**、**音色（9 种+试听）**、**故事句子数（3–12 / 角色默认）**、**单词显示音标（成人开/儿童关）**、语速、每日时长、免费聊开关 |
 | 健康检查 | `GET /api/health` | 显示「服务降级」提示（`voice.capabilities`、`degraded`）|

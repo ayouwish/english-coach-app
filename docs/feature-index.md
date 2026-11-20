@@ -113,6 +113,7 @@
 | **家庭成本台账** | `GET /api/cost/summary?month=`、`/parent` 成本卡（LLM/图片/TTS/ASR，按家庭）| ✅ | README §6.1b、§3.3 |
 | **后台管理员** | `/admin/login`、`/admin`（独立 `ADMIN_PASSWORD` 登录）；成本看板 + 邀请码管理 | ✅ | `screens-matrix.md` §7、README §3.3 |
 | **管理员成本看板（跨家庭）** | `GET /api/admin/costs`（独立管理员会话；LLM tokens/图片/金额/按家庭/按天/明细）| ✅ | 同上 |
+| **一键缓存所有音色（批量预热）** | `/admin`「🎧 音色缓存预热」、`/api/admin/tts-warmup`（voice `/v1/warmup/bulk`；进度/取消/再次补缓存）| ✅ | `screens-matrix.md` §7、`deploy/.env.example`（CACHE_MAX_*）|
 | 提建议 / 导出 | `POST /api/suggestions`、`GET /api/suggestions`、`/export` | ✅ | 同上 |
 | 部署自查 | `GET /api/health`（features）、`GET /v1/health`（capabilities） | ✅ | README §2.4、§3 |
 | 清理某账号测试数据 | `web/scripts/cleanup-user-data.mjs` | ✅ | `english-coach/docs/deployment.md` §6.5 |
