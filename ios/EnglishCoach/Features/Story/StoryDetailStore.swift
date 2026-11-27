@@ -34,6 +34,8 @@ final class StoryDetailStore {
     /// 打印用的绝对日期（`yyyy/M/d`）；`dateText` 是“3 分钟前”这类相对文案。
     private(set) var createdAtText = ""
     private(set) var sourceZh = ""
+    /// 只有故事创建者能看到/打印中文原文（与 web `isStoryOwner` 一致）。
+    private(set) var isOwner = false
     private(set) var showsSourceZh = false
     private(set) var sentences: [StorySentenceItem] = []
 
@@ -100,7 +102,12 @@ final class StoryDetailStore {
     }
 
     var hasSourceZh: Bool {
-        !sourceZh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !sourceZh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isOwner
+    }
+
+    /// 只有创建者可以打印中文原文。
+    var canSeeSourceZh: Bool {
+        hasSourceZh
     }
 
     // MARK: - 加载
@@ -136,6 +143,8 @@ final class StoryDetailStore {
         dateText = ECJSON.relativeText(from: detail.createdAt)
         createdAtText = Self.printDate(detail.createdAt)
         sourceZh = (detail.sourceZh ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let userId = session.user?.id ?? ""
+        isOwner = !userId.isEmpty && (detail.createdBy ?? "") == userId
         showsSourceZh = false
         imagePrompt = (detail.imagePrompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         showsImagePrompt = false

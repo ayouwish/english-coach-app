@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// 多选打印：sheet 关闭后要交给系统打印/分享的 PDF。
+private struct PendingStoryCollectionPDF {
+    let data: Data
+    let name: String
+}
+
 /// 故事集（Tab 3）。契约 §3.15.1 冻结签名：`(services: AppServices, audio: AudioCoordinator)`。
 ///
 /// 列表按「今天/昨天/更早」分组（两列卡片），支持全家/只看我的筛选、
@@ -16,6 +22,15 @@ struct StoryHomeView: View {
     /// 内嵌的创作区状态（对齐 web：故事首页同时是创作页）。
     @State private var createStore: StoryRecordStore?
 
+    // 多选打印故事集
+    @State private var selecting = false
+    @State private var selectedIDs: Set<String> = []
+    @State private var showCollectionPrint = false
+    @State private var pendingCollectionPrint: PendingStoryCollectionPDF?
+    @State private var pendingCollectionShare: PendingStoryCollectionPDF?
+    @State private var collectionFailureMessage = ""
+    @State private var showCollectionFailure = false
+
     init(services: AppServices, audio: AudioCoordinator) {
         self.services = services
         self.audio = audio
@@ -28,12 +43,36 @@ struct StoryHomeView: View {
                     store: store,
                     services: services,
                     creationStore: createStore,
+                    selecting: selecting,
+                    selectedIDs: selectedIDs,
                     onOpen: open,
                     onRead: { materialId in router.push(.flowStory(materialId: materialId)) },
-                    onCreated: handleCreated
+                    onCreated: handleCreated,
+                    onStartSelecting: startSelecting,
+                    onCancelSelecting: cancelSelecting,
+                    onToggleSelection: toggleSelection,
+                    onPrintSelection: printSelection
                 )
                     .onChange(of: store.savedTick) { _, _ in
                         Task { await store.reload() }
+                    }
+                    .sheet(isPresented: $showCollectionPrint, onDismiss: handleCollectionDismiss) {
+                        StoryCollectionPrintSheet(
+                            storyIDs: selectedStoryIDs,
+                            currentUserId: session.user?.id ?? "",
+                            services: services,
+                            onPrint: { data, name in
+                                pendingCollectionPrint = PendingStoryCollectionPDF(data: data, name: name)
+                            },
+                            onShare: { data, name in
+                                pendingCollectionShare = PendingStoryCollectionPDF(data: data, name: name)
+                            }
+                        )
+                    }
+                    .alert("打印面板打不开", isPresented: $showCollectionFailure) {
+                        Button("好", role: .cancel) {}
+                    } message: {
+                        Text(collectionFailureMessage)
                     }
             } else {
                 LoadingBlock(text: "正在打开故事书…", subText: nil, showsSpinner: true)
@@ -65,6 +104,72 @@ struct StoryHomeView: View {
         Task { await store?.reload() }
         router.push(.storyDetail(materialId: materialId))
     }
+
+    // MARK: - 多选打印故事集
+
+    /// 按列表显示顺序取已选 id（Set 本身无序；合集封面/排版需要稳定顺序）。
+    private var selectedStoryIDs: [String] {
+        guard let store else { return [] }
+        return store.groups
+            .flatMap(\.items)
+            .map(\.id)
+            .filter { selectedIDs.contains($0) }
+    }
+
+    private func startSelecting() {
+        selectedIDs = []
+        selecting = true
+    }
+
+    private func cancelSelecting() {
+        selecting = false
+        selectedIDs = []
+    }
+
+    private func toggleSelection(_ id: String) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else if selectedIDs.count < 30 {
+            selectedIDs.insert(id)
+        }
+    }
+
+    private func printSelection() {
+        guard !selectedStoryIDs.isEmpty else { return }
+        showCollectionPrint = true
+    }
+
+    private func handleCollectionDismiss() {
+        let pendingPrint = pendingCollectionPrint
+        let pendingShare = pendingCollectionShare
+        pendingCollectionPrint = nil
+        pendingCollectionShare = nil
+        defer { cancelSelecting() }
+
+        if let pendingPrint {
+            Task { @MainActor in
+                let ok = await StoryPrintService.presentPrintPanel(data: pendingPrint.data, jobName: pendingPrint.name)
+                if !ok {
+                    let shared = await StoryPrintService.sharePDF(
+                        data: pendingPrint.data,
+                        fileName: "story-collection.pdf"
+                    )
+                    if !shared {
+                        collectionFailureMessage = "系统打印面板没有打开。请重试，或稍后再试。"
+                        showCollectionFailure = true
+                    }
+                }
+            }
+        } else if let pendingShare {
+            Task { @MainActor in
+                let ok = await StoryPrintService.sharePDF(data: pendingShare.data, fileName: pendingShare.name)
+                if !ok {
+                    collectionFailureMessage = "分享面板没有打开，请稍后重试。"
+                    showCollectionFailure = true
+                }
+            }
+        }
+    }
 }
 
 // MARK: - 内容
@@ -73,9 +178,15 @@ private struct StoryHomeContent: View {
     let store: StoryHomeStore
     let services: AppServices
     let creationStore: StoryRecordStore?
+    let selecting: Bool
+    let selectedIDs: Set<String>
     let onOpen: (String) -> Void
     let onRead: (String) -> Void
     let onCreated: (String) -> Void
+    let onStartSelecting: () -> Void
+    let onCancelSelecting: () -> Void
+    let onToggleSelection: (String) -> Void
+    let onPrintSelection: () -> Void
 
     @Environment(\.roleCapabilities) private var caps
 
@@ -115,6 +226,39 @@ private struct StoryHomeContent: View {
         }
         .refreshable { await store.reload() }
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting {
+                selectionBar
+            }
+        }
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: Tokens.Spacing.s12) {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.s2) {
+                Text("已选 \(selectedIDs.count) 篇")
+                    .font(AppFont.bodyEmphasis(caps))
+                    .foregroundStyle(Tokens.Colors.textPrimary)
+                if selectedIDs.count >= 30 {
+                    Text("最多 30 篇")
+                        .font(AppFont.micro(caps))
+                        .foregroundStyle(Tokens.Colors.warningText)
+                }
+            }
+            Spacer(minLength: 0)
+            Button("取消") {
+                onCancelSelecting()
+            }
+            .font(AppFont.caption(caps).weight(.semibold))
+            .foregroundStyle(Tokens.Colors.textSecondary)
+            .frame(minHeight: caps.minTapTarget)
+            AppButton(title: "🖨️ 打印故事集", kind: .primary, isEnabled: !selectedIDs.isEmpty) {
+                onPrintSelection()
+            }
+        }
+        .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
+        .padding(.vertical, Tokens.Spacing.s8)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: 统计卡
@@ -155,6 +299,9 @@ private struct StoryHomeContent: View {
     private var filterRow: some View {
         HStack(spacing: Tokens.Spacing.s8) {
             Button {
+                if selecting {
+                    onCancelSelecting()
+                }
                 store.setOnlyMine(false)
             } label: {
                 filterChip(title: "全家", isOn: !store.onlyMine)
@@ -163,6 +310,9 @@ private struct StoryHomeContent: View {
             .accessibilityLabel(Text("显示全家故事"))
 
             Button {
+                if selecting {
+                    onCancelSelecting()
+                }
                 store.setOnlyMine(true)
             } label: {
                 filterChip(title: "只看我的", isOn: store.onlyMine)
@@ -174,9 +324,39 @@ private struct StoryHomeContent: View {
             if store.isRefreshing {
                 ProgressView().controlSize(.small).tint(Tokens.Colors.primary)
             }
-            Text("\(store.filteredCount) 篇")
-                .font(AppFont.micro(caps))
-                .foregroundStyle(Tokens.Colors.textSecondary)
+            if selecting {
+                Text("已选 \(selectedIDs.count)/30 篇")
+                    .font(AppFont.micro(caps))
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+                Button {
+                    onCancelSelecting()
+                } label: {
+                    Text("取消")
+                        .font(AppFont.caption(caps).weight(.semibold))
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                        .padding(.horizontal, Tokens.Spacing.s12)
+                        .frame(minHeight: caps.minTapTarget)
+                        .background(Capsule(style: .continuous).fill(Tokens.Colors.surfaceMuted))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("取消选择"))
+            } else {
+                Text("\(store.filteredCount) 篇")
+                    .font(AppFont.micro(caps))
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+                Button {
+                    onStartSelecting()
+                } label: {
+                    Text("☑️ 选择")
+                        .font(AppFont.caption(caps).weight(.semibold))
+                        .foregroundStyle(Tokens.Colors.primary)
+                        .padding(.horizontal, Tokens.Spacing.s12)
+                        .frame(minHeight: caps.minTapTarget)
+                        .background(Capsule(style: .continuous).fill(Tokens.Colors.surfaceMuted))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("选择故事用于打印故事集"))
+            }
         }
     }
 
@@ -213,13 +393,25 @@ private struct StoryHomeContent: View {
         }
     }
 
-    /// 对齐 web「我的故事集」：一列行式卡片（缩略图 + 标题/元信息 + ▶ 读这篇）。
+    /// 对齐 web「我的故事集」：一列行式卡片（缩略图 + 标题/元信息 + ▶ 读这篇）；
+    /// 多选模式下整行可点，左侧显示勾选圈，隐藏「读这篇」。
     private func card(_ item: StoryCardItem) -> some View {
-        HStack(spacing: Tokens.Spacing.s12) {
+        let isSelected = selectedIDs.contains(item.id)
+        return HStack(spacing: Tokens.Spacing.s12) {
             Button {
-                onOpen(item.id)
+                if selecting {
+                    onToggleSelection(item.id)
+                } else {
+                    onOpen(item.id)
+                }
             } label: {
                 HStack(spacing: Tokens.Spacing.s12) {
+                    if selecting {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(isSelected ? Tokens.Colors.primary : Tokens.Colors.textTertiary)
+                            .accessibilityHidden(true)
+                    }
                     StoryRemoteImageView(
                         materialId: item.id,
                         version: item.imageVersion,
@@ -247,23 +439,30 @@ private struct StoryHomeContent: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("\(item.title)，\(metaLine(item))"))
+            .accessibilityLabel(
+                Text(selecting
+                     ? "\(isSelected ? "已选" : "未选")《\(item.title)》"
+                     : "\(item.title)，\(metaLine(item))")
+            )
+            .accessibilityHint(Text(selecting ? "点按切换选择" : "打开故事详情"))
 
-            AppButton(title: "▶ 读这篇", kind: .ghost) {
-                onRead(item.id)
+            if !selecting {
+                AppButton(title: "▶ 读这篇", kind: .ghost) {
+                    onRead(item.id)
+                }
+                .frame(width: 116)
+                .accessibilityLabel(Text("连读《\(item.title)》"))
             }
-            .frame(width: 116)
-            .accessibilityLabel(Text("连读《\(item.title)》"))
         }
         .padding(Tokens.Spacing.s12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
-                .fill(Tokens.Colors.surfaceCard)
+                .fill(isSelected ? Tokens.Colors.primary.opacity(0.08) : Tokens.Colors.surfaceCard)
         )
         .overlay(
             RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous)
-                .strokeBorder(Tokens.Colors.borderSubtle, lineWidth: 1)
+                .strokeBorder(isSelected ? Tokens.Colors.primary.opacity(0.45) : Tokens.Colors.borderSubtle, lineWidth: 1)
         )
     }
 

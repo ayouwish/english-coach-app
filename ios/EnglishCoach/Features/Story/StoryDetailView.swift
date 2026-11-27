@@ -595,13 +595,13 @@ struct StoryDetailView: View {
                         Text("显示中文原文")
                             .font(AppFont.body(caps))
                             .foregroundStyle(Tokens.Colors.textPrimary)
-                        Text(store.sourceZh.isEmpty ? "这篇故事没有中文原文" : "把你的中文讲述也印在纸上（仅创建者可见）")
+                        Text(store.canSeeSourceZh ? "把你的中文讲述也印在纸上（仅创建者可见）" : "只有创建者可以打印这篇的中文原文")
                             .font(AppFont.micro(caps))
                             .foregroundStyle(Tokens.Colors.textTertiary)
                     }
                 }
                 .tint(Tokens.Colors.primary)
-                .disabled(store.sourceZh.isEmpty)
+                .disabled(!store.canSeeSourceZh)
                 .frame(minHeight: caps.minTapTarget)
 
                 Toggle(isOn: $printLines) {
@@ -641,7 +641,7 @@ struct StoryDetailView: View {
             authorName: store.authorName,
             sentences: store.sentences.map(\.en),
             sourceZh: store.sourceZh,
-            includeChinese: printChinese && !store.sourceZh.isEmpty,
+            includeChinese: printChinese && store.canSeeSourceZh,
             includeWritingLines: printLines,
             layout: printLayout
         )

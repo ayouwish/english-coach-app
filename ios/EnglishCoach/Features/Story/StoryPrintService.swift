@@ -35,6 +35,24 @@ struct StoryPrintOptions {
     var layout: StoryPrintLayout
 }
 
+/// 合集里的单篇故事（合集打印用）。
+struct StoryPrintStory: Sendable {
+    var title: String
+    var level: String
+    var dateText: String
+    var authorName: String
+    var sentences: [String]
+    var sourceZh: String
+}
+
+/// 故事集合集打印选项（封面 + 连续排版，对齐 web `/story/print?ids=`）。
+struct StoryPrintCollectionOptions: Sendable {
+    var stories: [StoryPrintStory]
+    var includeChinese: Bool
+    var includeWritingLines: Bool
+    var collectionTitle: String = "我的故事集"
+}
+
 /// 故事打印：本地画 PDF（A4 / A5），再交给系统打印面板；
 /// 也支持导出 PDF 用「文件」App / 分享打印（对齐 web 的「打印 / 另存为 PDF」）。
 enum StoryPrintService {
@@ -174,6 +192,151 @@ enum StoryPrintService {
                 }
             }
 
+            endPage()
+        }
+    }
+
+    /// 故事集合集：封面独占第一页，之后按“连续排版”拼接；长故事自然跨页，句子块不跨页。
+    static func makeCollectionPDF(_ options: StoryPrintCollectionOptions) -> Data? {
+        let stories = options.stories.filter { story in
+            story.sentences.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+        guard !stories.isEmpty else { return nil }
+
+        let media = a4
+        let margin: CGFloat = 44
+        let contentWidth = media.width - margin * 2
+        let bottomLimit = media.height - margin - 56
+
+        let coverFont = UIFont.systemFont(ofSize: 30, weight: .bold)
+        let coverSubFont = UIFont.systemFont(ofSize: 13)
+        let storyTitleFont = UIFont.systemFont(ofSize: 15, weight: .bold)
+        let storyMetaFont = UIFont.systemFont(ofSize: 9)
+        let zhTitleFont = UIFont.systemFont(ofSize: 9, weight: .bold)
+        let zhBodyFont = UIFont.systemFont(ofSize: 9)
+        let bodyFont = UIFont.systemFont(ofSize: 13)
+        let numberFont = UIFont.systemFont(ofSize: 13, weight: .semibold)
+
+        let coverAttrs = attrs(coverFont)
+        let coverSubAttrs = attrs(coverSubFont, UIColor(white: 0.35, alpha: 1))
+        let storyTitleAttrs = attrs(storyTitleFont)
+        let storyMetaAttrs = attrs(storyMetaFont, UIColor(white: 0.35, alpha: 1))
+        let zhTitleAttrs = attrs(zhTitleFont)
+        let zhBodyAttrs = attrs(zhBodyFont, lineSpacing: 2)
+        let bodyAttrs = attrs(bodyFont, lineSpacing: 6)
+        let numberAttrs = attrs(numberFont)
+        let footerAttrs = attrs(UIFont.systemFont(ofSize: 9), UIColor(white: 0.3, alpha: 1))
+
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: media))
+        return renderer.pdfData { ctx in
+            var page = 0
+            var y: CGFloat = margin
+
+            func beginPage() {
+                ctx.beginPage()
+                page += 1
+                y = margin
+            }
+
+            func endPage() {
+                drawCollectionFooter(page: page, media: media, margin: margin, attrs: footerAttrs)
+            }
+
+            func ensure(_ height: CGFloat) {
+                if y + height > bottomLimit {
+                    endPage()
+                    beginPage()
+                }
+            }
+
+            // 封面（独占第一页）
+            beginPage()
+            let coverTop = media.height * 0.30
+            drawText(options.collectionTitle, at: CGPoint(x: margin, y: coverTop), width: contentWidth, attrs: coverAttrs)
+            let subtitle = "共 \(stories.count) 篇 · \(todayText())"
+            drawText(subtitle, at: CGPoint(x: margin, y: coverTop + 44), width: contentWidth, attrs: coverSubAttrs)
+            strokeLine(
+                from: CGPoint(x: margin, y: coverTop + 78),
+                to: CGPoint(x: media.width - margin, y: coverTop + 78),
+                color: UIColor(white: 0.55, alpha: 1)
+            )
+            drawText("英语教练 · 家庭故事集", at: CGPoint(x: margin, y: coverTop + 94), width: contentWidth, attrs: coverSubAttrs)
+            endPage()
+
+            // 正文：封面之后连续排版
+            beginPage()
+            for (storyIndex, story) in stories.enumerated() {
+                let sentences = story.sentences
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                guard !sentences.isEmpty else { continue }
+
+                let titleHeight = textSize(story.title, width: contentWidth, attrs: storyTitleAttrs).height
+                var meta = "等级 \(story.level.isEmpty ? "—" : story.level) · \(sentences.count) 句"
+                if !story.dateText.isEmpty { meta += " · \(story.dateText)" }
+                if !story.authorName.isEmpty { meta += " · \(story.authorName)" }
+                let metaHeight = textSize(meta, width: contentWidth, attrs: storyMetaAttrs).height
+
+                ensure(titleHeight + metaHeight + 48)
+                if storyIndex > 0 {
+                    y += 10
+                    strokeLine(
+                        from: CGPoint(x: margin, y: y),
+                        to: CGPoint(x: media.width - margin, y: y),
+                        color: UIColor(white: 0.82, alpha: 1)
+                    )
+                    y += 14
+                }
+                drawText(story.title, at: CGPoint(x: margin, y: y), width: contentWidth, attrs: storyTitleAttrs)
+                y += titleHeight + 2
+                drawText(meta, at: CGPoint(x: margin, y: y), width: contentWidth, attrs: storyMetaAttrs)
+                y += metaHeight + 8
+                strokeLine(
+                    from: CGPoint(x: margin, y: y),
+                    to: CGPoint(x: media.width - margin, y: y),
+                    color: UIColor(white: 0.55, alpha: 1)
+                )
+                y += 10
+
+                let zh = story.sourceZh.trimmingCharacters(in: .whitespacesAndNewlines)
+                if options.includeChinese, !zh.isEmpty {
+                    let zhHeading = "中文原文（我讲的）"
+                    let zhBodyWidth = contentWidth - 16
+                    let headingHeight = textSize(zhHeading, width: zhBodyWidth, attrs: zhTitleAttrs).height
+                    let bodyHeight = textSize(zh, width: zhBodyWidth, attrs: zhBodyAttrs).height
+                    let boxHeight = 8 + headingHeight + 2 + bodyHeight + 8
+                    ensure(boxHeight + 8)
+                    let box = CGRect(x: margin, y: y, width: contentWidth, height: boxHeight)
+                    UIColor(red: 0.972, green: 0.976, blue: 1, alpha: 1).setFill()
+                    UIBezierPath(roundedRect: box, cornerRadius: 6).fill()
+                    drawText(zhHeading, at: CGPoint(x: margin + 8, y: y + 8), width: zhBodyWidth, attrs: zhTitleAttrs)
+                    drawText(zh, at: CGPoint(x: margin + 8, y: y + 8 + headingHeight + 2), width: zhBodyWidth, attrs: zhBodyAttrs)
+                    y += boxHeight + 8
+                }
+
+                let numberWidth: CGFloat = 24
+                let textWidth = contentWidth - numberWidth
+                for (index, sentence) in sentences.enumerated() {
+                    let bodyHeight = textSize(sentence, width: textWidth, attrs: bodyAttrs).height
+                    let writingHeight: CGFloat = options.includeWritingLines ? 22 : 0
+                    ensure(bodyHeight + writingHeight + 6)
+                    drawText("\(index + 1).", at: CGPoint(x: margin, y: y + 1), width: numberWidth, attrs: numberAttrs)
+                    drawText(sentence, at: CGPoint(x: margin + numberWidth, y: y), width: textWidth, attrs: bodyAttrs)
+                    y += bodyHeight
+                    if options.includeWritingLines {
+                        y += 6
+                        strokeLine(
+                            from: CGPoint(x: margin + numberWidth, y: y + 12),
+                            to: CGPoint(x: media.width - margin, y: y + 12),
+                            color: UIColor(white: 0.72, alpha: 1)
+                        )
+                        y += 22
+                    } else {
+                        y += 7
+                    }
+                }
+                y += 12
+            }
             endPage()
         }
     }
@@ -318,6 +481,31 @@ enum StoryPrintService {
         path.setLineDash([6, 4], count: 2, phase: 0)
         UIColor(white: 0.4, alpha: 1).setStroke()
         path.stroke()
+    }
+
+    private static func todayText() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy/M/d"
+        return formatter.string(from: Date())
+    }
+
+    private static func drawCollectionFooter(
+        page: Int,
+        media: CGSize,
+        margin: CGFloat,
+        attrs: [NSAttributedString.Key: Any]
+    ) {
+        let footerY = media.height - margin - 22
+        strokeLine(
+            from: CGPoint(x: margin, y: footerY - 10),
+            to: CGPoint(x: media.width - margin, y: footerY - 10),
+            color: UIColor(white: 0.72, alpha: 1)
+        )
+        drawText("英语教练 · 家庭故事集", at: CGPoint(x: margin, y: footerY), width: media.width - margin * 2 - 80, attrs: attrs)
+        let right = "第 \(page) 页"
+        let width = textSize(right, width: media.width, attrs: attrs).width
+        drawText(right, at: CGPoint(x: media.width - margin - width, y: footerY), width: width + 1, attrs: attrs)
     }
 
     private static func drawFooter(
