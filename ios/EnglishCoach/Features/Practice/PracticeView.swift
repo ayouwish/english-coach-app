@@ -3,7 +3,8 @@ import SwiftUI
 /// 跟读根页（Tab 0）：卡片流 + 页内结果。
 ///
 /// 结构：页头（问候 / 今日用量 / 等级 / 句子列表入口）→ 练习游标横幅 → 句子卡片
-/// （示范音 / 录音 / 评测 / 结果）→ 上一句/下一句。四态齐全：loading / empty / error / 权限。
+/// （示范音 / 录音 / 评测 / 结果）→ 上一句/下一句；左边缘右滑唤出句子列表抽屉。
+/// 四态齐全：loading / empty / error / 权限。
 @MainActor
 struct PracticeView: View {
     private let services: AppServices
@@ -17,6 +18,11 @@ struct PracticeView: View {
     @State private var store: PracticeStore?
     /// 纵向卡片流当前停在哪一句（`scrollPosition(id:)` 绑定）。
     @State private var pagerSentenceID: String?
+
+    // 句子列表抽屉：进度 0（关闭）→ 1（完全展开），拖动时跟手。
+    @State private var drawerVisible = false
+    @State private var drawerProgress: CGFloat = 0
+    @State private var drawerWidth: CGFloat = 320
 
     init(services: AppServices, audio: AudioCoordinator) {
         self.services = services
@@ -43,6 +49,8 @@ struct PracticeView: View {
             Task { await store.handleScenePhase(newPhase) }
         }
         .onDisappear {
+            drawerVisible = false
+            drawerProgress = 0
             guard let store else { return }
             Task { await store.stopAll() }
         }
@@ -71,9 +79,23 @@ struct PracticeView: View {
 
     // MARK: - 内容
 
+    /// 跟读页整体：卡片流 + 左侧句子列表抽屉（左边缘右滑/页头按钮唤出）。
+    private func content(_ store: PracticeStore) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                pageContent(store)
+                drawerLayer(store)
+            }
+            .onAppear { updateDrawerWidth(geo.size.width) }
+            .onChange(of: geo.size.width) { _, newValue in
+                updateDrawerWidth(newValue)
+            }
+        }
+    }
+
     /// 页头固定；句子本身是**纵向卡片流**（与 HOS `PracticePage` 一致）：
     /// 每张卡片占满可视高度，上下滑动切换句子（`.viewAligned` 保证卡片比屏幕高时也能读完整）。
-    private func content(_ store: PracticeStore) -> some View {
+    private func pageContent(_ store: PracticeStore) -> some View {
         VStack(spacing: 0) {
             header(store)
                 .padding(.horizontal, Tokens.Spacing.pageMargin(isChild: caps.isChild))
@@ -157,6 +179,16 @@ struct PracticeView: View {
             .scrollPosition(id: $pagerSentenceID)
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.immediately)
+            .overlay(alignment: .leading) {
+                // 只在左边缘 24pt 内起手，避免抢占纵向卡片流 / 系统返回手势；录音中禁用。
+                if !drawerVisible, store.recordingPhase == .idle {
+                    Color.clear
+                        .frame(width: 24)
+                        .contentShape(Rectangle())
+                        .gesture(edgeOpenGesture(store))
+                        .accessibilityHidden(true)
+                }
+            }
             .refreshable {
                 await store.reload(force: true)
             }
@@ -206,6 +238,132 @@ struct PracticeView: View {
         .contentColumn(alignment: .center)
     }
 
+    // MARK: - 句子列表抽屉
+
+    private func drawerLayer(_ store: PracticeStore) -> some View {
+        Group {
+            if drawerVisible {
+                Color.black.opacity(0.28 * drawerProgress)
+                    .ignoresSafeArea()
+                    .onTapGesture { closeDrawer() }
+                    .accessibilityHidden(true)
+
+                PracticeSentenceDrawer(
+                    store: store,
+                    onSelect: { index in
+                        store.select(index: index)
+                        closeDrawer()
+                    },
+                    onClose: { closeDrawer() },
+                    onOpenAll: {
+                        closeDrawer()
+                        router.push(.sentences)
+                    }
+                )
+                .frame(width: drawerWidth)
+                .frame(maxHeight: .infinity)
+                .background(Tokens.Colors.surfaceCard)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: Tokens.Radius.xLarge,
+                        topTrailingRadius: Tokens.Radius.xLarge,
+                        style: .continuous
+                    )
+                )
+                .shadow(color: .black.opacity(0.16), radius: 24, x: 10)
+                .offset(x: -drawerWidth * (1 - drawerProgress))
+                .simultaneousGesture(drawerCloseGesture())
+            }
+        }
+    }
+
+    private func updateDrawerWidth(_ width: CGFloat) {
+        let next = min(360, max(280, width * 0.86))
+        guard abs(next - drawerWidth) > 0.5 else { return }
+        drawerWidth = next
+    }
+
+    private func toggleDrawer(_ store: PracticeStore) {
+        if drawerVisible {
+            closeDrawer()
+        } else {
+            openDrawer(store)
+        }
+    }
+
+    private func openDrawer(_ store: PracticeStore) {
+        guard store.recordingPhase == .idle else { return }
+        store.stopPlayback()
+        if !drawerVisible {
+            drawerVisible = true
+            drawerProgress = 0
+        }
+        snapDrawer(open: true)
+    }
+
+    private func closeDrawer() {
+        snapDrawer(open: false)
+    }
+
+    private func snapDrawer(open: Bool) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            drawerProgress = open ? 1 : 0
+        }
+        guard !open else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            if drawerProgress == 0 {
+                drawerVisible = false
+            }
+        }
+    }
+
+    /// 左边缘右滑：跟手拉出抽屉，松手按进度/预测位置吸附。
+    private func edgeOpenGesture(_ store: PracticeStore) -> some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+            .onChanged { value in
+                guard store.recordingPhase == .idle else { return }
+                guard value.translation.width > 0,
+                      abs(value.translation.width) > abs(value.translation.height) else { return }
+                if !drawerVisible {
+                    drawerVisible = true
+                    drawerProgress = 0
+                    store.stopPlayback()
+                }
+                drawerProgress = min(1, max(0, value.translation.width / max(drawerWidth, 1)))
+            }
+            .onEnded { value in
+                guard drawerVisible else { return }
+                let shouldOpen = drawerProgress > 0.3
+                    || value.predictedEndTranslation.width > drawerWidth * 0.5
+                if shouldOpen {
+                    snapDrawer(open: true)
+                } else {
+                    closeDrawer()
+                }
+            }
+    }
+
+    /// 抽屉内左滑收回（与列表纵向滚动同时识别，只在水平方向生效）。
+    private func drawerCloseGesture() -> some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                drawerProgress = min(1, max(0, 1 + value.translation.width / max(drawerWidth, 1)))
+            }
+            .onEnded { value in
+                let shouldClose = drawerProgress < 0.7
+                    || value.translation.width < -drawerWidth * 0.3
+                if shouldClose {
+                    closeDrawer()
+                } else {
+                    snapDrawer(open: true)
+                }
+            }
+    }
+
     // MARK: - 页头
 
     private func header(_ store: PracticeStore) -> some View {
@@ -223,17 +381,23 @@ struct PracticeView: View {
                 }
                 Spacer(minLength: 0)
                 Button {
-                    router.push(.sentences)
+                    toggleDrawer(store)
                 } label: {
-                    Text("句子列表")
-                        .font(AppFont.caption(caps).weight(.semibold))
-                        .foregroundStyle(Tokens.Colors.primary)
-                        .padding(.horizontal, Tokens.Spacing.s12)
-                        .frame(minHeight: caps.minTapTarget)
-                        .background(Capsule(style: .continuous).fill(Tokens.Colors.surfaceMuted))
+                    HStack(spacing: Tokens.Spacing.s4) {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("句子列表")
+                            .font(AppFont.caption(caps).weight(.semibold))
+                    }
+                    .foregroundStyle(Tokens.Colors.primary)
+                    .padding(.horizontal, Tokens.Spacing.s12)
+                    .frame(minHeight: caps.minTapTarget)
+                    .background(Capsule(style: .continuous).fill(Tokens.Colors.surfaceMuted))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("打开句子列表"))
+                .disabled(store.recordingPhase != .idle)
+                .opacity(store.recordingPhase != .idle ? 0.5 : 1)
+                .accessibilityLabel(Text(drawerVisible ? "收起句子列表" : "打开句子列表"))
             }
 
             if caps.canChangeLevel {
